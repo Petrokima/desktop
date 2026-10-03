@@ -4841,8 +4841,14 @@ $('mbu-save').addEventListener('click', mbuSave);
 // ═════════════════════════════════════════════════════════
 //  BOOT
 // ═════════════════════════════════════════════════════════
+// Built-in connection: when the key below is filled in, everyone goes straight to the sign-in screen.
+// The publishable key is public by design (logins + database rules protect the data). Never put the secret/service key here.
+const EMBED_URL = 'https://hckkrzghxxhauotyqlqr.supabase.co';
+const EMBED_KEY = 'sb_publishable_yyfkPLo6M7XDe3lwurctmw_6wsmB-2M';
 (function boot(){
-  const url = localStorage.getItem('sb_url'), key = localStorage.getItem('sb_key');
+  const embedded = EMBED_KEY && !EMBED_KEY.startsWith('PASTE-');
+  if (embedded){ localStorage.setItem('sb_url', EMBED_URL); localStorage.setItem('sb_key', EMBED_KEY); $('setup').style.display = 'none'; }
+  const url = embedded ? EMBED_URL : localStorage.getItem('sb_url'), key = embedded ? EMBED_KEY : localStorage.getItem('sb_key');
   if (url) $('cfg-url').value = url; if (key) $('cfg-key').value = key;
   if (!lib()){ const e=$('setup-err'); e.textContent='The Supabase library could not load. Check your internet connection and reload.'; e.style.display='block'; return; }
   if (url && key) startApp(url, key).catch(e => { const x=$('setup-err'); x.textContent='Auto-connect failed: '+e.message; x.style.display='block'; $('setup').style.display='flex'; $('app').style.display='none'; });

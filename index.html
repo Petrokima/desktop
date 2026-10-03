@@ -156,7 +156,8 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
       <button class="btn btn-primary" id="btn-login" style="width:100%;justify-content:center">Sign in</button>
     </div>
     <div id="login-first" style="display:none">
-      <div class="alert a-info" style="margin:0 0 14px;line-height:1.6">Welcome <b id="fl-name"></b>. This is your first sign-in — choose your own password now. It must be at least 8 characters and different from Petro@….</div>
+      <div class="alert a-info" style="margin:0 0 14px;line-height:1.6">Welcome <b id="fl-name"></b>. This is your first sign-in — confirm your year of birth and choose your own password (at least 8 characters, different from Petro@…).</div>
+      <div class="field" style="margin-bottom:12px"><label>Your year of birth</label><input id="fl-year" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="e.g. 1988"></div>
       <div class="field" style="margin-bottom:12px"><label>New password (at least 8 characters)</label><input id="fl-p1" type="password" autocomplete="new-password"></div>
       <div class="field" style="margin-bottom:16px"><label>Repeat new password</label><input id="fl-p2" type="password" autocomplete="new-password"></div>
       <button class="btn btn-primary" id="btn-first" style="width:100%;justify-content:center">Set my password</button>
@@ -1270,16 +1271,17 @@ function showFirstLogin(me, user){
   $('app').style.display='none'; $('self').style.display='none'; $('login').style.display='flex';
   ['login-form','login-noaccess'].forEach(id=>$(id).style.display='none'); $('login-first').style.display='block';
   $('login-err').style.display='none'; $('fl-name').textContent = me.full_name || user.email;
-  ['fl-p1','fl-p2'].forEach(id=>$(id).value=''); setTimeout(()=>$('fl-p1').focus(),50);
+  ['fl-year','fl-p1','fl-p2'].forEach(id=>$(id).value=''); setTimeout(()=>$('fl-year').focus(),50);
   $('btn-first').onclick = async () => {
-    const a=$('fl-p1').value, b=$('fl-p2').value, err=$('login-err');
+    const yr=$('fl-year').value.trim(), a=$('fl-p1').value, b=$('fl-p2').value, err=$('login-err');
     const show = m => { err.innerHTML=m; err.style.display='block'; };
     err.style.display='none';
     if (a.length < 8) return show('The new password must be at least 8 characters.');
     if (a !== b) return show('The two passwords do not match.');
     if (a === lastTempPass) return show('Choose a password different from the temporary one.');
     const btn=$('btn-first'); btn.disabled=true; btn.textContent='Saving…';
-    const { data, error } = await sb.rpc('complete_first_login', { p_nid_last4:null, p_new_password:a });
+    if (!/^\d{4}$/.test(yr)) return show('Enter the year you were born (4 digits, e.g. 1988).');
+    const { data, error } = await sb.rpc('complete_first_login', { p_nid_last4:null, p_new_password:a, p_birth_year:yr });
     btn.disabled=false; btn.textContent='Set my password';
     if (error) return show(esc(error.message));
     if (data !== 'ok') return show(esc(data));

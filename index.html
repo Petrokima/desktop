@@ -32,6 +32,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter','Segoe UI',Tahom
 .sidebar{transition:width .15s ease}
 .nav-toggle{display:flex;align-items:center;gap:10px;margin:0 10px 10px;padding:8px 12px;border-radius:var(--rs);cursor:pointer;color:var(--muted);font-size:13px;font-weight:600;border:1px solid var(--border);background:transparent;width:calc(100% - 20px);font-family:inherit}
 .nav-toggle:hover{color:var(--text);background:var(--hover)}
+
 body.nav-mini .sidebar{width:64px}
 body.nav-mini .sidebar .nav-label, body.nav-mini .sidebar .nav-txt{display:none}
 body.nav-mini .sidebar .nav-item{justify-content:center;margin:0 8px;padding:9px 0;position:relative}
@@ -41,6 +42,12 @@ body.nav-mini .sidebar .nav-item .chip{position:absolute;top:5px;right:7px;width
 .nav-item{display:flex;align-items:center;gap:10px;margin:0 10px;padding:9px 12px;border-radius:var(--rs);cursor:pointer;color:var(--label);font-size:13px;font-weight:500}
 .nav-item:hover{background:var(--card);color:var(--text)}
 .nav-item.active{background:rgba(59,111,212,.18);color:var(--link)}
+.sidebar .nav-label{cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none}
+.sidebar .nav-label:hover{color:var(--text)}
+.sidebar .nav-label .sec-arrow{margin-inline-start:auto;font-size:11px;opacity:.8}
+.sidebar .nav-label .sec-dot{width:8px;height:8px;border-radius:50%;background:var(--danger);display:none}
+.sidebar .nav-label.sec-closed.has-alert .sec-dot{display:inline-block}
+.sidebar .nav-item.sec-hide:not(.active){display:none!important}
 .main{flex:1;padding:28px 32px;min-width:0}
 .page{display:none}.page.active{display:block}
 .page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;gap:16px;flex-wrap:wrap}
@@ -4571,10 +4578,46 @@ $('pc-xlsx').addEventListener('click', async () => {
   };
   document.querySelectorAll('.sidebar').forEach(sb => {
     const b = document.createElement('button'); b.className = 'nav-toggle'; b.type = 'button';
-    b.addEventListener('click', () => { const mini = !document.body.classList.contains('nav-mini'); localStorage.setItem('pk_nav_mini', mini ? '1' : '0'); apply(mini); });
+    b.addEventListener('click', () => { const mini = !document.body.classList.contains('nav-mini'); localStorage.setItem('pk_nav_mini', mini ? '1' : '0'); apply(mini); if (window.paintNavSections) window.paintNavSections(); });
     sb.insertBefore(b, sb.firstChild);
   });
   apply(localStorage.getItem('pk_nav_mini') === '1');
+})();
+
+// ═════════════════════════════════════════════════════════
+//  SIDEBAR SECTIONS — click a heading (e.g. WORKFORCE) to fold / unfold its pages (remembered)
+// ═════════════════════════════════════════════════════════
+(function sidebarSections(){
+  const KEY = 'pk_nav_closed';
+  const closed = new Set(JSON.parse(localStorage.getItem(KEY) || '[]'));
+  const groups = [];                                         // [{ label, key, items[] }]
+  document.querySelectorAll('.sidebar').forEach((sb, si) => {
+    let cur = null;
+    [...sb.children].forEach(el => {
+      if (el.classList.contains('nav-label')){
+        const key = si + ':' + el.textContent.trim().toLowerCase();
+        el.insertAdjacentHTML('beforeend', '<span class="sec-dot" title="Something is waiting in this section"></span><span class="sec-arrow"></span>');
+        cur = { label: el, key, items: [] }; groups.push(cur);
+        el.addEventListener('click', () => { closed.has(key) ? closed.delete(key) : closed.add(key); localStorage.setItem(KEY, JSON.stringify([...closed])); paint(); });
+      } else if (cur && el.classList.contains('nav-item')) cur.items.push(el);
+    });
+  });
+  function paint(){
+    groups.forEach(g => {
+      const shut = closed.has(g.key);
+      g.label.classList.toggle('sec-closed', shut);
+      g.label.querySelector('.sec-arrow').textContent = shut ? '▸' : '▾';
+      g.label.title = shut ? 'Show this section' : 'Fold this section';
+      const mini = document.body.classList.contains('nav-mini');      // icon-only menu: headings are hidden, so show every icon
+      g.items.forEach(it => it.classList.toggle('sec-hide', shut && !mini));
+      const alert = g.items.some(it => [...it.querySelectorAll('.chip')].some(c => c.style.display !== 'none' && c.textContent.trim() && c.textContent.trim() !== '0'));
+      g.label.classList.toggle('has-alert', alert);
+    });
+  }
+  paint();
+  // keep the red dots current whenever the counters change
+  if (typeof updateBadges === 'function'){ const _ub = updateBadges; updateBadges = function(){ const r = _ub.apply(this, arguments); paint(); return r; }; }
+  window.paintNavSections = paint;
 })();
 // ═════════════════════════════════════════════════════════
 //  BULK UPLOAD — one page for every kind of data (template → upload → preview → save)

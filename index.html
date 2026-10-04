@@ -131,6 +131,7 @@ body:not(.can-hr):not(.can-pay) :is(#par-new,[data-par-edit],[data-par-del]){dis
 body:not(.can-hr) :is(#as-add-box,#as-bulk-box,[data-as-rm],.as-chk){display:none!important}
 body:not(.can-pay) #pay-publish{display:none!important}
 body:not(.can-pay) :is(#cc-save,#cc-reset){display:none!important}
+body:not(.can-hr) .nav-item:is([data-page="news"],[data-page="voice"]){display:none!important}
 body:not(.can-hr):not(.can-pay) .nav-item[data-page="bulk"]{display:none!important}
 body:not(.can-hr) :is(#aa-send,#aa-approve-all,[data-aa-ok],[data-aa-no],[data-aa-resend]){display:none!important}
 body.is-officer :is([data-page="payroll"],[data-page="history"],[data-page="loans"],[data-page="settings"],.no-officer){display:none!important}
@@ -206,6 +207,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   </nav>
   <main class="main" style="max-width:1100px">
     <div class="page-header"><div><div class="page-title" id="self-title"></div><div class="page-sub" id="self-sub"></div></div></div>
+    <div id="self-bday"></div>
     <div id="self-req">
       <div class="stats" id="self-stats"></div>
       <div class="btn-group" style="margin-bottom:18px">
@@ -282,6 +284,8 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="nav-item" data-page="exempt">⭐ Exception rule</div>
   <div class="nav-item" data-page="assign">📌 Project assignments</div>
   <div class="nav-item" data-page="bulk">⬆ Bulk upload</div>
+  <div class="nav-item" data-page="news">📢 Announcements</div>
+  <div class="nav-item" data-page="voice">💬 Employee voice <span class="chip c-orange" id="voice-badge" style="display:none;margin-inline-start:auto"></span></div>
   <div class="nav-item" data-page="projects">🏗 Projects</div>
   <div class="nav-label">Payroll</div>
   <div class="nav-item" data-page="monthly">✎ Monthly Entries</div>
@@ -305,6 +309,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
     <div class="btn-group"><button class="btn btn-ghost btn-sm" data-act="new-att">+ Log Attendance</button><button class="btn btn-primary btn-sm" data-nav="payroll">Payroll Run</button></div></div>
   <div class="period-note"></div>
   <div id="dash-alert"></div>
+  <div id="dash-bday"></div>
   <div class="stats">
     <div class="stat"><div class="stat-label">Active Employees</div><div class="stat-value" id="st-emp">—</div><div class="stat-sub" id="st-emp-sub"></div></div>
     <div class="stat"><div class="stat-label">Logged Today</div><div class="stat-value" id="st-today">—</div><div class="stat-sub" id="st-today-sub"></div></div>
@@ -484,6 +489,48 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
     <div style="font-size:12px;color:var(--muted)">2026 defaults: Andersen Egypt tax table (January 2026); insurance wage 2,700–16,700 from the National Organization for Social Insurance (from 1 January 2026). Only Finance and the administrator can save changes.</div>
   </div>
 </div>
+
+<!-- ANNOUNCEMENTS -->
+<div class="page" id="page-news">
+  <div class="page-header"><div><div class="page-title">Announcements & decisions</div>
+    <div class="page-sub">Published to the employees' phone app (📢 tab). You can attach one file — PDF, image, Word or Excel, up to 20 MB.</div></div></div>
+  <div class="card" style="padding:20px">
+    <div class="toolbar-title" style="margin-bottom:12px">New announcement</div>
+    <div class="grid3">
+      <div class="field"><label>Type</label><select class="sel" id="an-kind"><option value="announcement">📢 Announcement</option><option value="decision">📜 Administrative decision</option></select></div>
+      <div class="field"><label>Who should see it</label><select class="sel" id="an-dept"></select></div>
+      <div class="field"><label>Attachment (optional)</label><input type="file" id="an-file"></div>
+      <div class="field full"><label>Title *</label><input class="inp" id="an-title" maxlength="150"></div>
+      <div class="field full"><label>Text</label><textarea class="inp" id="an-body" rows="5"></textarea></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" id="an-go">📢 Publish</button></div>
+  </div>
+  <div class="card"><div class="toolbar"><span class="toolbar-title">Published</span></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Title</th><th>For</th><th>Attachment</th><th class="num">Read by</th><th></th></tr></thead><tbody id="an-tbl"></tbody></table></div></div>
+</div>
+
+<!-- EMPLOYEE VOICE -->
+<div class="page" id="page-voice">
+  <div class="page-header"><div><div class="page-title">Employee voice</div>
+    <div class="page-sub">Complaints and suggestions (also seen by the board member) · requests from managers for new employees and for training. Click a row to answer.</div></div></div>
+  <div class="card"><div class="toolbar"><span class="toolbar-title">⚠️💡 Complaints & suggestions</span>
+      <div class="toolbar-right"><select class="sel" id="vo-kind"><option value="">All</option><option value="complaint">Complaints</option><option value="suggestion">Suggestions</option></select>
+        <select class="sel" id="vo-st"><option value="open">Open (New + In review)</option><option value="">All</option><option value="Closed">Closed</option></select></div></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Employee</th><th>Subject</th><th>Details</th><th>Status</th><th>Reply</th></tr></thead><tbody id="vo-fb"></tbody></table></div></div>
+  <div class="card"><div class="toolbar"><span class="toolbar-title">👥 Requests for new employees</span></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Manager</th><th class="num">Number</th><th>Job name</th><th>Job description</th><th>Needed by</th><th>Status</th><th>HR note</th></tr></thead><tbody id="vo-hire"></tbody></table></div></div>
+  <div class="card"><div class="toolbar"><span class="toolbar-title">🎓 Training requests</span></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Manager</th><th>Employees</th><th>Topic</th><th>Details</th><th>Preferred date</th><th>Status</th><th>HR note</th></tr></thead><tbody id="vo-train"></tbody></table></div></div>
+</div>
+
+<!-- MODAL: ANSWER -->
+<div class="overlay" id="m-voice"><div class="modal" style="max-width:620px">
+  <div class="modal-head"><div class="modal-title" id="mv-title"></div><button class="x" data-close="m-voice">×</button></div>
+  <div id="mv-info" style="font-size:13px;line-height:1.6;margin-bottom:12px;white-space:pre-wrap"></div>
+  <div class="field"><label>Status</label><select class="sel" id="mv-st"></select></div>
+  <div class="field"><label id="mv-note-l">Reply</label><textarea class="inp" id="mv-note" rows="4"></textarea></div>
+  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-voice">Cancel</button><button class="btn btn-primary" id="mv-save">Save</button></div>
+</div></div>
 
 <!-- BULK UPLOAD -->
 <div class="page" id="page-bulk">
@@ -1453,7 +1500,7 @@ function buildLists(){
 const PAGE_RENDER = { dashboard:()=>renderDashboard(), employees:()=>renderEmployees(), attendance:()=>renderAttendance(), projects:()=>renderProjects(),
   monthly:()=>renderMonthly(), loans:()=>renderLoans(), payroll:()=>renderPayroll(), reports:()=>renderReports(), permissions:()=>renderPermissions(),
   leaves:()=>renderLeaves(), exempt:()=>renderExempt(), penalties:()=>renderPenalties(), holidays:()=>renderHolidays(), hrreq:()=>renderHrRequests(),
-  reporting:()=>renderReporting(), history:()=>renderHistory(), parrules:()=>renderParRules(), approvals:()=>renderApprovals(), assign:()=>renderAssign(), bulk:()=>renderBulk(), calc:()=>renderCalc() };
+  reporting:()=>renderReporting(), history:()=>renderHistory(), parrules:()=>renderParRules(), approvals:()=>renderApprovals(), assign:()=>renderAssign(), bulk:()=>renderBulk(), calc:()=>renderCalc(), news:()=>renderNewsPage(), voice:()=>renderVoicePage() };
 let DIRTY = new Set(), LOAD_MS = 0;
 function currentPage(){ const p = document.querySelector('.page.active'); return p ? p.id.replace('page-','') : 'dashboard'; }
 function renderPageIfNeeded(name){ if (DIRTY.has(name) && PAGE_RENDER[name]) { DIRTY.delete(name); PAGE_RENDER[name](); } }
@@ -5068,6 +5115,121 @@ $('cc-n2g').addEventListener('click', () => { CC_DIR = 'n2g'; $('cc-n2g').classN
 $('cc-ins').addEventListener('change', () => { $('cc-insw-box').style.display = $('cc-ins').checked ? '' : 'none'; ccCalc(); });
 $('cc-save').addEventListener('click', ccSave);
 $('cc-reset').addEventListener('click', () => { ccFillRates({ ...CALC_DEFAULTS }); toast('2026 defaults filled in — click Save rates to keep them'); });
+// ═════════════════════════════════════════════════════════
+//  ANNOUNCEMENTS · EMPLOYEE VOICE · BIRTHDAYS (desktop)
+// ═════════════════════════════════════════════════════════
+const V = { news:[], reads:[], fb:[], hire:[], train:[] };
+const vDate = ts => ts ? new Date(ts).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '';
+const vChip = s => `<span class="chip ${({New:'c-orange','In review':'c-blue','In progress':'c-blue',Closed:'c-green',Done:'c-green',Rejected:'c-red'})[s]||'c-grey'}">${esc(s)}</span>`;
+const vName = id => { const e = empById(id); return e ? `${empName(e)} (${id})` : id; };
+// ── birthdays ──
+const isBirthdayToday = d => { if (!d) return false; const t = new Date(), b = String(d).slice(5,10), m = String(t.getMonth()+1).padStart(2,'0'), day = String(t.getDate()).padStart(2,'0');
+  return b === `${m}-${day}` || (b === '02-29' && `${m}-${day}` === '02-28' && new Date(t.getFullYear(), 1, 29).getMonth() !== 1); };
+function renderBirthdays(){
+  const box = $('dash-bday'); if (!box) return;
+  const L = (S.employees || []).filter(e => e.status !== 'Inactive' && isBirthdayToday(e.birth_date));
+  box.innerHTML = L.length ? `<div class="alert a-info" style="margin-bottom:14px">🎂 <b>Birthdays today:</b> ${L.map(e => esc(`${empName(e)} (${e.id})${e.department ? ' — ' + e.department : ''}`)).join(' · ')}. Their phone app shows “Petrokima family wishes you a happy birthday”.</div>` : '';
+}
+const _renderDashboardB = renderDashboard;
+renderDashboard = function(){ const r = _renderDashboardB.apply(this, arguments); renderBirthdays(); if (ME && ['admin','hr'].includes(ME.role) && !V.loaded){ V.loaded = true; loadVoice().catch(() => {}); } return r; };
+async function renderSelfBirthday(){
+  const box = $('self-bday'); if (!box) return;
+  const r = await sb.rpc('my_birthday_today').then(x => x, () => ({}));
+  box.innerHTML = r && r.data ? `<div class="card" style="background:linear-gradient(135deg,#ee2624,#b4151a);color:#fff;text-align:center;padding:22px;margin-bottom:16px">
+      <div style="font-size:42px">🎂</div><div style="font-size:20px;font-weight:800;margin-top:6px">Petrokima family wishes you a happy birthday 🎉</div>
+      <div style="opacity:.9;margin-top:4px">عائلة بتروكيما تتمنى لك عيد ميلاد سعيد</div></div>` : '';
+}
+const _showSelfB = showSelf;
+showSelf = async function(){ const r = await _showSelfB.apply(this, arguments); renderSelfBirthday(); return r; };
+
+// ── announcements ──
+async function loadNews(){
+  const [a, r] = await Promise.all([sb.from('announcements').select('*').order('created_at', { ascending:false }), fetchAll('announcement_reads', 'ann_id')]);
+  V.news = a.data || []; V.reads = r || [];
+}
+async function renderNewsPage(){
+  const depts = [...new Set((S.employees || []).filter(e => e.status !== 'Inactive').map(e => e.department).filter(Boolean))].sort();
+  const keep = $('an-dept').value; $('an-dept').innerHTML = '<option value="">Everyone</option>' + depts.map(d => `<option ${d===keep?'selected':''}>${esc(d)}</option>`).join('');
+  await loadNews();
+  const active = (S.employees || []).filter(e => e.status !== 'Inactive');
+  $('an-tbl').innerHTML = V.news.map(a => { const aud = a.department ? active.filter(e => e.department === a.department).length : active.length, rd = V.reads.filter(x => x.ann_id === a.id).length;
+    return `<tr><td class="mono">${esc(vDate(a.created_at))}</td><td>${a.kind==='decision' ? '📜 Decision' : '📢 Announcement'}</td><td class="strong" style="white-space:normal">${esc(a.title)}</td>
+      <td>${esc(a.department || 'Everyone')}</td><td>${a.attachment_path ? `<a href="#" data-an-att="${esc(a.attachment_path)}" style="color:var(--link)">📎 ${esc(a.attachment_name || 'file')}</a>` : ''}</td>
+      <td class="num">${rd} / ${aud}</td><td><button class="btn btn-ghost btn-sm" data-an-del="${esc(a.id)}">🗑</button></td></tr>`; }).join('') || '<tr><td colspan="7" class="empty">Nothing published yet</td></tr>';
+}
+async function publishNews(){
+  const title = $('an-title').value.trim(); if (!title) return toast('Write a title','warn');
+  const f = $('an-file').files[0]; if (f && f.size > 20 * 1024 * 1024) return toast('The attachment is larger than 20 MB','warn');
+  const b = $('an-go'); b.disabled = true; b.textContent = 'Publishing…';
+  try {
+    let path = null, name = null;
+    if (f){
+      name = f.name; path = `${new Date().getFullYear()}/${(crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36))}-${f.name.replace(/[^A-Za-z0-9._-]+/g, '_')}`;
+      const up = await sb.storage.from('announcements').upload(path, f, { contentType: f.type || 'application/octet-stream', upsert:false });
+      if (up.error) throw new Error('Attachment not uploaded: ' + up.error.message);
+    }
+    const { data, error } = await sb.from('announcements').insert({ kind:$('an-kind').value, title, body:$('an-body').value.trim(), department:$('an-dept').value || null,
+      attachment_path:path, attachment_name:name, created_by:(ME && (ME.full_name || ME.email)) || 'HR' }).select();
+    if (error || !(data && data.length)){ if (path) await sb.storage.from('announcements').remove([path]); throw new Error(error ? error.message : NOPERM); }
+    ['an-title','an-body'].forEach(i => $(i).value = ''); $('an-file').value = '';
+    toast(`Published to ${$('an-dept').value || 'everyone'} — it appears in the 📢 tab of the phone app`); renderNewsPage();
+  } catch(e){ toast(e.message, 'err'); }
+  b.disabled = false; b.textContent = '📢 Publish';
+}
+document.addEventListener('click', async e => {
+  const at = e.target.closest('[data-an-att]'); if (at){ e.preventDefault(); const { data, error } = await sb.storage.from('announcements').createSignedUrl(at.dataset.anAtt, 600); if (error) return toast(error.message,'err'); window.open(data.signedUrl, '_blank'); return; }
+  const del = e.target.closest('[data-an-del]'); if (del){ const a = V.news.find(x => x.id === del.dataset.anDel); if (!a) return;
+    confirmDel(`Delete “${a.title}”? Employees will no longer see it.`, async () => {
+      const { error } = await sb.from('announcements').delete().eq('id', a.id); if (error) throw error;
+      if (a.attachment_path) await sb.storage.from('announcements').remove([a.attachment_path]);
+      toast('Announcement deleted'); renderNewsPage(); }); }
+});
+$('an-go').addEventListener('click', publishNews);
+
+// ── employee voice ──
+async function loadVoice(){
+  const [f, h, t] = await Promise.all([sb.from('feedback').select('*').order('created_at', { ascending:false }), sb.from('hiring_requests').select('*').order('created_at', { ascending:false }), sb.from('training_requests').select('*').order('created_at', { ascending:false })]);
+  V.fb = f.data || []; V.hire = h.data || []; V.train = t.data || [];
+  const open = V.fb.filter(x => x.status !== 'Closed').length + V.hire.filter(x => x.status === 'New').length + V.train.filter(x => x.status === 'New').length;
+  const b = $('voice-badge'); if (b){ b.textContent = open; b.style.display = open ? '' : 'none'; }
+}
+async function renderVoicePage(){
+  await loadVoice();
+  const k = $('vo-kind').value, st = $('vo-st').value;
+  const fb = V.fb.filter(x => (!k || x.kind === k) && (!st || (st === 'open' ? x.status !== 'Closed' : x.status === st)));
+  $('vo-fb').innerHTML = fb.map(x => `<tr data-vo="fb:${esc(x.id)}" style="cursor:pointer"><td class="mono">${esc(vDate(x.created_at))}</td><td>${x.kind==='complaint' ? '⚠️ Complaint' : '💡 Suggestion'}</td>
+      <td>${esc(x.emp_name ? `${x.emp_name} (${x.emp_id})` : vName(x.emp_id))}</td><td class="strong" style="white-space:normal">${esc(x.subject)}</td><td style="white-space:normal;max-width:320px">${esc(x.body)}</td>
+      <td>${vChip(x.status)}</td><td style="white-space:normal;max-width:240px">${esc(x.reply || '')}${x.replied_by ? `<div style="font-size:11px;color:var(--muted)">— ${esc(x.replied_by)}</div>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">Nothing here</td></tr>';
+  $('vo-hire').innerHTML = V.hire.map(x => `<tr data-vo="hire:${esc(x.id)}" style="cursor:pointer"><td class="mono">${esc(vDate(x.created_at))}</td><td>${esc(vName(x.manager_emp))}</td><td class="num">${x.headcount}</td>
+      <td class="strong">${esc(x.job_name)}</td><td style="white-space:normal;max-width:340px">${esc(x.job_description)}${x.notes ? `<div style="font-size:12px;color:var(--muted)">${esc(x.notes)}</div>` : ''}</td>
+      <td class="mono">${esc(x.needed_by || '')}</td><td>${vChip(x.status)}</td><td style="white-space:normal">${esc(x.hr_note || '')}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">No requests</td></tr>';
+  $('vo-train').innerHTML = V.train.map(x => `<tr data-vo="train:${esc(x.id)}" style="cursor:pointer"><td class="mono">${esc(vDate(x.created_at))}</td><td>${esc(vName(x.manager_emp))}</td>
+      <td style="white-space:normal;max-width:260px">${(x.emp_ids || []).map(id => esc(vName(id))).join(', ')}</td><td class="strong">${esc(x.topic)}</td><td style="white-space:normal;max-width:300px">${esc(x.details || '')}</td>
+      <td class="mono">${esc(x.preferred_date || '')}</td><td>${vChip(x.status)}</td><td style="white-space:normal">${esc(x.hr_note || '')}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">No requests</td></tr>';
+}
+let VO_CUR = null;
+document.addEventListener('click', e => {
+  const r = e.target.closest('[data-vo]'); if (!r) return;
+  const [kind, id] = r.dataset.vo.split(':'), x = (kind === 'fb' ? V.fb : kind === 'hire' ? V.hire : V.train).find(y => y.id === id); if (!x) return;
+  VO_CUR = { kind, x };
+  $('mv-title').textContent = kind === 'fb' ? `${x.kind === 'complaint' ? '⚠️ Complaint' : '💡 Suggestion'} — ${x.subject}` : kind === 'hire' ? `👥 ${x.headcount} × ${x.job_name}` : `🎓 ${x.topic}`;
+  $('mv-info').textContent = kind === 'fb' ? `From: ${x.emp_name ? x.emp_name + ' (' + x.emp_id + ')' : vName(x.emp_id)} · ${vDate(x.created_at)}\n\n${x.body}`
+    : kind === 'hire' ? `Manager: ${vName(x.manager_emp)} · ${vDate(x.created_at)}\nJob description: ${x.job_description}${x.needed_by ? '\nNeeded by: ' + x.needed_by : ''}${x.notes ? '\nNotes: ' + x.notes : ''}`
+    : `Manager: ${vName(x.manager_emp)} · ${vDate(x.created_at)}\nEmployees: ${(x.emp_ids || []).map(vName).join(', ')}${x.details ? '\nDetails: ' + x.details : ''}${x.preferred_date ? '\nPreferred date: ' + x.preferred_date : ''}`;
+  const sts = kind === 'fb' ? ['New','In review','Closed'] : ['New','In progress','Done','Rejected'];
+  $('mv-st').innerHTML = sts.map(s => `<option ${s === x.status ? 'selected' : ''}>${s}</option>`).join('');
+  $('mv-note-l').textContent = kind === 'fb' ? 'Reply (the employee sees it in the app)' : 'HR note (the manager sees it in the app)';
+  $('mv-note').value = (kind === 'fb' ? x.reply : x.hr_note) || '';
+  openM('m-voice');
+});
+$('mv-save').addEventListener('click', async () => {
+  if (!VO_CUR) return; const { kind, x } = VO_CUR, table = kind === 'fb' ? 'feedback' : kind === 'hire' ? 'hiring_requests' : 'training_requests';
+  const ch = kind === 'fb' ? { status:$('mv-st').value, reply:$('mv-note').value.trim() || null } : { status:$('mv-st').value, hr_note:$('mv-note').value.trim() || null };
+  const { data, error } = await sb.from(table).update(ch).eq('id', x.id).select();
+  if (error || !(data && data.length)) return toast(error ? error.message : NOPERM, 'err');
+  closeM('m-voice'); toast('Saved — visible in the app'); renderVoicePage();
+});
+['vo-kind','vo-st'].forEach(id => $(id).addEventListener('change', renderVoicePage));
 // ═════════════════════════════════════════════════════════
 //  BOOT
 // ═════════════════════════════════════════════════════════

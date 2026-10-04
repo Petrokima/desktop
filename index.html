@@ -130,6 +130,7 @@ body:not(.can-var) :is(#mon-save,#mon-add-btn,#mon-pick,#mon-bulk,#mp-attended,#
 body:not(.can-hr):not(.can-pay) :is(#par-new,[data-par-edit],[data-par-del]){display:none!important}
 body:not(.can-hr) :is(#as-add-box,#as-bulk-box,[data-as-rm],.as-chk){display:none!important}
 body:not(.can-pay) #pay-publish{display:none!important}
+body:not(.can-pay) :is(#cc-save,#cc-reset){display:none!important}
 body:not(.can-hr):not(.can-pay) .nav-item[data-page="bulk"]{display:none!important}
 body:not(.can-hr) :is(#aa-send,#aa-approve-all,[data-aa-ok],[data-aa-no],[data-aa-resend]){display:none!important}
 body.is-officer :is([data-page="payroll"],[data-page="history"],[data-page="loans"],[data-page="settings"],.no-officer){display:none!important}
@@ -288,6 +289,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="nav-item" data-page="loans">💳 Loans</div>
   <div class="nav-item" data-page="payroll">💰 Payroll Run</div>
   <div class="nav-item" data-page="history">🗄 Payroll history</div>
+  <div class="nav-item" data-page="calc">🧮 Net ↔ Gross calculator</div>
   <div class="nav-item" data-page="parrules">💼 Project allowance rules</div>
   <div class="nav-item" data-page="approvals">✅ Allowance approvals <span class="chip c-orange" id="aa-badge" style="margin-left:auto;display:none"></span></div>
   <div class="nav-label">Config</div>
@@ -443,6 +445,43 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
       <div class="toolbar-right"><input class="inp" id="hs-q" placeholder="Search employee…"><button class="btn btn-ghost btn-sm" id="hs-export">⬇ Export CSV</button></div></div>
     <div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Bank</th><th class="num">Gross</th><th class="num">Deductions</th><th class="num">Net</th></tr></thead><tbody id="hs-lines"></tbody></table></div>
     <div class="foot" id="hs-foot"></div>
+  </div>
+</div>
+
+<!-- NET ↔ GROSS CALCULATOR -->
+<div class="page" id="page-calc">
+  <div class="page-header"><div><div class="page-title">Net ↔ Gross calculator</div>
+    <div class="page-sub">Egyptian salaries: wage tax, social insurance and the martyrs' families fund. A tool for offers and negotiations — it does not change the payroll.</div></div></div>
+  <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
+    <div class="card" style="flex:1;min-width:320px;max-width:460px;padding:20px">
+      <div class="toolbar-title" style="margin-bottom:12px">1 · What do you know?</div>
+      <div class="btn-group" style="margin-bottom:14px"><button class="btn btn-sm btn-primary" id="cc-g2n">Gross → Net</button><button class="btn btn-sm btn-ghost" id="cc-n2g">Net → Gross</button></div>
+      <div class="field"><label id="cc-amt-l">Monthly gross salary (EGP)</label><input class="inp" id="cc-amt" type="number" min="0" step="0.01" placeholder="e.g. 10000" style="font-size:20px"></div>
+      <div class="field" style="margin-top:10px"><label><input type="checkbox" id="cc-ins" checked> Covered by social insurance</label></div>
+      <div class="field" id="cc-insw-box"><label>Insurance wage (أجر الاشتراك) — leave empty to use the gross</label><input class="inp" id="cc-insw" type="number" min="0" step="0.01" placeholder="same as gross (kept within the limits)"></div>
+      <div class="field"><label>Tax-exempt allowances per month (optional)</label><input class="inp" id="cc-ex" type="number" min="0" step="0.01" placeholder="0"></div>
+      <div id="cc-rates-note" style="font-size:12px;color:var(--muted);margin-top:10px;line-height:1.6"></div>
+    </div>
+    <div class="card" style="flex:1.4;min-width:340px;padding:20px">
+      <div class="toolbar-title" style="margin-bottom:12px">2 · Result (per month)</div>
+      <div class="tbl-wrap"><table><tbody id="cc-out"></tbody></table></div>
+      <div class="toolbar-title" style="margin:18px 0 8px">How the yearly tax is worked out</div>
+      <div class="tbl-wrap"><table><thead><tr><th>Annual taxable income</th><th class="num">Rate</th><th class="num">Tax</th></tr></thead><tbody id="cc-br"></tbody></table></div>
+    </div>
+  </div>
+  <div class="card" style="padding:20px">
+    <div class="toolbar"><span class="toolbar-title">Rates used</span><div class="toolbar-right"><button class="btn btn-ghost btn-sm" id="cc-reset">Back to 2026 defaults</button><button class="btn btn-primary btn-sm" id="cc-save">Save rates</button></div></div>
+    <div class="grid3" style="padding:0 0 6px">
+      <div class="field"><label>Tax year</label><input class="inp" id="cr-year" type="number"></div>
+      <div class="field"><label>Personal exemption (EGP / year)</label><input class="inp" id="cr-exemption" type="number"></div>
+      <div class="field"><label>Martyrs' families fund (% of gross)</label><input class="inp" id="cr-martyrs" type="number" step="0.01"></div>
+      <div class="field"><label>Social insurance — employee %</label><input class="inp" id="cr-siEmp" type="number" step="0.01"></div>
+      <div class="field"><label>Social insurance — employer %</label><input class="inp" id="cr-siEr" type="number" step="0.01"></div>
+      <div class="field"><label>Insurance wage limits (EGP / month)</label><div style="display:flex;gap:8px"><input class="inp" id="cr-siMin" type="number" placeholder="min"><input class="inp" id="cr-siMax" type="number" placeholder="max"></div></div>
+      <div class="field full"><label>Tax brackets — one per line: upper limit, rate % (last line: “above”, rate)</label><textarea class="inp" id="cr-brackets" rows="7" style="font-family:monospace"></textarea></div>
+      <div class="field full"><label>Higher incomes lose lower brackets — one per line: above this annual income, start from bracket number (2 = the second line)</label><textarea class="inp" id="cr-skip" rows="5" style="font-family:monospace"></textarea></div>
+    </div>
+    <div style="font-size:12px;color:var(--muted)">2026 defaults: Andersen Egypt tax table (January 2026); insurance wage 2,700–16,700 from the National Organization for Social Insurance (from 1 January 2026). Only Finance and the administrator can save changes.</div>
   </div>
 </div>
 
@@ -1414,7 +1453,7 @@ function buildLists(){
 const PAGE_RENDER = { dashboard:()=>renderDashboard(), employees:()=>renderEmployees(), attendance:()=>renderAttendance(), projects:()=>renderProjects(),
   monthly:()=>renderMonthly(), loans:()=>renderLoans(), payroll:()=>renderPayroll(), reports:()=>renderReports(), permissions:()=>renderPermissions(),
   leaves:()=>renderLeaves(), exempt:()=>renderExempt(), penalties:()=>renderPenalties(), holidays:()=>renderHolidays(), hrreq:()=>renderHrRequests(),
-  reporting:()=>renderReporting(), history:()=>renderHistory(), parrules:()=>renderParRules(), approvals:()=>renderApprovals(), assign:()=>renderAssign(), bulk:()=>renderBulk() };
+  reporting:()=>renderReporting(), history:()=>renderHistory(), parrules:()=>renderParRules(), approvals:()=>renderApprovals(), assign:()=>renderAssign(), bulk:()=>renderBulk(), calc:()=>renderCalc() };
 let DIRTY = new Set(), LOAD_MS = 0;
 function currentPage(){ const p = document.querySelector('.page.active'); return p ? p.id.replace('page-','') : 'dashboard'; }
 function renderPageIfNeeded(name){ if (DIRTY.has(name) && PAGE_RENDER[name]) { DIRTY.delete(name); PAGE_RENDER[name](); } }
@@ -4917,6 +4956,118 @@ async function mbuSave(){
 $('mbu-template').addEventListener('click', mbuTemplate);
 $('mbu-file').addEventListener('change', mbuFile);
 $('mbu-save').addEventListener('click', mbuSave);
+// ═════════════════════════════════════════════════════════
+//  NET ↔ GROSS CALCULATOR (Egypt) — standalone tool, does not change the payroll
+//  2026 defaults: personal exemption 20,000 · brackets per Law 91/2005 as amended (incl. losing lower brackets
+//  above 600,000) · social insurance 11% employee / 18.75% employer on a wage of 2,700–16,700 · martyrs' fund 0.05%
+// ═════════════════════════════════════════════════════════
+const CALC_DEFAULTS = { year: 2026, exemption: 20000, siEmp: 11, siEr: 18.75, siMin: 2700, siMax: 16700, martyrs: 0.05, round10: true,
+  // the normal ladder: [upper limit of the bracket, rate %]
+  brackets: [[40000, 0], [55000, 10], [70000, 15], [200000, 20], [400000, 22.5], [1200000, 25], [Infinity, 27.5]],
+  // higher incomes lose the lower brackets: above this annual taxable income, tax starts from this bracket
+  skip: [[600000, 1], [700000, 2], [800000, 3], [900000, 4], [1200000, 5]] };
+let calcRates = () => ({ ...CALC_DEFAULTS, ...((settings && settings.calcRates) || {}) });
+// annual tax on annual taxable income (after the personal exemption)
+function annualTax(n, R){
+  R = R || calcRates(); if (!(n > 0)) return { tax:0, rows:[] };
+  let start = 0; R.skip.forEach(([lim, idx]) => { if (n > lim) start = idx; });
+  let tax = 0, prev = 0; const rows = [];
+  R.brackets.forEach(([up, rate], i) => {
+    const lo = i < start ? null : (i === start ? 0 : prev); prev = up;
+    if (lo === null) return;
+    const top = Math.min(n, up); if (top <= lo) return;
+    const part = (top - lo) * rate / 100; tax += part; rows.push({ from: lo, to: top, rate, tax: part });
+  });
+  return { tax, rows };
+}
+// gross → net for one month
+function grossToNet(gross, o = {}){
+  const R = o.rates || calcRates();
+  const insured = o.insured !== false;
+  const baseIns = o.insWage > 0 ? o.insWage : gross;
+  const insWage = insured ? Math.min(Math.max(baseIns, R.siMin), R.siMax) : 0;
+  const siEmp = insured ? insWage * R.siEmp / 100 : 0;
+  const exempt = Math.max(0, num(o.exempt));
+  const monthlyTaxable = Math.max(0, gross - siEmp - exempt);
+  let annualTaxable = Math.max(0, monthlyTaxable * 12 - R.exemption);
+  if (R.round10) annualTaxable = Math.floor(annualTaxable / 10) * 10;
+  const at = annualTax(annualTaxable, R);
+  const tax = at.tax / 12, martyrs = gross * R.martyrs / 100;
+  const net = gross - siEmp - tax - martyrs;
+  const siEr = insured ? insWage * R.siEr / 100 : 0;
+  return { gross, insWage, siEmp, exempt, monthlyTaxable, annualTaxable, annualTax: at.tax, rows: at.rows, tax, martyrs, net, siEr, cost: gross + siEr };
+}
+// net → gross: the gross that leaves exactly this net (to the piastre)
+function netToGross(net, o = {}){
+  if (!(net > 0)) return grossToNet(0, o);
+  let lo = net, hi = net * 2 + 100000;
+  while (grossToNet(hi, o).net < net) hi *= 2;
+  for (let i = 0; i < 80 && hi - lo > 0.001; i++){ const mid = (lo + hi) / 2; if (grossToNet(mid, o).net < net) lo = mid; else hi = mid; }
+  const exact = Math.round(hi * 100) / 100, whole = Math.ceil(exact - 1e-9);
+  const w = grossToNet(whole, o);                            // prefer a whole-pound gross when it leaves the same net
+  return Math.abs(w.net - net) <= 0.01 ? w : grossToNet(exact, o);
+}
+
+// ── the page ──
+let CC_DIR = 'g2n';
+const ccFmt = v => (Math.round(v * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function ccOpts(){ return { insured: $('cc-ins').checked, insWage: num($('cc-insw').value), exempt: num($('cc-ex').value) }; }
+function renderCalc(){
+  const R = calcRates();
+  $('cc-rates-note').innerHTML = `Rates for <b>${R.year}</b>: personal exemption ${fmt(R.exemption)} · insurance ${R.siEmp}% (employee) on a wage of ${fmt(R.siMin)}–${fmt(R.siMax)} · martyrs' fund ${R.martyrs}% of gross.`;
+  $('cc-insw-box').style.display = $('cc-ins').checked ? '' : 'none';
+  ccFillRates(R); ccCalc();
+}
+function ccCalc(){
+  const amt = num($('cc-amt').value), o = ccOpts();
+  if (!(amt > 0)){ $('cc-out').innerHTML = '<tr><td class="empty">Type an amount on the left</td></tr>'; $('cc-br').innerHTML = ''; return; }
+  const r = CC_DIR === 'g2n' ? grossToNet(amt, o) : netToGross(amt, o);
+  const row = (l, v, strong, note) => `<tr${strong ? ' style="background:var(--hover)"' : ''}><td${strong ? ' class="strong"' : ''}>${l}${note ? `<div style="font-size:11px;color:var(--muted)">${note}</div>` : ''}</td><td class="num${strong ? ' strong' : ''}" style="font-size:${strong ? 18 : 14}px">${ccFmt(v)}</td></tr>`;
+  const R = calcRates();
+  $('cc-out').innerHTML =
+      row('Gross salary', r.gross, CC_DIR === 'n2g', CC_DIR === 'n2g' ? 'the gross needed for the net you entered' : '')
+    + (o.insured ? row('Insurance wage (أجر الاشتراك)', r.insWage, false, `kept within ${fmt(R.siMin)}–${fmt(R.siMax)}`) : '')
+    + row(`− Social insurance, employee (${R.siEmp}%)`, -r.siEmp)
+    + row('− Wage tax (ضريبة كسب العمل)', -r.tax, false, `${ccFmt(r.annualTax)} a year on ${fmt(r.annualTaxable)} taxable (after the ${fmt(R.exemption)} exemption)`)
+    + row(`− Martyrs' families fund (${R.martyrs}%)`, -r.martyrs)
+    + row('Net salary', r.net, true, CC_DIR === 'n2g' ? 'check: equals the net you entered' : '')
+    + (o.insured ? row(`Employer's social insurance (${R.siEr}%)`, r.siEr, false, 'paid by the company, on top of the gross') : '')
+    + row('Total monthly cost to the company', r.cost, true);
+  $('cc-br').innerHTML = r.rows.map(b => `<tr><td class="mono">${fmt(b.from)} – ${fmt(b.to)}</td><td class="num">${b.rate}%</td><td class="num">${ccFmt(b.tax)}</td></tr>`).join('')
+    + `<tr style="background:var(--hover)"><td class="strong">Total for the year (÷ 12 = ${ccFmt(r.tax)} a month)</td><td></td><td class="num strong">${ccFmt(r.annualTax)}</td></tr>`;
+}
+function ccFillRates(R){
+  ['year','exemption','martyrs','siEmp','siEr','siMin','siMax'].forEach(k => { const el = $('cr-' + k); if (document.activeElement !== el) el.value = R[k]; });
+  if (document.activeElement !== $('cr-brackets')) $('cr-brackets').value = R.brackets.map(([u, r]) => `${u === Infinity || u === null ? 'above' : u}, ${r}`).join('\n');
+  if (document.activeElement !== $('cr-skip')) $('cr-skip').value = R.skip.map(([a, i]) => `${a}, ${i + 1}`).join('\n');
+}
+function ccReadRates(){
+  const brackets = $('cr-brackets').value.split('\n').map(l => l.split(',').map(x => x.trim())).filter(p => p.length === 2 && p[1] !== '')
+    .map(([u, r]) => [/above|∞|فوق/i.test(u) ? Infinity : Number(u), Number(r)]);
+  const skip = $('cr-skip').value.split('\n').map(l => l.split(',').map(x => x.trim())).filter(p => p.length === 2 && p[1] !== '').map(([a, i]) => [Number(a), Number(i) - 1]);
+  const R = { year: num($('cr-year').value), exemption: num($('cr-exemption').value), martyrs: num($('cr-martyrs').value), siEmp: num($('cr-siEmp').value),
+              siEr: num($('cr-siEr').value), siMin: num($('cr-siMin').value), siMax: num($('cr-siMax').value), round10: true, brackets, skip };
+  const bad = brackets.some(([u, r], i) => !(u > 0) || !(r >= 0) || (i && u <= brackets[i-1][0])) || brackets[brackets.length - 1][0] !== Infinity
+           || skip.some(([a, i]) => !(a > 0) || !(i >= 0) || i >= brackets.length) || !(R.siMax > R.siMin);
+  if (bad) throw new Error('Check the rates: brackets must go up, the last line must be “above, rate”, and the insurance minimum must be below the maximum.');
+  return R;
+}
+async function ccSave(){
+  let R; try { R = ccReadRates(); } catch(e){ return toast(e.message, 'warn'); }
+  const old = settings.calcRates; settings.calcRates = { ...R, brackets: R.brackets.map(([u, r]) => [u === Infinity ? null : u, r]) };
+  const { data, error } = await sb.from('settings').upsert({ key:'payroll', value:settings }).select();
+  if (error || !(data && data.length)){ settings.calcRates = old; return toast(error ? error.message : NOPERM, 'err'); }
+  toast(`Rates for ${R.year} saved`); renderCalc();
+}
+// stored rates keep "above" as null — turn it back into Infinity
+const _calcRatesRaw = calcRates;
+calcRates = function(){ const R = _calcRatesRaw(); return { ...R, brackets: R.brackets.map(([u, r]) => [u === null ? Infinity : u, r]) }; };
+$('cc-g2n').addEventListener('click', () => { CC_DIR = 'g2n'; $('cc-g2n').className = 'btn btn-sm btn-primary'; $('cc-n2g').className = 'btn btn-sm btn-ghost'; $('cc-amt-l').textContent = 'Monthly gross salary (EGP)'; ccCalc(); });
+$('cc-n2g').addEventListener('click', () => { CC_DIR = 'n2g'; $('cc-n2g').className = 'btn btn-sm btn-primary'; $('cc-g2n').className = 'btn btn-sm btn-ghost'; $('cc-amt-l').textContent = 'Agreed monthly net salary (EGP)'; ccCalc(); });
+['cc-amt','cc-insw','cc-ex'].forEach(id => $(id).addEventListener('input', ccCalc));
+$('cc-ins').addEventListener('change', () => { $('cc-insw-box').style.display = $('cc-ins').checked ? '' : 'none'; ccCalc(); });
+$('cc-save').addEventListener('click', ccSave);
+$('cc-reset').addEventListener('click', () => { ccFillRates({ ...CALC_DEFAULTS }); toast('2026 defaults filled in — click Save rates to keep them'); });
 // ═════════════════════════════════════════════════════════
 //  BOOT
 // ═════════════════════════════════════════════════════════

@@ -147,6 +147,25 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 #loader{position:fixed;inset:0;background:var(--overlay);z-index:300;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;color:var(--label)}
 @media(max-width:900px){#self .layout{flex-direction:column}#self .sidebar{display:flex;position:static;width:100%;height:auto;padding:8px;gap:6px;border-right:none;border-bottom:1px solid var(--border)}#self .sidebar .nav-label{display:none}#self .sidebar .nav-item{margin:0}
 #page-reports>div:last-child{grid-template-columns:1fr!important}.sidebar{display:none}.main{padding:16px}.grid2,.grid3{grid-template-columns:1fr}}
+
+/* phones and small tablets: ☰ opens the menu over the page */
+.menu-btn{display:none;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:20px;cursor:pointer;flex-shrink:0}
+#nav-backdrop{display:none}
+@media(max-width:900px){
+  .menu-btn{display:inline-flex}
+  #app>.topbar{height:auto;min-height:56px;flex-wrap:wrap;padding:8px 12px;gap:8px}
+  #app>.topbar .topbar-right{flex-wrap:wrap;gap:6px;margin-left:0}
+  #app>.topbar .logo-sub{display:none}
+  body.nav-open #app .sidebar{display:block!important;position:fixed;top:0;left:0;height:100vh;width:280px;z-index:1001;box-shadow:0 0 40px rgba(0,0,0,.35);padding-top:12px}
+  body.nav-open #nav-backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000}
+  body.nav-mini #app .sidebar{width:280px}
+  body.nav-mini #app .sidebar .nav-txt{display:inline}
+  body.nav-mini #app .sidebar .nav-label{display:flex}
+  body.nav-mini #app .sidebar .nav-item{justify-content:flex-start;margin:0 10px;padding:9px 12px}
+  #app .sidebar .nav-toggle{display:none}
+  .page-header{flex-direction:column}
+  .tbl-wrap{overflow-x:auto}
+}
 </style>
 </head>
 <body>
@@ -256,6 +275,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 
 <div id="app" style="display:none">
 <div class="topbar">
+  <button class="menu-btn" id="menu-btn" type="button" aria-label="Menu">☰</button>
   <div class="logo"><div class="logo-mark">PK</div><div><div class="logo-name">Petrokima HR</div><div class="logo-sub">Attendance &amp; Payroll System</div></div></div>
   <div class="topbar-right">
     <span class="badge"><span class="dot"></span>Supabase</span>
@@ -519,11 +539,28 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
     <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Employee</th><th>Subject</th><th>Details</th><th>Status</th><th>Reply</th></tr></thead><tbody id="vo-fb"></tbody></table></div></div>
   <div class="card"><div class="toolbar"><span class="toolbar-title">⚖️💰 Penalties & variable elements requested by managers</span><span style="font-size:12px;color:var(--muted)">Manager → board member → HR (final). On HR approval it is recorded automatically — days and hours are converted with the employee's daily / hourly pay.</span></div>
     <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Employee</th><th class="num">Quantity</th><th>Payroll month</th><th>Reason</th><th>Requested by</th><th>Board member</th><th>Status</th></tr></thead><tbody id="vo-act"></tbody></table></div></div>
+  <div class="card"><div class="toolbar"><span class="toolbar-title">💼 Basic salary changes</span><span style="font-size:12px;color:var(--muted)">Applied only after the board member approves.</span></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Employee</th><th class="num">Current</th><th class="num">New</th><th>From</th><th>Reason</th><th>Requested by</th><th>Board member</th><th>Status</th><th></th></tr></thead><tbody id="vo-sal"></tbody></table></div></div>
   <div class="card"><div class="toolbar"><span class="toolbar-title">👥 Requests for new employees</span><span style="font-size:12px;color:var(--muted)">Closed only when both HR and the manager agree.</span></div>
     <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Manager</th><th class="num">Number</th><th>Job name</th><th>Job description</th><th>Needed by</th><th>Status</th><th>Closing</th><th>HR note</th></tr></thead><tbody id="vo-hire"></tbody></table></div></div>
   <div class="card"><div class="toolbar"><span class="toolbar-title">🎓 Training requests</span></div>
     <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Manager</th><th>Employees</th><th>Topic</th><th>Details</th><th>Preferred date</th><th>Status</th><th>HR note</th></tr></thead><tbody id="vo-train"></tbody></table></div></div>
 </div>
+
+<div id="nav-backdrop"></div>
+<!-- MODAL: BASIC SALARY CHANGE REQUEST -->
+<div class="overlay" id="m-salreq"><div class="modal" style="max-width:520px">
+  <div class="modal-head"><div class="modal-title">💼 Request basic salary change</div><button class="x" data-close="m-salreq">×</button></div>
+  <div class="alert a-info" style="margin-bottom:12px">Basic salary changes take effect only after the board member approves them. The change is then applied automatically.</div>
+  <div id="sr-who" style="font-size:14px;margin-bottom:10px"></div>
+  <div class="grid3">
+    <div class="field"><label>Current basic salary</label><input class="inp" id="sr-cur" disabled></div>
+    <div class="field"><label>New basic salary *</label><input class="inp" id="sr-new" type="number" min="1" step="0.01"></div>
+    <div class="field"><label>Effective from *</label><input class="inp" id="sr-from" type="date"></div>
+    <div class="field full"><label>Reason * (the board member sees it)</label><textarea class="inp" id="sr-reason" rows="3"></textarea></div>
+  </div>
+  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-salreq">Cancel</button><button class="btn btn-primary" id="sr-go">Send to the board member</button></div>
+</div></div>
 
 <!-- MODAL: ANSWER -->
 <div class="overlay" id="m-voice"><div class="modal" style="max-width:620px">
@@ -830,6 +867,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="sec">Mobile app</div>
   <div id="emp-dev" style="font-size:13px;color:var(--label)"></div>
   <div class="sec no-officer">Fixed salary package</div>
+  <div id="emp-sal-pending" class="no-officer"></div>
   <div id="emp-pkg" class="no-officer"></div>
   <div class="sec" style="margin-top:16px">📌 Assigned projects</div>
   <div id="emp-proj" style="font-size:13px"></div>
@@ -1318,7 +1356,7 @@ async function connectFromForm(){
 }
 
 let ME = null;
-const ROLE_LABEL = { admin:'Admin', hr:'HR', hr_officer:'HR Officer', finance:'Finance', manager:'Manager', employee:'Employee' };
+const ROLE_LABEL = { admin:'Admin', hr:'HR', hr_officer:'HR Officer', employee:'Employee' };
 const PAY_FIELDS = ['salary','housing','transport','daily_pay','hour_pay','delay_hour_pay','insurance_amount'];
 const isOfficer = () => !!(ME && ME.role === 'hr_officer');
 async function startApp(url,key){
@@ -1865,6 +1903,7 @@ function renderPackage(){
 async function addPackageRow(){
   const code = num($('pk-el').value), amt = $('pk-amt').value, from = $('pk-from').value, to = $('pk-to').value;
   if (!code || amt==='' || !from) return toast('Element, amount and start date are required','warn');
+  if ((elByCode(code) || {}).is_basic) return openSalaryRequest(editingEmp, code, num(amt), from);   // basic salary → board approval
   const rec = { emp_id: editingEmp, element_code: code, amount: num(amt), effective_from: from, effective_to: to || null };
   const { data, error } = await sb.from('employee_salary_elements').insert(rec).select();
   if (error) return toast(error.message.includes('duplicate') ? 'This element already starts on that date for this employee' : error.message, 'err');
@@ -3169,6 +3208,7 @@ $('hd-year').addEventListener('change', renderHolidays);
 $('hd-save').addEventListener('click', saveHol);
 $('hd-tbl').addEventListener('click', e => { const x=e.target.closest('[data-del-hol]');
   if (x){ const id=x.dataset.delHol; confirmDel('Delete this public holiday? Leave day counts already saved are not changed.', async()=>{ await del('public_holidays',id); S.holidays=S.holidays.filter(h=>h.id!==id); holidaySet=new Set(S.holidays.map(h=>h.date)); afterHolChange(); toast('Deleted'); }); } });
+let SUPER = {};
 let ACCT_FLAGS = {};
 // ═════════════════════════════════════════════════════════
 //  USERS & ROLES (admin only)
@@ -3179,12 +3219,13 @@ async function loadUsers(){
   const { data, error } = await sb.rpc('admin_list_users');
   if (error){ $('us-tbl').innerHTML = `<tr><td colspan="7" class="empty">${esc(error.message)}</td></tr>`; return; }
   USERS = data || [];
-  const fl = await sb.from('app_users').select('id,acct_reports');           // who may open Project cost reports
+  const fl = await sb.from('app_users').select('id,acct_reports,super_admin');           // who may open Project cost reports · who is super admin
   ACCT_FLAGS = Object.fromEntries((fl.data || []).map(x => [x.id, !!x.acct_reports]));
+  SUPER = Object.fromEntries((fl.data || []).map(x => [x.id, !!x.super_admin]));
   renderUsers();
 }
 function renderUsers(){
-  const roles = ['','admin','hr','hr_officer','finance','manager','employee'];
+  const roles = ['','admin','hr','hr_officer','employee'];
   const q=$('us-q').value.trim().toLowerCase(), rf=$('us-role').value, st=$('us-state').value;
   const withLogin = new Set(USERS.map(u=>String(u.emp_id||'')).filter(Boolean));
   const gap = S.employees.filter(e=>e.status!=='Inactive' && !withLogin.has(String(e.id))).length;
@@ -4708,6 +4749,19 @@ $('pc-xlsx').addEventListener('click', async () => {
   if (typeof updateBadges === 'function'){ const _ub = updateBadges; updateBadges = function(){ const r = _ub.apply(this, arguments); paint(); return r; }; }
   window.paintNavSections = paint;
 })();
+
+// ═════════════════════════════════════════════════════════
+//  PHONE / SMALL SCREENS — ☰ opens the menu over the page; picking a page closes it
+// ═════════════════════════════════════════════════════════
+$('menu-btn').addEventListener('click', () => document.body.classList.toggle('nav-open'));
+$('nav-backdrop').addEventListener('click', () => document.body.classList.remove('nav-open'));
+document.addEventListener('click', e => { if (e.target.closest('#app .sidebar .nav-item[data-page]')) document.body.classList.remove('nav-open'); });
+// users list: mark the super admin
+const _renderUsersSA = renderUsers;
+renderUsers = function(){ const r = _renderUsersSA.apply(this, arguments);
+  document.querySelectorAll('#us-tbl tr').forEach(tr => { const cb = tr.querySelector('[data-u-acct]'); if (cb && SUPER[cb.dataset.uAcct]){
+    const cell = tr.querySelector('td'); if (cell && !cell.querySelector('.sa-badge')) cell.insertAdjacentHTML('beforeend', ' <span class="chip c-red sa-badge" title="Full authority — only she can make or remove administrators">👑 Super admin</span>'); } });
+  return r; };
 // ═════════════════════════════════════════════════════════
 //  BULK UPLOAD — one page for every kind of data (template → upload → preview → save)
 // ═════════════════════════════════════════════════════════
@@ -4848,12 +4902,17 @@ const BU_TYPES = {
     async save(x){ return sb.from('employees').update(x.data.rec).eq('id', x.data.id).select('id'); } },
 
   fixed: { t:'Fixed salary package', roles:['admin','finance'], d:'Fixed salary elements per employee with the date they start (and end).',
-    cols: () => [['emp','Employee code','emp',true],['el','Element code','num',true,'a Fixed element from Salary elements'],['amt','Amount','num',true],['from','Effective from','date',true],['to','Effective to','date',false]],
+    cols: () => [['emp','Employee code','emp',true],['el','Element code','num',true,'a Fixed element from Salary elements'],['amt','Amount','num',true],['from','Effective from','date',true],['to','Effective to','date',false],
+                 ['why','Reason','text',false,'required for BASIC salary rows — they go to the board member for approval']],
     check(v){ const emp = buEmp(v.emp); if (!emp) return err(`Employee code “${buTxt(v.emp)}” not found`);
       const el = elByCode(buNum(v.el)); if (!el) return err(`Element “${buTxt(v.el)}” not found`); if (el.input_method !== 'Fixed') return err(`${el.code} · ${el.name_en} is not a Fixed element`);
       const a = buNum(v.amt); if (a === null || a === '') return err('Amount is required'); const f = buDate(v.from), t = buDate(v.to); if (!f) return err('Effective from is not valid'); if (t === null) return err('Effective to is not valid');
+      if (el.is_basic){
+        if (!buTxt(v.why)) return err('Basic salary changes need a reason — they go to the board member for approval');
+        return ok('new', `💼 Request to board: ${empName(empById(emp))} · basic salary ${fmt(a)} from ${f}`, { request:true, rec:{ emp_id:emp, element_code:el.code, new_amount:a, effective_from:f, reason:buTxt(v.why) } });
+      }
       return ok('new', `${empName(empById(emp))} · ${el.code} ${el.name_en} · ${fmt(a)} from ${f}`, { rec:{ emp_id:emp, element_code:el.code, amount:a, effective_from:f, effective_to:t || null } }); },
-    async save(x){ return sb.from('employee_salary_elements').insert(x.data.rec).select('id'); } },
+    async save(x){ return x.data.request ? sb.from('salary_change_requests').insert(x.data.rec).select('id') : sb.from('employee_salary_elements').insert(x.data.rec).select('id'); } },
 
   loans: { t:'Loans', roles:['admin','finance'], d:'Instalment = amount ÷ months, deducted from the first deduction month onwards.',
     cols: () => [['emp','Employee code','emp',true],['amt','Loan amount','num',true],['months','Months','num',true],['start','First deduction month','month',true,'e.g. 2026-11'],['settled','Already settled','num',false],['ref','Reference','text',false]],
@@ -5269,6 +5328,61 @@ $('mv-close').addEventListener('click', async () => {
   if (error) return toast(error.message, 'err');
   closeM('m-voice'); toast(data === 'Closed' ? 'Closed — both HR and the manager agreed' : 'You agreed to close — waiting for the manager to confirm'); renderVoicePage();
 });
+
+// ═════════════════════════════════════════════════════════
+//  BASIC SALARY CHANGES — only after the board member approves
+// ═════════════════════════════════════════════════════════
+let SR_CUR = null; V.sal = [];
+function currentBasic(empId, onDate){
+  const rows = (S.fixed || []).filter(r => String(r.emp_id) === String(empId) && (elByCode(r.element_code) || {}).is_basic
+    && r.effective_from <= onDate && (!r.effective_to || r.effective_to >= onDate)).sort((a,b) => String(b.effective_from).localeCompare(String(a.effective_from)));
+  return rows.length ? num(rows[0].amount) : null;
+}
+function openSalaryRequest(empId, code, amount, from){
+  const e = empById(empId); if (!e) return toast('Save the employee first','warn');
+  SR_CUR = { empId, code };
+  $('sr-who').innerHTML = `<b>${esc(empName(e))}</b> (${esc(empId)}) · ${esc((elByCode(code) || {}).name_en || 'Basic salary')}`;
+  const f = from || todayISO(); $('sr-from').value = f;
+  const cur = currentBasic(empId, f); $('sr-cur').value = cur == null ? '—' : fmt(cur);
+  $('sr-new').value = amount || ''; $('sr-reason').value = '';
+  openM('m-salreq');
+}
+$('sr-from').addEventListener('change', () => { if (SR_CUR){ const c = currentBasic(SR_CUR.empId, $('sr-from').value); $('sr-cur').value = c == null ? '—' : fmt(c); } });
+$('sr-go').addEventListener('click', async () => {
+  const amt = num($('sr-new').value), from = $('sr-from').value, reason = $('sr-reason').value.trim();
+  if (!(amt > 0) || !from || !reason) return toast('Enter the new basic salary, the date and the reason','warn');
+  const { data, error } = await sb.from('salary_change_requests').insert({ emp_id: SR_CUR.empId, element_code: SR_CUR.code, new_amount: amt, effective_from: from, reason }).select();
+  if (error || !(data && data.length)) return toast(error ? error.message : NOPERM, 'err');
+  closeM('m-salreq'); toast('Sent to the board member for approval — the new basic salary applies once approved');
+  renderSalaryPending(SR_CUR.empId);
+});
+async function renderSalaryPending(empId){
+  const box = $('emp-sal-pending'); if (!box) return; box.innerHTML = '';
+  if (!empId || !(ME && ['admin','hr','finance'].includes(ME.role))) return;
+  const { data } = await sb.from('salary_change_requests').select('*').eq('emp_id', empId).order('created_at', { ascending:false }).limit(3);
+  const w = (data || []).find(r => r.status === 'Waiting for board'), last = (data || []).find(r => r.status !== 'Waiting for board' && r.status !== 'Cancelled');
+  box.innerHTML = (w ? `<div class="alert a-warn" style="margin:10px 0">💼 Basic salary change to <b>${fmt(w.new_amount)}</b> from ${esc(w.effective_from)} is <b>waiting for the board member's approval</b> (requested by ${esc(w.requested_by || '')}).</div>` : '')
+    + (last && !w ? `<div style="font-size:12px;color:var(--muted);margin:8px 0">Last basic salary request: ${fmt(last.new_amount)} from ${esc(last.effective_from)} — ${esc(last.status)}${last.board_by ? ' by ' + esc(last.board_by) : ''}</div>` : '')
+    + `<button class="btn btn-ghost btn-sm" style="margin:6px 0" data-sal-req="${esc(empId)}">💼 Request basic salary change</button>`;
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-sal-req]'); if (!b) return;
+  const basic = (S.elements || []).find(x => x.is_basic && x.active !== false); openSalaryRequest(b.dataset.salReq, basic ? basic.code : null, null, null); });
+const _openEmpSal = openEmp;
+openEmp = function(id){ const r = _openEmpSal.apply(this, arguments); renderSalaryPending(id); return r; };
+// list on the Employee voice page
+const _loadVoiceSal = loadVoice;
+loadVoice = async function(){ await _loadVoiceSal.apply(this, arguments); const r = await sb.from('salary_change_requests').select('*').order('created_at', { ascending:false }); V.sal = r.data || []; };
+const _renderVoiceSal = renderVoicePage;
+renderVoicePage = async function(){ await _renderVoiceSal.apply(this, arguments);
+  $('vo-sal').innerHTML = V.sal.map(x => `<tr><td class="mono">${esc(vDate(x.created_at))}</td><td>${esc(x.emp_name ? `${x.emp_name} (${x.emp_id})` : vName(x.emp_id))}</td>
+      <td class="num">${x.current_amount == null ? '—' : fmt(x.current_amount)}</td><td class="num strong">${fmt(x.new_amount)}</td><td class="mono">${esc(x.effective_from)}</td>
+      <td style="white-space:normal;max-width:280px">${esc(x.reason)}</td><td>${esc(x.requested_by || '')}</td>
+      <td style="white-space:normal;font-size:12px">${x.board_by ? esc(x.board_by) + (x.board_note ? ': ' + esc(x.board_note) : '') : ''}</td><td>${vChip(x.status)}</td>
+      <td>${x.status === 'Waiting for board' ? `<button class="btn btn-ghost btn-sm" data-sal-cancel="${esc(x.id)}">Cancel</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="10" class="empty">No requests</td></tr>';
+};
+document.addEventListener('click', async e => { const b = e.target.closest('[data-sal-cancel]'); if (!b) return;
+  const { error } = await sb.rpc('cancel_salary_change', { p_id: b.dataset.salCancel }); if (error) return toast(error.message, 'err');
+  toast('Request cancelled'); renderVoicePage(); });
 // ═════════════════════════════════════════════════════════
 //  BOOT
 // ═════════════════════════════════════════════════════════

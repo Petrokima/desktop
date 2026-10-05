@@ -517,8 +517,10 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
       <div class="toolbar-right"><select class="sel" id="vo-kind"><option value="">All</option><option value="complaint">Complaints</option><option value="suggestion">Suggestions</option></select>
         <select class="sel" id="vo-st"><option value="open">Open (New + In review)</option><option value="">All</option><option value="Closed">Closed</option></select></div></div>
     <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Employee</th><th>Subject</th><th>Details</th><th>Status</th><th>Reply</th></tr></thead><tbody id="vo-fb"></tbody></table></div></div>
-  <div class="card"><div class="toolbar"><span class="toolbar-title">👥 Requests for new employees</span></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Manager</th><th class="num">Number</th><th>Job name</th><th>Job description</th><th>Needed by</th><th>Status</th><th>HR note</th></tr></thead><tbody id="vo-hire"></tbody></table></div></div>
+  <div class="card"><div class="toolbar"><span class="toolbar-title">⚖️🏅 Penalties & incentives requested by managers</span><span style="font-size:12px;color:var(--muted)">Manager → board member → HR (final). On HR approval the penalty or incentive is recorded automatically.</span></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Employee</th><th class="num">Quantity</th><th>Payroll month</th><th>Reason</th><th>Requested by</th><th>Board member</th><th>Status</th></tr></thead><tbody id="vo-act"></tbody></table></div></div>
+  <div class="card"><div class="toolbar"><span class="toolbar-title">👥 Requests for new employees</span><span style="font-size:12px;color:var(--muted)">Closed only when both HR and the manager agree.</span></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Manager</th><th class="num">Number</th><th>Job name</th><th>Job description</th><th>Needed by</th><th>Status</th><th>Closing</th><th>HR note</th></tr></thead><tbody id="vo-hire"></tbody></table></div></div>
   <div class="card"><div class="toolbar"><span class="toolbar-title">🎓 Training requests</span></div>
     <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Manager</th><th>Employees</th><th>Topic</th><th>Details</th><th>Preferred date</th><th>Status</th><th>HR note</th></tr></thead><tbody id="vo-train"></tbody></table></div></div>
 </div>
@@ -529,7 +531,8 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div id="mv-info" style="font-size:13px;line-height:1.6;margin-bottom:12px;white-space:pre-wrap"></div>
   <div class="field"><label>Status</label><select class="sel" id="mv-st"></select></div>
   <div class="field"><label id="mv-note-l">Reply</label><textarea class="inp" id="mv-note" rows="4"></textarea></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-voice">Cancel</button><button class="btn btn-primary" id="mv-save">Save</button></div>
+  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-voice">Cancel</button><button class="btn btn-ghost" id="mv-close" style="display:none">✔ Agree to close</button>
+    <button class="btn btn-danger" id="mv-reject" style="display:none">✖ Reject</button><button class="btn btn-primary" id="mv-save">Save</button></div>
 </div></div>
 
 <!-- BULK UPLOAD -->
@@ -5118,9 +5121,9 @@ $('cc-reset').addEventListener('click', () => { ccFillRates({ ...CALC_DEFAULTS }
 // ═════════════════════════════════════════════════════════
 //  ANNOUNCEMENTS · EMPLOYEE VOICE · BIRTHDAYS (desktop)
 // ═════════════════════════════════════════════════════════
-const V = { news:[], reads:[], fb:[], hire:[], train:[] };
+const V = { news:[], reads:[], fb:[], hire:[], train:[], act:[] };
 const vDate = ts => ts ? new Date(ts).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '';
-const vChip = s => `<span class="chip ${({New:'c-orange','In review':'c-blue','In progress':'c-blue',Closed:'c-green',Done:'c-green',Rejected:'c-red'})[s]||'c-grey'}">${esc(s)}</span>`;
+const vChip = s => `<span class="chip ${({'Waiting for board':'c-orange','Waiting for HR':'c-blue',Approved:'c-green',Cancelled:'c-grey',New:'c-orange','In review':'c-blue','In progress':'c-blue',Closed:'c-green',Done:'c-green',Rejected:'c-red'})[s]||'c-grey'}">${esc(s)}</span>`;
 const vName = id => { const e = empById(id); return e ? `${empName(e)} (${id})` : id; };
 // ── birthdays ──
 const isBirthdayToday = d => { if (!d) return false; const t = new Date(), b = String(d).slice(5,10), m = String(t.getMonth()+1).padStart(2,'0'), day = String(t.getDate()).padStart(2,'0');
@@ -5188,9 +5191,10 @@ $('an-go').addEventListener('click', publishNews);
 
 // ── employee voice ──
 async function loadVoice(){
-  const [f, h, t] = await Promise.all([sb.from('feedback').select('*').order('created_at', { ascending:false }), sb.from('hiring_requests').select('*').order('created_at', { ascending:false }), sb.from('training_requests').select('*').order('created_at', { ascending:false })]);
-  V.fb = f.data || []; V.hire = h.data || []; V.train = t.data || [];
-  const open = V.fb.filter(x => x.status !== 'Closed').length + V.hire.filter(x => x.status === 'New').length + V.train.filter(x => x.status === 'New').length;
+  const [f, h, t, m] = await Promise.all([sb.rpc('feedback_inbox'), sb.from('hiring_requests').select('*').order('created_at', { ascending:false }),
+    sb.from('training_requests').select('*').order('created_at', { ascending:false }), sb.from('manager_actions').select('*').order('created_at', { ascending:false })]);
+  V.fb = f.data || []; V.hire = h.data || []; V.train = t.data || []; V.act = m.data || [];
+  const open = V.fb.filter(x => x.status !== 'Closed').length + V.hire.filter(x => x.status === 'New').length + V.train.filter(x => x.status === 'New').length + V.act.filter(x => x.status === 'Waiting for HR').length;
   const b = $('voice-badge'); if (b){ b.textContent = open; b.style.display = open ? '' : 'none'; }
 }
 async function renderVoicePage(){
@@ -5198,11 +5202,16 @@ async function renderVoicePage(){
   const k = $('vo-kind').value, st = $('vo-st').value;
   const fb = V.fb.filter(x => (!k || x.kind === k) && (!st || (st === 'open' ? x.status !== 'Closed' : x.status === st)));
   $('vo-fb').innerHTML = fb.map(x => `<tr data-vo="fb:${esc(x.id)}" style="cursor:pointer"><td class="mono">${esc(vDate(x.created_at))}</td><td>${x.kind==='complaint' ? '⚠️ Complaint' : '💡 Suggestion'}</td>
-      <td>${esc(x.emp_name ? `${x.emp_name} (${x.emp_id})` : vName(x.emp_id))}</td><td class="strong" style="white-space:normal">${esc(x.subject)}</td><td style="white-space:normal;max-width:320px">${esc(x.body)}</td>
+      <td>${x.anonymous ? '🕶 <i>Anonymous</i>' : esc(x.emp_name ? `${x.emp_name} (${x.emp_id})` : vName(x.emp_id))}</td><td class="strong" style="white-space:normal">${esc(x.subject)}</td><td style="white-space:normal;max-width:320px">${esc(x.body)}</td>
       <td>${vChip(x.status)}</td><td style="white-space:normal;max-width:240px">${esc(x.reply || '')}${x.replied_by ? `<div style="font-size:11px;color:var(--muted)">— ${esc(x.replied_by)}</div>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">Nothing here</td></tr>';
   $('vo-hire').innerHTML = V.hire.map(x => `<tr data-vo="hire:${esc(x.id)}" style="cursor:pointer"><td class="mono">${esc(vDate(x.created_at))}</td><td>${esc(vName(x.manager_emp))}</td><td class="num">${x.headcount}</td>
       <td class="strong">${esc(x.job_name)}</td><td style="white-space:normal;max-width:340px">${esc(x.job_description)}${x.notes ? `<div style="font-size:12px;color:var(--muted)">${esc(x.notes)}</div>` : ''}</td>
-      <td class="mono">${esc(x.needed_by || '')}</td><td>${vChip(x.status)}</td><td style="white-space:normal">${esc(x.hr_note || '')}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">No requests</td></tr>';
+      <td class="mono">${esc(x.needed_by || '')}</td><td>${vChip(x.status)}</td><td style="white-space:nowrap;font-size:12px">HR ${x.hr_closed ? '✔' : '—'} · Manager ${x.mgr_closed ? '✔' : '—'}</td><td style="white-space:normal">${esc(x.hr_note || '')}${x.close_note ? `<div style="font-size:11px;color:var(--muted)">${esc(x.close_note)}</div>` : ''}</td></tr>`).join('') || '<tr><td colspan="9" class="empty">No requests</td></tr>';
+  $('vo-act').innerHTML = V.act.map(x => `<tr data-vo="act:${esc(x.id)}" style="cursor:pointer${x.status === 'Waiting for HR' ? ';background:rgba(224,123,57,.08)' : ''}"><td class="mono">${esc(vDate(x.created_at))}</td>
+      <td>${x.kind === 'penalty' ? '⚖️ Penalty' : '🏅 Incentive'}</td><td>${esc(x.emp_name ? `${x.emp_name} (${x.emp_id})` : vName(x.emp_id))}</td>
+      <td class="num">${fmt(x.quantity)} ${x.action_type === 'Amount' ? 'EGP' : x.action_type === 'Days' ? 'day(s)' : 'hour(s)'}</td><td class="mono">${esc(x.apply_period)}</td>
+      <td style="white-space:normal;max-width:300px">${esc(x.reason)}</td><td>${esc(x.manager_name || vName(x.manager_emp))}</td>
+      <td style="white-space:normal;font-size:12px">${x.board_by ? `${esc(x.board_by)}${x.board_note ? ': ' + esc(x.board_note) : ''}` : ''}</td><td>${vChip(x.status)}</td></tr>`).join('') || '<tr><td colspan="9" class="empty">No requests</td></tr>';
   $('vo-train').innerHTML = V.train.map(x => `<tr data-vo="train:${esc(x.id)}" style="cursor:pointer"><td class="mono">${esc(vDate(x.created_at))}</td><td>${esc(vName(x.manager_emp))}</td>
       <td style="white-space:normal;max-width:260px">${(x.emp_ids || []).map(id => esc(vName(id))).join(', ')}</td><td class="strong">${esc(x.topic)}</td><td style="white-space:normal;max-width:300px">${esc(x.details || '')}</td>
       <td class="mono">${esc(x.preferred_date || '')}</td><td>${vChip(x.status)}</td><td style="white-space:normal">${esc(x.hr_note || '')}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">No requests</td></tr>';
@@ -5210,26 +5219,56 @@ async function renderVoicePage(){
 let VO_CUR = null;
 document.addEventListener('click', e => {
   const r = e.target.closest('[data-vo]'); if (!r) return;
-  const [kind, id] = r.dataset.vo.split(':'), x = (kind === 'fb' ? V.fb : kind === 'hire' ? V.hire : V.train).find(y => y.id === id); if (!x) return;
+  const [kind, id] = r.dataset.vo.split(':'), x = (kind === 'fb' ? V.fb : kind === 'hire' ? V.hire : kind === 'act' ? V.act : V.train).find(y => y.id === id); if (!x) return;
   VO_CUR = { kind, x };
+  $('mv-close').style.display = kind === 'hire' && x.status !== 'Closed' && !x.hr_closed ? '' : 'none';
+  $('mv-reject').style.display = 'none'; $('mv-save').style.display = ''; $('mv-st').closest('.field').style.display = '';
+  if (kind === 'act'){
+    $('mv-title').textContent = `${x.kind === 'penalty' ? '⚖️ Penalty' : '🏅 Incentive'} — ${x.emp_name || x.emp_id}`;
+    $('mv-info').textContent = `Requested by: ${x.manager_name || x.manager_emp} · ${vDate(x.created_at)}\n${fmt(x.quantity)} ${x.action_type === 'Amount' ? 'EGP' : x.action_type === 'Days' ? 'day(s) of pay' : 'hour(s) of pay'} · payroll month ${x.apply_period}${x.incident_date ? ' · incident ' + x.incident_date : ''}\nReason: ${x.reason}\n\nBoard member: ${x.board_by ? x.board_by + (x.board_note ? ' — ' + x.board_note : '') : 'not yet'}\nStatus: ${x.status}`;
+    $('mv-st').closest('.field').style.display = 'none'; $('mv-note-l').textContent = 'HR note'; $('mv-note').value = x.hr_note || '';
+    const can = x.status === 'Waiting for HR'; $('mv-save').style.display = can ? '' : 'none'; $('mv-reject').style.display = can ? '' : 'none';
+    $('mv-save').textContent = can ? '✔ Approve & record' : 'Save'; openM('m-voice'); return;
+  }
+  $('mv-save').textContent = 'Save';
   $('mv-title').textContent = kind === 'fb' ? `${x.kind === 'complaint' ? '⚠️ Complaint' : '💡 Suggestion'} — ${x.subject}` : kind === 'hire' ? `👥 ${x.headcount} × ${x.job_name}` : `🎓 ${x.topic}`;
-  $('mv-info').textContent = kind === 'fb' ? `From: ${x.emp_name ? x.emp_name + ' (' + x.emp_id + ')' : vName(x.emp_id)} · ${vDate(x.created_at)}\n\n${x.body}`
+  $('mv-info').textContent = kind === 'fb' ? `From: ${x.anonymous ? '🕶 Anonymous (the employee chose not to show the name)' : x.emp_name ? x.emp_name + ' (' + x.emp_id + ')' : vName(x.emp_id)} · ${vDate(x.created_at)}\n\n${x.body}`
     : kind === 'hire' ? `Manager: ${vName(x.manager_emp)} · ${vDate(x.created_at)}\nJob description: ${x.job_description}${x.needed_by ? '\nNeeded by: ' + x.needed_by : ''}${x.notes ? '\nNotes: ' + x.notes : ''}`
     : `Manager: ${vName(x.manager_emp)} · ${vDate(x.created_at)}\nEmployees: ${(x.emp_ids || []).map(vName).join(', ')}${x.details ? '\nDetails: ' + x.details : ''}${x.preferred_date ? '\nPreferred date: ' + x.preferred_date : ''}`;
-  const sts = kind === 'fb' ? ['New','In review','Closed'] : ['New','In progress','Done','Rejected'];
+  const sts = kind === 'fb' ? ['New','In review','Closed'] : kind === 'hire' ? (x.status === 'Closed' ? ['Closed'] : ['New','In progress']) : ['New','In progress','Done','Rejected'];
   $('mv-st').innerHTML = sts.map(s => `<option ${s === x.status ? 'selected' : ''}>${s}</option>`).join('');
   $('mv-note-l').textContent = kind === 'fb' ? 'Reply (the employee sees it in the app)' : 'HR note (the manager sees it in the app)';
   $('mv-note').value = (kind === 'fb' ? x.reply : x.hr_note) || '';
   openM('m-voice');
 });
 $('mv-save').addEventListener('click', async () => {
-  if (!VO_CUR) return; const { kind, x } = VO_CUR, table = kind === 'fb' ? 'feedback' : kind === 'hire' ? 'hiring_requests' : 'training_requests';
-  const ch = kind === 'fb' ? { status:$('mv-st').value, reply:$('mv-note').value.trim() || null } : { status:$('mv-st').value, hr_note:$('mv-note').value.trim() || null };
-  const { data, error } = await sb.from(table).update(ch).eq('id', x.id).select();
-  if (error || !(data && data.length)) return toast(error ? error.message : NOPERM, 'err');
+  if (!VO_CUR) return; const { kind, x } = VO_CUR;
+  if (kind === 'act') return decideAct(true);
+  if (kind === 'fb'){
+    const { error } = await sb.rpc('answer_feedback', { p_id:x.id, p_status:$('mv-st').value, p_reply:$('mv-note').value.trim() || null });
+    if (error) return toast(error.message, 'err');
+  } else {
+    const table = kind === 'hire' ? 'hiring_requests' : 'training_requests';
+    const { data, error } = await sb.from(table).update({ status:$('mv-st').value, hr_note:$('mv-note').value.trim() || null }).eq('id', x.id).select();
+    if (error || !(data && data.length)) return toast(error ? error.message : NOPERM, 'err');
+  }
   closeM('m-voice'); toast('Saved — visible in the app'); renderVoicePage();
 });
 ['vo-kind','vo-st'].forEach(id => $(id).addEventListener('change', renderVoicePage));
+
+async function decideAct(ok){
+  const { x } = VO_CUR;
+  const { data, error } = await sb.rpc('decide_manager_action', { p_id:x.id, p_approve:ok, p_note:$('mv-note').value.trim() || null });
+  if (error) return toast(error.message, 'err');
+  closeM('m-voice'); toast(data || 'Saved'); renderVoicePage();
+}
+$('mv-reject').addEventListener('click', () => decideAct(false));
+$('mv-close').addEventListener('click', async () => {
+  const { x } = VO_CUR;
+  const { data, error } = await sb.rpc('close_hiring_request', { p_id:x.id, p_note:$('mv-note').value.trim() || null });
+  if (error) return toast(error.message, 'err');
+  closeM('m-voice'); toast(data === 'Closed' ? 'Closed — both HR and the manager agreed' : 'You agreed to close — waiting for the manager to confirm'); renderVoicePage();
+});
 // ═════════════════════════════════════════════════════════
 //  BOOT
 // ═════════════════════════════════════════════════════════

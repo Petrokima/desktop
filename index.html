@@ -739,6 +739,11 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
             <select class="sel" id="rep-group" style="display:none"><option value="department">By department</option><option value="unit">By unit</option><option value="entity">By entity</option><option value="contract_type">By contract type</option></select>
             <select class="sel" id="rep-dept"><option value="">All departments</option></select>
             <input class="inp" id="rep-q" placeholder="Search…" style="width:160px">
+            <span style="position:relative;display:inline-block"><button class="btn btn-ghost btn-sm" id="rep-cols-btn">☰ Columns</button>
+              <div id="rep-cols-pop" style="display:none;position:absolute;right:0;top:110%;z-index:60;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.3);padding:12px;width:290px;max-height:420px;overflow:auto">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b style="font-size:13px">Columns to show &amp; export</b>
+                  <span style="font-size:12px"><a href="#" id="rep-cols-all" style="color:var(--link)">All</a> · <a href="#" id="rep-cols-none" style="color:var(--link)">None</a></span></div>
+                <div id="rep-cols-list"></div></div></span>
             <button class="btn btn-primary btn-sm" id="rep-xlsx">⬇ Excel</button><button class="btn btn-ghost btn-sm" id="rep-export">⬇ CSV</button>
           </div></div>
         <div class="tbl-wrap"><table><thead id="rep-head"></thead><tbody id="rep-body"></tbody><tfoot id="rep-foot"></tfoot></table></div>
@@ -2795,7 +2800,10 @@ function runReport(){
   data.rows = data.rows.filter(x => repOrgMatch(x) &&
                                     (!q || Object.values(x).some(v => typeof v!=='object' && String(v??'').toLowerCase().includes(q))));
   if (isOfficer()) data.cols = data.cols.filter(c => !MONEY_COLS.includes(c.k) && !PAY_FIELDS.includes(c.k));
-  repData=data;
+  data.allCols = data.cols;                                        // ☰ Columns: the user's choice for this report
+  const hide = repHiddenCols(r.id), kept = data.cols.filter(c => !hide.includes(c.k));
+  data.cols = kept.length ? kept : data.cols.slice(0, 1);
+  repData=data; renderRepColsBtn();
   const cell=(c,v)=>{ if(c.t==='link') return /^https?:/.test(String(v||'')) ? `<td><a class="maplink" href="${esc(v)}" target="_blank" rel="noopener">📍 Open map</a></td>` : `<td style="color:var(--muted)">no location</td>`;
     if(v===null||v===undefined||v==='') return `<td${c.t==='num'||c.t==='int'||c.t==='pct'?' class="num"':''}></td>`;
     if(c.t==='num') return `<td class="num">${fmt(v)}</td>`; if(c.t==='int') return `<td class="num">${Math.round(num(v))}</td>`;
@@ -2818,7 +2826,7 @@ function exportReport(){
   const q=v=>{ const s=String(v??''); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
   const val=(c,v)=>{ if(v===null||v===undefined) return '';
     if(c.t==='num') return (Math.round(num(v)*100)/100).toFixed(2); if(c.t==='int') return Math.round(num(v)); if(c.t==='pct') return (num(v)*100).toFixed(2);
-    if(c.t==='id' && String(v).length>0) return `="${String(v).replace(/"/g,'')}"`;   // keeps long numbers as text in Excel
+    if((c.t==='id' && String(v).length>0) || /^\d{10,}$/.test(String(v).trim())) return `="${String(v).trim().replace(/"/g,'')}"`;   // keeps codes and long numbers (national ID, mobile…) as text in Excel
     return v; };
   const lines=[repData.cols.map(c=>q(c.l)).join(','), ...repData.rows.map(x=>repData.cols.map(c=>{ const v=val(c,x[c.k]); return String(v).startsWith('="')?v:q(v); }).join(','))];
   const extra = r.param==='day' ? '-'+($('rep-day').value||todayStr()) : r.param==='group' ? '-'+$('rep-group').value : '-'+settings.period;
@@ -2832,6 +2840,27 @@ $('rep-list').addEventListener('click', e => { const i=e.target.closest('[data-r
 ['rep-day','rep-group','rep-dept'].forEach(id => $(id).addEventListener('change', runReport));
 $('rep-q').addEventListener('input', runReport);
 $('rep-export').addEventListener('click', exportReport);
+
+// ── ☰ Columns: choose which columns a report shows and exports (remembered per report on this computer) ──
+function repHiddenCols(id){ try { return JSON.parse(localStorage.getItem('pk_repcols_' + id) || '[]'); } catch(e) { return []; } }
+function renderRepColsBtn(){
+  if (!repData || !repData.allCols) return;
+  const hide = repHiddenCols(repCur), n = repData.allCols.filter(c => !hide.includes(c.k)).length;
+  $('rep-cols-btn').textContent = n < repData.allCols.length ? `☰ Columns (${n} of ${repData.allCols.length})` : '☰ Columns';
+  $('rep-cols-list').innerHTML = repData.allCols.map(c => `<label style="display:flex;gap:8px;align-items:center;padding:4px 2px;font-size:13px;cursor:pointer">
+      <input type="checkbox" data-repcol="${esc(c.k)}" ${hide.includes(c.k) ? '' : 'checked'}> ${esc(c.l)}</label>`).join('');
+}
+function setRepHidden(list){ localStorage.setItem('pk_repcols_' + repCur, JSON.stringify(list)); runReport(); }
+$('rep-cols-btn').addEventListener('click', e => { e.stopPropagation(); const p = $('rep-cols-pop'); p.style.display = p.style.display === 'none' ? 'block' : 'none'; });
+$('rep-cols-pop').addEventListener('click', e => e.stopPropagation());
+document.addEventListener('click', () => { const p = $('rep-cols-pop'); if (p) p.style.display = 'none'; });
+$('rep-cols-list').addEventListener('change', () => {
+  const hide = [...document.querySelectorAll('#rep-cols-list [data-repcol]')].filter(x => !x.checked).map(x => x.dataset.repcol);
+  if (hide.length === repData.allCols.length) { toast('Keep at least one column','warn'); return renderRepColsBtn(); }
+  setRepHidden(hide);
+});
+$('rep-cols-all').addEventListener('click', e => { e.preventDefault(); setRepHidden([]); });
+$('rep-cols-none').addEventListener('click', e => { e.preventDefault(); setRepHidden(repData.allCols.slice(1).map(c => c.k)); });
 // ═════════════════════════════════════════════════════════
 //  PERMISSIONS (late arrival / early leave)
 // ═════════════════════════════════════════════════════════
@@ -4583,7 +4612,10 @@ document.addEventListener('click', e => { const g = e.target.closest('[data-goto
 // ═════════════════════════════════════════════════════════
 //  ⬇ EXCEL — on every page (what the page shows, with its filters) and on every report (all rows)
 // ═════════════════════════════════════════════════════════
-const xlNum = v => { const s = String(v).replace(/,/g,'').trim(); return /^-?\d+(\.\d+)?$/.test(s) && s.length < 16 && !/^0\d/.test(s) ? Number(s) : v; };
+// long number codes (national ID, mobile, bank account, insurance no. …) stay TEXT so Excel shows every digit
+const isLongCode = v => /^\d{10,}$/.test(String(v).trim());
+const xlNum = v => { const s = String(v).replace(/,/g,'').trim(); if (isLongCode(String(v).trim())) return String(v).trim();
+  return /^-?\d+(\.\d+)?$/.test(s) && s.length < 16 && !/^0\d/.test(s) ? Number(s) : v; };
 function tableToRows(tbl){
   const heads = [...tbl.querySelectorAll('thead th')], keep = heads.map(th => th.textContent.trim() !== '');
   const out = [heads.filter((_,i) => keep[i]).map(th => th.textContent.trim())];
@@ -4609,7 +4641,9 @@ async function exportReportExcel(){
   const rep = repCur && REPORTS.find(x => x.id === repCur);
   if (!rep || !repData) return toast('Open a report first','warn');
   const XL = await loadSheetJs();
-  const aoa = [repData.cols.map(c => c.l)].concat(repData.rows.map(r => repData.cols.map(c => { const v = r[c.k]; return v == null ? '' : typeof v === 'number' ? v : xlNum(String(v).replace(/<[^>]*>/g,'')); })));
+  const aoa = [repData.cols.map(c => c.l)].concat(repData.rows.map(r => repData.cols.map(c => { const v = r[c.k];
+    if (v == null) return ''; if (typeof v === 'number') return Number.isInteger(v) && isLongCode(v) ? String(v) : v;
+    return xlNum(String(v).replace(/<[^>]*>/g,'')); })));
   const wb = XL.utils.book_new(); XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(aoa), rep.t.replace(/[\\/?*\[\]:]/g,' ').slice(0,31));
   XL.writeFile(wb, `petrokima-${rep.id}-${todayISO()}.xlsx`); toast('Report downloaded as Excel');
 }

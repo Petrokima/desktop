@@ -548,6 +548,14 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </div>
 
 <div id="nav-backdrop"></div>
+<!-- MODAL: RE-EMPLOY / BLACKLIST / PAST PERIOD -->
+<div class="overlay" id="m-life"><div class="modal" style="max-width:500px">
+  <div class="modal-head"><div class="modal-title" id="ml-title"></div><button class="x" data-close="m-life">×</button></div>
+  <div id="ml-info" style="font-size:13px;line-height:1.6;margin-bottom:12px"></div>
+  <div class="grid3" id="ml-fields"></div>
+  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-life">Cancel</button><button class="btn btn-primary" id="ml-go">Save</button></div>
+</div></div>
+
 <!-- MODAL: BASIC SALARY CHANGE REQUEST -->
 <div class="overlay" id="m-salreq"><div class="modal" style="max-width:520px">
   <div class="modal-head"><div class="modal-title">💼 Request basic salary change</div><button class="x" data-close="m-salreq">×</button></div>
@@ -876,6 +884,8 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div id="emp-pkg" class="no-officer"></div>
   <div class="sec" style="margin-top:16px">📌 Assigned projects</div>
   <div id="emp-proj" style="font-size:13px"></div>
+  <div class="sec" style="margin-top:16px">📜 Employment history</div>
+  <div id="emp-life" style="font-size:13px"></div>
   <div class="modal-foot"><button class="btn btn-ghost" data-close="m-emp">Cancel</button><button class="btn btn-primary" id="emp-save">Save employee</button></div>
 </div></div>
 
@@ -1557,6 +1567,7 @@ function renderAll(){
   renderPageIfNeeded('dashboard'); renderPageIfNeeded('reporting'); renderLocks(); renderPeriodHint();
   renderPageIfNeeded(currentPage());
 }
+
 // ═════════════════════════════════════════════════════════
 //  PAYROLL ENGINE
 // ═════════════════════════════════════════════════════════
@@ -1806,10 +1817,11 @@ function renderEmployees(){
     <td class="mono">${esc(e.id)}</td><td class="ar strong">${esc(e.name_ar)}</td><td class="strong">${esc(e.name_en)}</td>
     <td>${esc(e.department)}</td><td>${esc(e.unit)}</td><td>${esc(e.job_name)}</td>
     <td>${e.manager_id ? esc(empName(empById(e.manager_id))||e.manager_id) : (e.top_of_org ? '<span class="chip c-blue">Top</span>' : (e.status!=='Inactive' ? '<span class="chip c-orange">not set</span>' : ''))}</td>
-    <td>${chip(e.contract_type)}</td><td>${chip(e.insurance)}</td><td>${chip(e.status||'Active')}${e.attendance_exempt?' <span class="chip c-blue">Exception</span>':''}</td></tr>`).join('')
+    <td>${chip(e.contract_type)}</td><td>${chip(e.insurance)}</td><td>${chip(e.status||'Active')}${e.attendance_exempt?' <span class="chip c-blue">Exception</span>':''}${e.blacklisted?' <span class="chip c-red" title="On the blacklist — cannot be re-employed">⛔ Blacklist</span>':''}</td></tr>`).join('')
     || '<tr><td colspan="10" class="empty">No employees match these filters</td></tr>';
   $('emp-foot').textContent = `Showing ${list.length} of ${S.employees.length}. Click any row to view or edit.`;
 }
+
 // ═════════════════════════════════════════════════════════
 //  EMPLOYEE MODAL
 // ═════════════════════════════════════════════════════════
@@ -2097,6 +2109,7 @@ async function saveAtt(){
 }
 
 $('a-date').addEventListener('change', checkSplits);
+
 // ═════════════════════════════════════════════════════════
 //  PROJECTS
 // ═════════════════════════════════════════════════════════
@@ -2371,6 +2384,7 @@ $('mp-fill-go').addEventListener('click', () => {
   let n = 0; document.querySelectorAll('#mon-tbl [data-mf="a"]').forEach(inp => { inp.value = v; monInput(inp); n++; });
   toast(`${fmt(num(v))} entered for ${n} employee${n===1?'':'s'} — click Save changes to keep it`);
 });
+
 // ═════════════════════════════════════════════════════════
 //  SETTINGS
 // ═════════════════════════════════════════════════════════
@@ -2498,6 +2512,7 @@ function cycleHint(){
   settings.cycleStartDay = keep; settings.period = kp;
 }
 ['s-cycle','s-period'].forEach(id => $(id).addEventListener('input', cycleHint));
+
 // ═════════════════════════════════════════════════════════
 //  REPORTS
 // ═════════════════════════════════════════════════════════
@@ -2861,6 +2876,7 @@ $('rep-cols-list').addEventListener('change', () => {
 });
 $('rep-cols-all').addEventListener('click', e => { e.preventDefault(); setRepHidden([]); });
 $('rep-cols-none').addEventListener('click', e => { e.preventDefault(); setRepHidden(repData.allCols.slice(1).map(c => c.k)); });
+
 // ═════════════════════════════════════════════════════════
 //  PERMISSIONS (late arrival / early leave)
 // ═════════════════════════════════════════════════════════
@@ -2947,6 +2963,7 @@ $('perm-tbl').addEventListener('click', e => {
   const x=e.target.closest('[data-del-perm]');
   if(x){ const id=x.dataset.delPerm; confirmDel('Delete this permission request?', async()=>{ await del('attendance_permissions',id); S.permissions=S.permissions.filter(p=>p.id!==id); afterPermChange(); toast('Deleted'); }); }
 });
+
 // ═════════════════════════════════════════════════════════
 //  LEAVE HELPERS
 // ═════════════════════════════════════════════════════════
@@ -3111,6 +3128,7 @@ $('ex-kind').addEventListener('change', () => { EX_FIELD = $('ex-kind').value; e
 $('ex-add-sel').addEventListener('click', () => setExempt([...exOffSel], true));
 ['ex-q','ex-job','ex-on-q'].forEach(id=>$(id).addEventListener('input', renderExempt));
 $('ex-dept').addEventListener('change', renderExempt);
+
 // ═════════════════════════════════════════════════════════
 //  PENALTIES
 // ═════════════════════════════════════════════════════════
@@ -3237,6 +3255,7 @@ $('hd-year').addEventListener('change', renderHolidays);
 $('hd-save').addEventListener('click', saveHol);
 $('hd-tbl').addEventListener('click', e => { const x=e.target.closest('[data-del-hol]');
   if (x){ const id=x.dataset.delHol; confirmDel('Delete this public holiday? Leave day counts already saved are not changed.', async()=>{ await del('public_holidays',id); S.holidays=S.holidays.filter(h=>h.id!==id); holidaySet=new Set(S.holidays.map(h=>h.date)); afterHolChange(); toast('Deleted'); }); } });
+
 let SUPER = {};
 let ACCT_FLAGS = {};
 // ═════════════════════════════════════════════════════════
@@ -3376,6 +3395,9 @@ document.addEventListener('change', async e => {
   ACCT_FLAGS[c.dataset.uAcct] = c.checked;
   toast(`${(u && (u.full_name || u.email)) || 'User'} ${c.checked ? 'can now open Project costs (totals per project, no names)' : 'can no longer open Project costs'}`);
 });
+
+// employee screens: hours as hours and minutes (1.5 → "1 h 30 m"); payroll and reports keep decimal hours
+const fmtHM = v => { const tm = Math.round(num(v) * 60), h = Math.floor(tm / 60), m = tm % 60; return h && m ? `${h} h ${m} m` : h ? `${h} h` : `${m} m`; };
 // ═════════════════════════════════════════════════════════
 //  SELF-SERVICE (employee's own requests)
 // ═════════════════════════════════════════════════════════
@@ -3425,7 +3447,7 @@ function renderSelf(){
   // one list of everything
   const items = [
     ...SD.leaves.map(l => ({ kind:'leave', id:l.id, at:l.created_at, what:`🌴 ${l.leave_type} leave`, detail:`${l.date_from} → ${l.date_to} · ${fmt(l.days)} day${num(l.days)===1?'':'s'}${l.reason?' · '+l.reason:''}`, status: waitingManager(l) ? 'Waiting for manager' : l.status==='Pending' && l.manager_status==='Approved' ? 'Waiting for HR' : l.status, reply:[l.decided_by?`by ${l.decided_by}`:'', l.decision_note||''].filter(Boolean).join(' — ') })),
-    ...SD.perms.map(p => ({ kind:'perm', id:p.id, at:p.requested_at, what:`✋ ${p.type}`, detail:`${p.date} · ${fmt(p.hours)} h${p.reason?' · '+p.reason:''}`, status: waitingManager(p) ? 'Waiting for manager' : p.status==='Pending' && p.manager_status==='Approved' ? 'Waiting for HR' : p.status, reply:[p.decided_by?`by ${p.decided_by}`:'', p.decision_note||''].filter(Boolean).join(' — ') })),
+    ...SD.perms.map(p => ({ kind:'perm', id:p.id, at:p.requested_at, what:`✋ ${p.type}`, detail:`${p.date} · ${fmtHM(p.hours)}${p.reason?' · '+p.reason:''}`, status: waitingManager(p) ? 'Waiting for manager' : p.status==='Pending' && p.manager_status==='Approved' ? 'Waiting for HR' : p.status, reply:[p.decided_by?`by ${p.decided_by}`:'', p.decision_note||''].filter(Boolean).join(' — ') })),
     ...SD.reqs.map(r => ({ kind:'req', id:r.id, at:r.created_at, what:`📨 ${r.request_type}`, detail:r.details||'', status:r.status, reply:[r.hr_response||'', r.handled_by?`(${r.handled_by})`:''].filter(Boolean).join(' ') })),
   ].sort((a,b)=>String(b.at||'').localeCompare(String(a.at||'')));
   $('self-list').innerHTML = items.map(x => `<tr><td class="mono" style="white-space:nowrap">${esc(fmtSent(x.at))}</td><td class="strong">${esc(x.what)}</td>
@@ -3444,7 +3466,7 @@ function renderSelf(){
   $('self-treq-tbl').innerHTML = tReq.map(({kind, r}) => { const st = waitingManager(r) ? '<span class="chip c-orange">Waiting for you</span>' : r.manager_status==='Approved' && r.status==='Pending' ? '<span class="chip c-blue">Approved by you — waiting for HR</span>' : chip(r.status);
     return `<tr><td class="strong">${esc(r.emp_name||r.emp_id)} <span class="mono" style="color:var(--muted)">${esc(r.emp_id)}</span></td>
       <td>${kind==='leave' ? `🌴 ${esc(r.leave_type)} leave` : `✋ ${esc(r.type)}`}</td>
-      <td class="mono">${kind==='leave' ? `${esc(r.date_from)} → ${esc(r.date_to)} · ${fmt(r.days)} d` : `${esc(r.date)} · ${fmt(r.hours)} h`}<div style="font-size:11px;color:var(--muted)">🕒 sent ${esc(fmtSent(r.created_at || r.requested_at))}</div></td>
+      <td class="mono">${kind==='leave' ? `${esc(r.date_from)} → ${esc(r.date_to)} · ${fmt(r.days)} d` : `${esc(r.date)} · ${fmtHM(r.hours)}`}<div style="font-size:11px;color:var(--muted)">🕒 sent ${esc(fmtSent(r.created_at || r.requested_at))}</div></td>
       <td style="white-space:normal;font-size:12px">${esc(r.reason||'')}</td><td>${st}${r.manager_note?`<div style="font-size:12px">💬 ${esc(r.manager_note)}</div>`:''}</td>
       <td style="white-space:nowrap">${waitingManager(r) ? `<button class="btn btn-success btn-sm" data-treq-ok="${kind}:${r.id}">Approve</button> <button class="btn btn-ghost btn-sm" data-treq-no="${kind}:${r.id}">Reject</button>` : ''}</td></tr>`; }).join('')
     || '<tr><td colspan="6" class="empty">No vacation or permission requests from your team</td></tr>';
@@ -3657,6 +3679,7 @@ $('self-pay-go').addEventListener('click', unlockSelfPay);
 $('self-pay-pass').addEventListener('keydown', e => { if (e.key === 'Enter') unlockSelfPay(); });
 $('self-pay-relock').addEventListener('click', lockSelfPay);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && $('self-pay-card').style.display !== 'none') lockSelfPay(); });
+
 // ═════════════════════════════════════════════════════════
 //  PAYROLL APPROVAL (permanent snapshot)
 // ═════════════════════════════════════════════════════════
@@ -3916,6 +3939,7 @@ function renderThemeList(){
 }
 function openTheme(){ renderThemeList(); openM('m-theme'); }
 document.addEventListener('click', e => { const b = e.target.closest('[data-theme-pick]'); if (b) setTheme(b.dataset.themePick); });
+
 // ═════════════════════════════════════════════════════════
 //  BULK UPLOAD — variable (monthly) additions and deductions
 // ═════════════════════════════════════════════════════════
@@ -4042,6 +4066,7 @@ $('mon-bulk').addEventListener('click', openBulk);
 $('bk-template').addEventListener('click', downloadTemplate);
 $('bk-file').addEventListener('change', onBulkFile);
 $('bk-import').addEventListener('click', doBulkImport);
+
 // ═════════════════════════════════════════════════════════
 //  HQ FINGERPRINT MACHINE (ZKTeco) — import punches into attendance
 // ═════════════════════════════════════════════════════════
@@ -4227,6 +4252,7 @@ function miPhoneOnly(ex){
   const ins = phone.filter(x => x.in).map(x => x.in).sort(), outs = phone.filter(x => x.out).map(x => x.out).sort();
   return { projects: phone, check_in: ins[0] || null, check_out: outs[outs.length-1] || null, total_hours: miSegHours(phone), source: 'Mobile', notes: null };
 }
+
 // ═════════════════════════════════════════════════════════
 //  PAST ATTENDANCE — any date range, without changing the payroll cycle
 // ═════════════════════════════════════════════════════════
@@ -4324,6 +4350,7 @@ $('par-tbl').addEventListener('click', e => {
     const { data, error } = await sb.from('project_allowance_rules').delete().eq('id', id).select(); if (error) throw error; if (!(data && data.length)) throw new Error(NOPERM);
     S.parRules = S.parRules.filter(x => x.id !== id); renderParRules(); DIRTY.add('payroll'); DIRTY.add('reports'); toast('Rule deleted'); }); }
 });
+
 // ═════════════════════════════════════════════════════════
 //  ALLOWANCE APPROVALS — direct manager first, then HR; paid only when both approved
 // ═════════════════════════════════════════════════════════
@@ -4428,6 +4455,7 @@ $('aa-tbl').addEventListener('click', e => {
 });
 ['aa-status'].forEach(id => $(id).addEventListener('change', renderApprovals));
 $('aa-q').addEventListener('input', renderApprovals);
+
 // ═════════════════════════════════════════════════════════
 //  DEPARTMENT + UNIT FILTERS — on every page that lists employees
 // ═════════════════════════════════════════════════════════
@@ -4796,6 +4824,7 @@ renderUsers = function(){ const r = _renderUsersSA.apply(this, arguments);
   document.querySelectorAll('#us-tbl tr').forEach(tr => { const cb = tr.querySelector('[data-u-acct]'); if (cb && SUPER[cb.dataset.uAcct]){
     const cell = tr.querySelector('td'); if (cell && !cell.querySelector('.sa-badge')) cell.insertAdjacentHTML('beforeend', ' <span class="chip c-red sa-badge" title="Full authority — only she can make or remove administrators">👑 Super admin</span>'); } });
   return r; };
+
 // ═════════════════════════════════════════════════════════
 //  BULK UPLOAD — one page for every kind of data (template → upload → preview → save)
 // ═════════════════════════════════════════════════════════
@@ -5099,6 +5128,7 @@ async function mbuSave(){
 $('mbu-template').addEventListener('click', mbuTemplate);
 $('mbu-file').addEventListener('change', mbuFile);
 $('mbu-save').addEventListener('click', mbuSave);
+
 // ═════════════════════════════════════════════════════════
 //  NET ↔ GROSS CALCULATOR (Egypt) — standalone tool, does not change the payroll
 //  2026 defaults: personal exemption 20,000 · brackets per Law 91/2005 as amended (incl. losing lower brackets
@@ -5211,6 +5241,7 @@ $('cc-n2g').addEventListener('click', () => { CC_DIR = 'n2g'; $('cc-n2g').classN
 $('cc-ins').addEventListener('change', () => { $('cc-insw-box').style.display = $('cc-ins').checked ? '' : 'none'; ccCalc(); });
 $('cc-save').addEventListener('click', ccSave);
 $('cc-reset').addEventListener('click', () => { ccFillRates({ ...CALC_DEFAULTS }); toast('2026 defaults filled in — click Save rates to keep them'); });
+
 // ═════════════════════════════════════════════════════════
 //  ANNOUNCEMENTS · EMPLOYEE VOICE · BIRTHDAYS (desktop)
 // ═════════════════════════════════════════════════════════
@@ -5417,6 +5448,94 @@ renderVoicePage = async function(){ await _renderVoiceSal.apply(this, arguments)
 document.addEventListener('click', async e => { const b = e.target.closest('[data-sal-cancel]'); if (!b) return;
   const { error } = await sb.rpc('cancel_salary_change', { p_id: b.dataset.salCancel }); if (error) return toast(error.message, 'err');
   toast('Request cancelled'); renderVoicePage(); });
+
+// ═════════════════════════════════════════════════════════
+//  RESIGNATION · RE-EMPLOYMENT · EMPLOYMENT HISTORY · BLACKLIST (employee window)
+// ═════════════════════════════════════════════════════════
+const ff = k => document.querySelector(`#emp-form [data-f="${k}"]`);
+// resignation date and Inactive go together
+document.addEventListener('change', e => {
+  const f = e.target.closest('#emp-form [data-f]'); if (!f) return;
+  if (f.dataset.f === 'resignation_date' && f.value && ff('status') && ff('status').value !== 'Inactive'){
+    ff('status').value = 'Inactive'; toast('Status set to Inactive — a resignation date always goes with Inactive');
+  }
+  if (f.dataset.f === 'status' && f.value === 'Inactive' && ff('resignation_date') && !ff('resignation_date').value){
+    ff('resignation_date').focus(); toast('Enter the resignation date — it is required when making an employee Inactive', 'warn');
+  }
+});
+const _saveEmpLife = saveEmp;
+saveEmp = async function(){
+  const st = ff('status'), rd = ff('resignation_date');
+  if (st && rd){
+    const e = editingEmp && empById(editingEmp);
+    if (e && e.status === 'Inactive' && st.value === 'Active'){ st.value = 'Inactive'; return openRehire(e.id); }   // re-employment has its own window
+    if (st.value === 'Inactive' && !rd.value){ rd.focus(); return toast('Enter the resignation date when making an employee Inactive','warn'); }
+    if (rd.value && st.value !== 'Inactive') st.value = 'Inactive';
+  }
+  return _saveEmpLife.apply(this, arguments);
+};
+// the Save button was linked to the original function — link it to the checked one
+$('emp-save').removeEventListener('click', _saveEmpLife);
+$('emp-save').addEventListener('click', () => saveEmp());
+let ML = null;
+async function renderEmpLife(id){
+  const box = $('emp-life'); if (!box) return; box.innerHTML = '';
+  if (!id) return void (box.innerHTML = '<span style="color:var(--muted)">Save the employee first.</span>');
+  const e = empById(id); if (!e) return;
+  const { data } = await sb.from('employment_history').select('*').eq('emp_id', id).order('employment_date', { ascending:true });
+  const rows = (data || []).map(h => `<tr><td class="mono">${esc(h.employment_date || '—')}</td><td class="mono">${esc(h.resignation_date || '—')}</td><td>${esc(h.job_name || '')}</td><td>${esc(h.department || '')}</td><td style="color:var(--muted);font-size:12px">${esc(h.note || '')}</td></tr>`);
+  rows.push(`<tr style="background:var(--hover)"><td class="mono">${esc(e.employment_date || '—')}</td><td class="mono">${e.status === 'Inactive' ? esc(e.resignation_date || '—') : '<b>current</b>'}</td><td>${esc(e.job_name || '')}</td><td>${esc(e.department || '')}</td><td style="font-size:12px">${e.status === 'Inactive' ? 'Last period' : 'Current period'}</td></tr>`);
+  const canHR = ME && ['admin','hr'].includes(ME.role), sup = !!(ME && ME.super_admin);
+  box.innerHTML = (e.blacklisted ? `<div class="alert a-alarm" style="margin:6px 0 10px">⛔ <b>On the blacklist — cannot be re-employed.</b> ${esc(e.blacklist_reason || '')}${e.blacklisted_by ? ` <span style="color:var(--muted)">(${esc(e.blacklisted_by)}${e.blacklisted_at ? ', ' + esc(String(e.blacklisted_at).slice(0,10)) : ''})</span>` : ''}</div>` : '')
+    + `<div class="tbl-wrap"><table><thead><tr><th>Employed from</th><th>Resigned on</th><th>Job</th><th>Department</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
+    + `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">`
+    + (canHR && e.status === 'Inactive' && !e.blacklisted ? `<button class="btn btn-primary btn-sm" data-life="rehire">↩ Re-employ under this code</button>` : '')
+    + (canHR ? `<button class="btn btn-ghost btn-sm" data-life="past">＋ Add a past period</button>` : '')
+    + (sup ? (e.blacklisted ? `<button class="btn btn-ghost btn-sm" data-life="unblack">Remove from blacklist</button>` : `<button class="btn btn-danger btn-sm" data-life="black">⛔ Add to blacklist</button>`) : '')
+    + `</div>`;
+}
+function lifeModal(kind, title, info, fields){
+  ML = { kind, id: editingEmp }; $('ml-title').textContent = title; $('ml-info').innerHTML = info;
+  $('ml-fields').innerHTML = fields.map(([k, l, t, v]) => `<div class="field${t==='textarea' ? ' full' : ''}"><label>${l}</label>${t === 'textarea' ? `<textarea class="inp" id="ml-${k}" rows="3">${esc(v || '')}</textarea>` : `<input class="inp" id="ml-${k}" type="${t}" value="${esc(v || '')}">`}</div>`).join('');
+  openM('m-life');
+}
+function openRehire(id){
+  const e = empById(id); if (!e) return; editingEmp = id;
+  lifeModal('rehire', '↩ Re-employ under the same code', `<b>${esc(empName(e))}</b> (${esc(id)}) left on <b>${esc(e.resignation_date || '—')}</b>. The previous period (${esc(e.employment_date || '—')} → ${esc(e.resignation_date || '—')}, ${esc(e.job_name || '')}) is saved to the employment history automatically.`,
+    [['from','New employment date *','date',''], ['job','Job name','text', e.job_name], ['dept','Department','text', e.department]]);
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-life]'); if (!b) return; const emp = empById(editingEmp); if (!emp) return;
+  const k = b.dataset.life;
+  if (k === 'rehire') return openRehire(emp.id);
+  if (k === 'past') return lifeModal('past', '＋ Add a past period', 'For an earlier period with Petrokima under this code (from the old files).', [['from','Employed from','date',''], ['to','Resigned on','date',''], ['job','Job name','text',''], ['dept','Department','text',''], ['note','Note','textarea','']]);
+  if (k === 'black') return lifeModal('black', '⛔ Add to blacklist', `<b>${esc(empName(emp))}</b> (${esc(emp.id)}) will never be re-employed — not under this code and not under a new one with the same national ID.`, [['reason','Reason * (kept on his record)','textarea','']]);
+  if (k === 'unblack') return lifeModal('unblack', 'Remove from blacklist', `Remove <b>${esc(empName(emp))}</b> (${esc(emp.id)}) from the blacklist? He could then be re-employed.`, []);
+});
+$('ml-go').addEventListener('click', async () => {
+  if (!ML) return; const id = ML.id, v = k => ($('ml-' + k) ? $('ml-' + k).value.trim() : '');
+  let res;
+  if (ML.kind === 'rehire'){
+    if (!v('from')) return toast('Enter the new employment date','warn');
+    res = await sb.from('employees').update({ status:'Active', resignation_date:null, employment_date:v('from'), job_name:v('job') || null, department:v('dept') || null }).eq('id', id).select();
+  } else if (ML.kind === 'past'){
+    if (!v('from') && !v('to')) return toast('Enter at least one date','warn');
+    res = await sb.from('employment_history').insert({ emp_id:id, employment_date:v('from') || null, resignation_date:v('to') || null, job_name:v('job') || null, department:v('dept') || null, note:v('note') || 'Added by hand', recorded_by:(ME && (ME.full_name || ME.email)) || 'HR' }).select();
+  } else if (ML.kind === 'black'){
+    if (!v('reason')) return toast('Write the reason','warn');
+    res = await sb.from('employees').update({ blacklisted:true, blacklist_reason:v('reason') }).eq('id', id).select();
+  } else {
+    res = await sb.from('employees').update({ blacklisted:false }).eq('id', id).select();
+  }
+  if (res.error || !(res.data && res.data.length)) return toast(res.error ? res.error.message : NOPERM, 'err');
+  if (ML.kind !== 'past'){ const i = S.employees.findIndex(x => String(x.id) === String(id)); if (i >= 0) S.employees[i] = { ...S.employees[i], ...res.data[0] }; }
+  closeM('m-life');
+  toast({ rehire:'Re-employed under the same code — the previous period is in his employment history', past:'Past period added', black:'Added to the blacklist', unblack:'Removed from the blacklist' }[ML.kind]);
+  if (ML.kind === 'rehire' || ML.kind === 'black' || ML.kind === 'unblack'){ openEmp(id); if (typeof renderEmployees === 'function') renderEmployees(); } else renderEmpLife(id);
+});
+const _openEmpLife = openEmp;
+openEmp = function(id){ const r = _openEmpLife.apply(this, arguments); renderEmpLife(id); return r; };
+
 // ═════════════════════════════════════════════════════════
 //  BOOT
 // ═════════════════════════════════════════════════════════
@@ -5432,5 +5551,6 @@ const EMBED_KEY = 'sb_publishable_yyfkPLo6M7XDe3lwurctmw_6wsmB-2M';
   if (!lib()){ const e=$('setup-err'); e.textContent='The Supabase library could not load. Check your internet connection and reload.'; e.style.display='block'; return; }
   if (url && key) startApp(url, key).catch(e => { const x=$('setup-err'); x.textContent='Auto-connect failed: '+e.message; x.style.display='block'; $('setup').style.display='flex'; $('app').style.display='none'; });
 })();
+
 </script>
 </body></html>

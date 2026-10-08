@@ -319,6 +319,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="nav-label">Config</div>
   <div class="nav-item" data-page="holidays">📅 Public holidays</div>
   <div class="nav-item admin-only" data-page="users">🔐 Users &amp; roles</div>
+  <div class="nav-item admin-only" data-page="audit">🧾 Audit log</div>
   <div class="nav-item" data-page="settings">⚙ Settings</div>
 </nav>
 <main class="main">
@@ -507,6 +508,13 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
       <div class="field full"><label>Higher incomes lose lower brackets — one per line: above this annual income, start from bracket number (2 = the second line)</label><textarea class="inp" id="cr-skip" rows="5" style="font-family:monospace"></textarea></div>
     </div>
     <div style="font-size:12px;color:var(--muted)">2026 defaults: Andersen Egypt tax table (January 2026); insurance wage 2,700–16,700 from the National Organization for Social Insurance (from 1 January 2026). Only Finance and the administrator can save changes.</div>
+  </div>
+
+  <div class="card" style="padding:20px" id="st-card">
+    <div class="toolbar"><span class="toolbar-title">📂 Wage-tax settlement — check &amp; planning</span>
+      <div class="toolbar-right"><input type="file" id="st-file" accept=".xlsx,.xls" style="max-width:260px"><select class="sel" id="st-sheet" style="display:none"></select></div></div>
+    <div style="font-size:12px;color:var(--muted);margin:-4px 0 10px">Upload the monthly settlement workbook (تسويات كسب العمل — one sheet per month). Every employee's tax is recalculated with the rates above and compared with the sheet. Choose one month, or “All months” for the year-to-date reconciliation. Internal analysis only — nothing is saved.</div>
+    <div id="st-out"></div>
   </div>
 </div>
 
@@ -780,6 +788,18 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
     <button class="btn btn-ghost" id="us-refresh">⟳ Refresh list</button></div>
   <div class="alert a-info" style="line-height:1.8"><b>To add a user:</b> Supabase → <b>Authentication</b> → <b>Users</b> → <b>Add user</b> → <b>Create new user</b> → enter their email and a temporary password → tick <b>Auto Confirm User</b> → <b>Create user</b>. Then click <b>⟳ Refresh list</b> here, choose their role and click <b>Save</b>.<br>
     <b>To reset a password:</b> Supabase → Authentication → Users → click the user → <b>Reset password</b>, or delete and re-create them. <b>To remove access</b> untick Active — it takes effect immediately.</div>
+  <div class="card" style="padding:18px" id="tfa-card">
+    <div class="sec" style="margin-top:0">🔐 Two-step sign-in (Admin, HR and HR Officer)</div>
+    <div style="font-size:13px;color:var(--label);line-height:1.7" id="tfa-status">Checking…</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <button class="btn btn-primary" id="tfa-setup-me">📱 Set up my two-step sign-in</button>
+      <button class="btn btn-success" id="tfa-on" style="display:none">Require two-step sign-in for all staff</button>
+      <button class="btn btn-ghost" id="tfa-off" style="display:none">Switch the requirement off</button>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-top:10px;line-height:1.6">Each staff member installs a free authenticator app on their phone (Google Authenticator or Microsoft Authenticator), scans a QR code once,
+      and from then on types the 6-digit code from the app after their password. While the requirement is ON, a staff account that has not entered the code
+      only sees its own employee data — the database enforces this, not just the screen. Ordinary employee accounts are not affected.</div>
+  </div>
   <div class="card" style="padding:18px">
     <div class="sec" style="margin-top:0">Employee logins</div>
     <div style="font-size:13px;color:var(--label);margin-bottom:12px;line-height:1.6" id="us-gap"></div>
@@ -797,8 +817,27 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
         <select class="sel" id="us-role"><option value="">All roles</option><option value="admin">Admin</option><option value="hr">HR</option><option value="hr_officer">HR Officer</option><option value="finance">Finance</option><option value="manager">Manager</option><option value="employee">Employee</option><option value="none">No access</option></select>
         <select class="sel" id="us-state"><option value="">Any status</option><option value="pending">Has not set a password</option><option value="locked">Locked / inactive</option><option value="ready">Active</option></select>
       </div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Email</th><th>Full name</th><th>Role</th><th>Linked employee (optional)</th><th>Active</th><th title="Can open Project costs (totals per project, no names) from My requests">Project cost reports</th><th>Password</th><th>Last sign-in</th><th></th></tr></thead><tbody id="us-tbl"></tbody></table></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Email</th><th>Full name</th><th>Role</th><th>Linked employee (optional)</th><th>Active</th><th title="Can open Project costs (totals per project, no names) from My requests">Project cost reports</th><th>Password</th><th title="Two-step sign-in (code from an authenticator app)">2-step</th><th>Last sign-in</th><th></th></tr></thead><tbody id="us-tbl"></tbody></table></div>
     <div class="foot">Admin: everything · HR: employee and attendance data, payroll view-only · Finance: payroll, HR data view-only · Manager and Employee roles become active in Phase 2</div>
+  </div>
+</div>
+
+<!-- AUDIT LOG -->
+<div class="page" id="page-audit">
+  <div class="page-header"><div><div class="page-title">Audit log</div><div class="page-sub">Who changed what, and when — salaries, employees, bank details, logins and roles, payroll, loans, penalties, settings. Nobody can edit or delete these lines.</div></div>
+    <button class="btn btn-ghost" id="au-load">⟳ Refresh</button></div>
+  <div class="card">
+    <div class="toolbar"><span class="toolbar-title" id="au-count">Changes</span>
+      <div class="toolbar-right">
+        <label style="font-size:12px;color:var(--muted)">From</label><input class="inp" type="date" id="au-from">
+        <label style="font-size:12px;color:var(--muted)">To</label><input class="inp" type="date" id="au-to">
+        <select class="sel" id="au-area"><option value="">All areas</option></select>
+        <select class="sel" id="au-act"><option value="">Any action</option><option value="INSERT">Added</option><option value="UPDATE">Changed</option><option value="DELETE">Deleted</option></select>
+        <input class="inp" id="au-emp" style="width:120px" placeholder="Employee code">
+        <input class="inp" id="au-q" placeholder="Search who / field / value…">
+      </div></div>
+    <div class="tbl-wrap"><table><thead><tr><th>When</th><th>Who</th><th>Area</th><th>Action</th><th>Record</th><th>Employee</th><th>What changed</th></tr></thead><tbody id="au-tbl"></tbody></table></div>
+    <div class="foot" id="au-foot">Shows up to 2,000 lines for the chosen dates — narrow the dates or filters to see older lines.</div>
   </div>
 </div>
 
@@ -1194,6 +1233,30 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="modal-foot"><button class="btn btn-ghost" data-close="m-pass">Cancel</button><button class="btn btn-primary" id="pw-save">Change password</button></div>
 </div></div>
 
+<!-- MODAL: TWO-STEP SET-UP -->
+<div class="overlay" id="m-2fa"><div class="modal" style="max-width:460px">
+  <div class="modal-head"><div class="modal-title">Set up two-step sign-in</div><button class="x" id="tfa-x">×</button></div>
+  <ol style="font-size:13px;line-height:1.7;color:var(--label);padding-left:18px;margin:0 0 12px">
+    <li>On your phone, install <b>Google Authenticator</b> or <b>Microsoft Authenticator</b> (free, App Store / Play Store).</li>
+    <li>In the app tap <b>+</b> → <b>Scan a QR code</b> and scan the square below.</li>
+    <li>Type the <b>6-digit code</b> the app shows, then click <b>Confirm</b>.</li></ol>
+  <div style="text-align:center;margin:6px 0 10px"><img id="tfa-qr" alt="QR code" style="width:200px;height:200px;background:#fff;padding:8px;border-radius:8px"></div>
+  <div style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:12px">Can't scan? Choose <b>Enter a setup key</b> in the app and type:<br><span class="mono" id="tfa-secret" style="font-size:13px;color:var(--text);word-break:break-all"></span></div>
+  <div class="field"><label>6-digit code from the app</label><input id="tfa-code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="123456" style="font-size:20px;letter-spacing:6px;text-align:center"></div>
+  <div id="tfa-err" class="alert a-warn" style="display:none;margin:12px 0 0"></div>
+  <div class="modal-foot"><button class="btn btn-ghost" id="tfa-cancel">Cancel</button><button class="btn btn-primary" id="tfa-confirm">Confirm</button></div>
+</div></div>
+
+<!-- MODAL: TWO-STEP CODE -->
+<div class="overlay" id="m-code"><div class="modal" style="max-width:380px">
+  <div class="modal-head"><div class="modal-title" id="code-title">Enter your 6-digit code</div></div>
+  <p style="font-size:13px;color:var(--label);line-height:1.6;margin:0 0 12px" id="code-msg">Open your authenticator app on your phone and type the 6-digit code shown for <b>Petrokima HR</b>.</p>
+  <div class="field"><input id="code-in" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="123456" style="font-size:22px;letter-spacing:8px;text-align:center"></div>
+  <div id="code-err" class="alert a-warn" style="display:none;margin:12px 0 0"></div>
+  <div style="font-size:11px;color:var(--muted);margin-top:10px">Lost your phone? Ask the administrator to reset your two-step sign-in.</div>
+  <div class="modal-foot"><button class="btn btn-ghost" id="code-cancel">Sign out</button><button class="btn btn-primary" id="code-ok">Continue</button></div>
+</div></div>
+
 <!-- MODAL: CONFIRM -->
 <div class="overlay" id="m-del"><div class="modal" style="max-width:420px">
   <div class="modal-head"><div class="modal-title" id="del-title">Confirm delete</div><button class="x" data-close="m-del">×</button></div>
@@ -1408,6 +1471,8 @@ async function afterLogin(user){
   if (!me || !me.role) return stop(`Signed in as <b>${esc(user.email)}</b>, but this account has not been given access yet. Ask the administrator to assign you a role.`);
   if (!me.active) return stop(`The account <b>${esc(user.email)}</b> is locked or deactivated. Contact the administrator.`);
   if (me.must_change_password) return showFirstLogin(me, user);
+  // Admin / HR / HR Officer: the 6-digit code (two-step sign-in) before staff powers
+  if (STAFF_ROLES.includes(me.role) && !(await mfaGate(me, user))) return;
   if (me.role==='employee') return showSelf(me, user);
   if (me.role==='manager') return stop(`Manager access to the desktop app arrives in Phase 2 with reporting lines. Your account is ready.`);
   ME = { ...me, email:user.email };
@@ -3293,9 +3358,10 @@ function renderUsers(){
       <td><input type="checkbox" data-u="active" ${u.active?'checked':''} ${me?'disabled':''}></td>
       <td style="text-align:center"><input type="checkbox" data-u-acct="${u.id}" ${ACCT_FLAGS[u.id]?'checked':''} title="Project cost reports (totals per project, no names)"></td>
       <td>${pw}</td>
+      <td style="white-space:nowrap">${typeof twoStepCell === 'function' ? twoStepCell(u) : ''}</td>
       <td class="mono">${u.last_sign_in_at ? esc(String(u.last_sign_in_at).slice(0,16).replace('T',' ')) : '<span style="color:var(--muted)">never</span>'}</td>
       <td style="white-space:nowrap"><button class="btn btn-primary btn-sm" data-u-save>Save</button>${me?'':` <button class="btn btn-ghost btn-sm" data-u-reset title="Reset to the temporary password">Reset password</button>`}${['hr','hr_officer'].includes(u.role) ? ` <button class="btn btn-ghost btn-sm" data-u-reps title="Choose which reports this user can open">📊 Reports (${Array.isArray(u.allowed_reports) ? u.allowed_reports.length : 'all'})</button>` : ''}</td></tr>`; }).join('')
-    || '<tr><td colspan="8" class="empty">No users match</td></tr>';
+    || '<tr><td colspan="10" class="empty">No users match</td></tr>';
   let dl = document.getElementById('dl-emp-all');
   if (!dl){ dl=document.createElement('datalist'); dl.id='dl-emp-all'; document.body.appendChild(dl); }
   if (dl.options.length !== S.employees.length) dl.innerHTML = S.employees.map(e=>`<option value="${esc(e.id)} — ${esc(empName(e))}"></option>`).join('');
@@ -3673,6 +3739,7 @@ async function unlockSelfPay(){
   const { error } = await sb.auth.signInWithPassword({ email, password: pw });
   $('self-pay-go').disabled = false;
   if (error){ $('self-pay-err').textContent = /invalid|credentials/i.test(error.message) ? 'Wrong password' : error.message; return; }
+  if (!(await mfaAfterReauth())) { $('self-pay-err').textContent = 'The 6-digit code is needed to open payslips'; return; }
   $('self-pay-lock').style.display = 'none'; $('self-pay-card').style.display = ''; $('self-pay-pass').value = '';
 }
 $('self-pay-go').addEventListener('click', unlockSelfPay);
@@ -5243,6 +5310,104 @@ $('cc-save').addEventListener('click', ccSave);
 $('cc-reset').addEventListener('click', () => { ccFillRates({ ...CALC_DEFAULTS }); toast('2026 defaults filled in — click Save rates to keep them'); });
 
 // ═════════════════════════════════════════════════════════
+//  WAGE-TAX SETTLEMENT WORKBOOK — check, year-to-date reconciliation, planning benchmark (internal analysis)
+//  Reads the monthly settlement sheets (B code · C name · J months · K/L/M pay · N gross · P insurance · U period tax).
+// ═════════════════════════════════════════════════════════
+let ST = null;                                             // { sheets: { name: rows[] } }
+const stN = v => { const x = Number(String(v ?? '').replace(/,/g, '')); return isFinite(x) ? x : 0; };
+const stF = v => (Math.round(v * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function stRead(ws){
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 'A', defval: null, raw: true }), out = [];
+  for (let i = 4; i < rows.length; i++){
+    const r = rows[i]; const a = String(r.A ?? '');
+    if (/الإجمال|الاجمال|total/i.test(a)) break;               // the totals row ends the list
+    const code = String(r.B ?? '').trim(), name = String(r.C ?? '').trim();
+    if (!code || !name) continue;
+    const gross = r.N != null ? stN(r.N) : stN(r.K) + stN(r.L) + stN(r.M);
+    out.push({ code, name, months: stN(r.J) || 1, gross, ins: r.P != null ? stN(r.P) : stN(r.W), sheetTax: stN(r.U) });
+  }
+  return out;
+}
+function stTax(gross, ins, months){                         // tax for the period, current rules
+  const R = calcRates();
+  let annual = Math.max(0, (gross - ins) * 12 / (months || 1) - R.exemption);
+  if (R.round10) annual = Math.floor(annual / 10) * 10;
+  return { annual, tax: annualTax(annual, R).tax * (months || 1) / 12 };
+}
+$('st-file').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  $('st-out').innerHTML = '<div class="empty">Reading the workbook…</div>';
+  try {
+    await loadSheetJs();
+    const wb = XLSX.read(new Uint8Array(await readAs(f, 'buffer')), { type: 'array' });
+    const sheets = {};
+    wb.SheetNames.forEach(n => { const rows = stRead(wb.Sheets[n]); if (rows.length) sheets[n] = rows; });
+    const names = Object.keys(sheets);
+    if (!names.length) throw new Error('No settlement sheets found — the employee list must start on row 5 (code in column B, name in column C).');
+    ST = { sheets, file: f.name };
+    $('st-sheet').innerHTML = names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('') + (names.length > 1 ? `<option value="__all">All months (year to date)</option>` : '');
+    $('st-sheet').value = names[names.length - 1]; $('st-sheet').style.display = '';
+    stRender();
+  } catch (err) { $('st-out').innerHTML = `<div class="alert a-warn">${esc(err.message)}</div>`; }
+});
+$('st-sheet').addEventListener('change', () => stRender());
+function stRender(){
+  if (!ST) return;
+  const sel = $('st-sheet').value;
+  if (sel === '__all') return stRenderYTD();
+  const rows = ST.sheets[sel].map(r => { const c = stTax(r.gross, r.ins, r.months); return { ...r, annual: c.annual, calcTax: c.tax, diff: r.sheetTax - c.tax }; });
+  const tot = k => rows.reduce((s, r) => s + r[k], 0), bad = rows.filter(r => Math.abs(r.diff) > 1);
+  // planning benchmark — totals only
+  const H = rows.filter(r => r.gross > 0).length, taxable = rows.reduce((s, r) => s + Math.max(0, r.gross - r.ins), 0);
+  const per = H ? taxable / H : 0, even = H ? H * stTax(per, 0, 1).tax : 0, actual = tot('calcTax');
+  const byTax = [...rows].sort((a, b) => b.calcTax - a.calcTax), top10 = byTax.slice(0, 10).reduce((s, r) => s + r.calcTax, 0);
+  const bands = [[0, 10000, 'up to 10,000'], [10000, 20000, '10,000 – 20,000'], [20000, 50000, '20,000 – 50,000'], [50000, 100000, '50,000 – 100,000'], [100000, Infinity, 'above 100,000']]
+    .map(([lo, hi, l]) => { const b = rows.filter(r => r.gross > lo && r.gross <= hi); const g = b.reduce((s, r) => s + r.gross, 0), t = b.reduce((s, r) => s + r.calcTax, 0);
+      return `<tr><td>${l}</td><td class="num">${b.length}</td><td class="num">${stF(g)}</td><td class="num">${stF(t)}</td><td class="num">${g ? (t / g * 100).toFixed(1) + '%' : '—'}</td><td class="num">${actual ? (t / actual * 100).toFixed(1) + '%' : '—'}</td></tr>`; }).join('');
+  $('st-out').innerHTML = `
+    <div class="stats" style="margin:6px 0 14px">
+      <div class="stat"><div class="stat-label">Employees · ${esc(sel)}</div><div class="stat-value">${rows.length}</div></div>
+      <div class="stat"><div class="stat-label">Total gross</div><div class="stat-value">${stF(tot('gross'))}</div></div>
+      <div class="stat"><div class="stat-label">Tax in the sheet</div><div class="stat-value">${stF(tot('sheetTax'))}</div></div>
+      <div class="stat"><div class="stat-label">Tax — current rules</div><div class="stat-value">${stF(actual)}</div><div class="stat-sub">${bad.length ? `<b style="color:var(--danger)">${bad.length} line(s) differ</b>` : 'all lines match ✓'}</div></div>
+    </div>
+    <div class="toolbar-title" style="margin:6px 0">📊 Planning benchmark (totals only)</div>
+    <div class="alert a-info" style="margin-bottom:10px;line-height:1.7">If the same total taxable payroll (<b>${stF(taxable)}</b>) were spread evenly over the same <b>${H}</b> employees (<b>${stF(per)}</b> each a month), the total monthly tax would be <b>${stF(even)}</b> instead of <b>${stF(actual)}</b> — a theoretical difference of <b>${stF(actual - even)}</b> a month (${actual ? ((actual - even) / actual * 100).toFixed(1) : 0}%).
+      The <b>10 highest-taxed employees</b> carry <b>${actual ? (top10 / actual * 100).toFixed(1) : 0}%</b> of the total tax.
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">A theoretical benchmark of how pay concentration drives tax. Each employee is always taxed on the pay he actually receives.</div></div>
+    <div class="tbl-wrap" style="margin-bottom:16px"><table><thead><tr><th>Monthly gross band</th><th class="num">Employees</th><th class="num">Gross</th><th class="num">Tax</th><th class="num">Effective rate</th><th class="num">Share of total tax</th></tr></thead><tbody>${bands}</tbody></table></div>
+    <div class="toolbar"><span class="toolbar-title">✅ Check per employee — ${esc(sel)}</span><label style="font-size:13px;margin-inline-start:auto"><input type="checkbox" id="st-only"> show only lines that differ</label></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Name</th><th class="num">Gross</th><th class="num">Insurance</th><th class="num">Annual tax base</th><th class="num">Tax in sheet</th><th class="num">Tax — current rules</th><th class="num">Difference</th></tr></thead>
+      <tbody id="st-rows">${stRows(rows, false)}</tbody></table></div>`;
+  $('st-only').onchange = () => { $('st-rows').innerHTML = stRows(rows, $('st-only').checked); };
+}
+function stRows(rows, onlyBad){
+  return rows.filter(r => !onlyBad || Math.abs(r.diff) > 1).map(r => `<tr${Math.abs(r.diff) > 1 ? ' style="background:rgba(214,69,69,.08)"' : ''}><td class="mono">${esc(r.code)}</td><td>${esc(r.name)}</td>
+    <td class="num">${stF(r.gross)}</td><td class="num">${stF(r.ins)}</td><td class="num">${stF(r.annual)}</td><td class="num">${stF(r.sheetTax)}</td><td class="num">${stF(r.calcTax)}</td>
+    <td class="num"${Math.abs(r.diff) > 1 ? ' style="color:var(--danger);font-weight:700"' : ''}>${Math.abs(r.diff) > 1 ? stF(r.diff) : '✓'}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">No differences ✓</td></tr>';
+}
+function stRenderYTD(){
+  const by = {};
+  Object.entries(ST.sheets).forEach(([sheet, rows]) => rows.forEach(r => {
+    const x = by[r.code] || (by[r.code] = { code: r.code, name: r.name, months: 0, taxable: 0, gross: 0, withheld: 0 });
+    x.name = r.name; x.months += r.months; x.gross += r.gross; x.taxable += Math.max(0, r.gross - r.ins); x.withheld += r.sheetTax;
+  }));
+  const list = Object.values(by).map(x => { const c = stTax(x.taxable, 0, x.months); return { ...x, due: c.tax, diff: x.withheld - c.tax }; }).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+  const over = list.filter(x => x.diff > 1), under = list.filter(x => x.diff < -1), s = k => list.reduce((t, x) => t + x[k], 0);
+  $('st-out').innerHTML = `
+    <div class="stats" style="margin:6px 0 14px">
+      <div class="stat"><div class="stat-label">Months · employees</div><div class="stat-value">${Object.keys(ST.sheets).length} · ${list.length}</div></div>
+      <div class="stat"><div class="stat-label">Tax withheld (sheets)</div><div class="stat-value">${stF(s('withheld'))}</div></div>
+      <div class="stat"><div class="stat-label">Tax due on year-to-date pay</div><div class="stat-value">${stF(s('due'))}</div></div>
+      <div class="stat"><div class="stat-label">Over / under withheld</div><div class="stat-value" style="font-size:18px">${over.length} over · ${under.length} under</div><div class="stat-sub">net ${stF(s('withheld') - s('due'))}</div></div>
+    </div>
+    <div class="alert a-info" style="margin-bottom:10px">Year-to-date method: each employee's pay for all months is annualised together, the tax due for the months worked is compared with what was withheld month by month. <b>Over-withheld</b> amounts can be corrected by withholding less in the remaining months; <b>under-withheld</b> amounts should be collected before year end.</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Name</th><th class="num">Months</th><th class="num">Gross YTD</th><th class="num">Withheld YTD</th><th class="num">Due YTD</th><th class="num">Over (+) / under (−)</th></tr></thead><tbody>
+      ${list.map(x => `<tr${Math.abs(x.diff) > 1 ? ' style="background:' + (x.diff > 0 ? 'rgba(59,111,212,.07)' : 'rgba(214,69,69,.08)') + '"' : ''}><td class="mono">${esc(x.code)}</td><td>${esc(x.name)}</td><td class="num">${(+x.months.toFixed(2))}</td>
+        <td class="num">${stF(x.gross)}</td><td class="num">${stF(x.withheld)}</td><td class="num">${stF(x.due)}</td><td class="num" style="font-weight:700;color:${x.diff > 1 ? 'var(--link)' : x.diff < -1 ? 'var(--danger)' : 'inherit'}">${Math.abs(x.diff) > 1 ? stF(x.diff) : '✓'}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+// ═════════════════════════════════════════════════════════
 //  ANNOUNCEMENTS · EMPLOYEE VOICE · BIRTHDAYS (desktop)
 // ═════════════════════════════════════════════════════════
 const V = { news:[], reads:[], fb:[], hire:[], train:[], act:[] };
@@ -5535,6 +5700,256 @@ $('ml-go').addEventListener('click', async () => {
 });
 const _openEmpLife = openEmp;
 openEmp = function(id){ const r = _openEmpLife.apply(this, arguments); renderEmpLife(id); return r; };
+
+// ═════════════════════════════════════════════════════════
+//  TWO-STEP SIGN-IN (TOTP) + AUDIT LOG   — database: 40-two-step-audit-tidyup.sql
+// ═════════════════════════════════════════════════════════
+const STAFF_ROLES = ['admin','hr','hr_officer'];
+let SEC = { require_staff_mfa:false, enrolled:false, aal:'aal1', ready:false };
+
+// the two two-step windows must not close by clicking beside them or pressing Esc
+document.addEventListener('click', e => { if (e.target && (e.target.id === 'm-code' || e.target.id === 'm-2fa')) e.stopImmediatePropagation(); }, true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && ($('m-code').classList.contains('open') || $('m-2fa').classList.contains('open'))) e.stopImmediatePropagation(); }, true);
+
+async function loadSecurity(){
+  try {
+    const { data, error } = await sb.rpc('my_security_status');
+    if (error) throw error;
+    SEC = { ...data, ready:true };
+  } catch (e) { SEC = { require_staff_mfa:false, enrolled:false, aal:'aal1', ready:false }; }   // database update 40 not run yet
+  return SEC;
+}
+async function verifiedFactor(){
+  const { data, error } = await sb.auth.mfa.listFactors();
+  if (error) throw error;
+  return ((data && data.totp) || []).find(f => f.status === 'verified') || null;
+}
+async function currentAal(){
+  const { data } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+  return data || { currentLevel:'aal1', nextLevel:'aal1' };
+}
+
+// ── ask for the 6-digit code (resolves true when the session is upgraded) ──
+function askCode(opts = {}){
+  return new Promise(resolve => {
+    $('code-title').textContent = opts.title || 'Enter your 6-digit code';
+    $('code-cancel').textContent = opts.cancelText || 'Sign out';
+    $('code-in').value = ''; $('code-err').style.display = 'none';
+    openM('m-code'); setTimeout(() => $('code-in').focus(), 50);
+    const done = ok => { closeM('m-code'); $('code-ok').onclick = $('code-cancel').onclick = $('code-in').onkeydown = null; resolve(ok); };
+    const go = async () => {
+      const code = $('code-in').value.replace(/\D/g, '');
+      if (code.length !== 6){ $('code-err').textContent = 'Type the 6 digits shown in your authenticator app.'; $('code-err').style.display = 'block'; return; }
+      $('code-ok').disabled = true; $('code-ok').textContent = 'Checking…';
+      try {
+        const f = await verifiedFactor(); if (!f) throw new Error('No authenticator is set up for this account.');
+        const { error } = await sb.auth.mfa.challengeAndVerify({ factorId: f.id, code });
+        if (error) throw error;
+        done(true);
+      } catch (e) {
+        $('code-err').textContent = /invalid|expired|code/i.test(e.message || '') ? 'Wrong or expired code — wait for the next code in the app and try again.' : (e.message || String(e));
+        $('code-err').style.display = 'block'; $('code-in').value = ''; $('code-in').focus();
+      } finally { $('code-ok').disabled = false; $('code-ok').textContent = 'Continue'; }
+    };
+    $('code-ok').onclick = go;
+    $('code-in').onkeydown = e => { if (e.key === 'Enter') go(); };
+    $('code-cancel').onclick = () => done(false);
+  });
+}
+
+// ── set up an authenticator (resolves true when verified) ──
+let tfaPending = null;
+function setupTwoStep(opts = {}){
+  return new Promise(async resolve => {
+    $('tfa-err').style.display = 'none'; $('tfa-code').value = ''; $('tfa-qr').removeAttribute('src'); $('tfa-secret').textContent = '…';
+    $('tfa-cancel').textContent = opts.forced ? 'Sign out' : 'Cancel';
+    $('tfa-x').style.display = opts.forced ? 'none' : '';
+    openM('m-2fa');
+    const fail = m => { $('tfa-err').innerHTML = m; $('tfa-err').style.display = 'block'; };
+    const finish = ok => { closeM('m-2fa'); $('tfa-confirm').onclick = $('tfa-cancel').onclick = $('tfa-x').onclick = $('tfa-code').onkeydown = null; resolve(ok); };
+    const cancel = async () => {
+      if (tfaPending) { try { await sb.auth.mfa.unenroll({ factorId: tfaPending }); } catch (e) {} tfaPending = null; }
+      finish(false);
+    };
+    $('tfa-cancel').onclick = cancel; $('tfa-x').onclick = cancel;
+    try {
+      // remove half-finished set-ups from earlier attempts
+      const { data: fl } = await sb.auth.mfa.listFactors();
+      for (const f of ((fl && fl.all) || []).filter(f => f.status !== 'verified')) { try { await sb.auth.mfa.unenroll({ factorId: f.id }); } catch (e) {} }
+      const { data, error } = await sb.auth.mfa.enroll({ factorType:'totp', issuer:'Petrokima HR', friendlyName:'Petrokima HR ' + new Date().toISOString().slice(0,16) });
+      if (error) throw error;
+      tfaPending = data.id;
+      $('tfa-qr').src = data.totp.qr_code;
+      $('tfa-secret').textContent = (data.totp.secret || '').replace(/(.{4})/g, '$1 ').trim();
+      setTimeout(() => $('tfa-code').focus(), 50);
+    } catch (e) {
+      return fail(/disabled|not enabled/i.test(e.message || '')
+        ? 'Two-step sign-in is switched off in Supabase. The administrator must open Supabase → <b>Authentication</b> → <b>Multi-Factor</b> (or Sign In / Providers → MFA) and enable <b>TOTP</b>.'
+        : esc(e.message || String(e)));
+    }
+    const go = async () => {
+      const code = $('tfa-code').value.replace(/\D/g, '');
+      if (code.length !== 6) return fail('Type the 6 digits shown in the app.');
+      $('tfa-confirm').disabled = true; $('tfa-confirm').textContent = 'Checking…';
+      const { error } = await sb.auth.mfa.challengeAndVerify({ factorId: tfaPending, code });
+      $('tfa-confirm').disabled = false; $('tfa-confirm').textContent = 'Confirm';
+      if (error) { $('tfa-code').value = ''; return fail('That code did not match — wait for the next code in the app and try again.'); }
+      tfaPending = null; toast('Two-step sign-in is set up ✔'); finish(true);
+    };
+    $('tfa-confirm').onclick = go;
+    $('tfa-code').onkeydown = e => { if (e.key === 'Enter') go(); };
+  });
+}
+
+// ── called by afterLogin for Admin / HR / HR Officer. true = carry on, false = stop (a window took over) ──
+async function mfaGate(me, user){
+  let lvl;
+  try { lvl = await currentAal(); } catch (e) { return true; }
+  if (lvl.currentLevel === 'aal2') { await loadSecurity(); return true; }
+  if (lvl.nextLevel === 'aal2') {                       // has an authenticator → always ask for the code
+    const ok = await askCode();
+    if (!ok) { signOut(); return false; }
+    await loadSecurity(); return true;
+  }
+  await loadSecurity();
+  if (SEC.require_staff_mfa) {                          // required but not set up yet → must set it up now
+    const ok = await setupTwoStep({ forced:true });
+    if (!ok) { signOut(); return false; }
+    await loadSecurity(); return true;
+  }
+  if (SEC.ready) setTimeout(() => toast('Protect your account: set up two-step sign-in (Users & roles → 📱, or ask the administrator).', 'warn'), 1500);
+  return true;
+}
+
+// after re-typing the password (payslips), a staff session must enter the code again
+async function mfaAfterReauth(){
+  try {
+    const lvl = await currentAal();
+    if (lvl.currentLevel === 'aal1' && lvl.nextLevel === 'aal2') return await askCode({ title:'Enter your 6-digit code', cancelText:'Cancel' });
+  } catch (e) {}
+  return true;
+}
+
+// ── Users & roles: the two-step card and the 2-step column ──
+let MFA_USERS = {};
+async function loadTwoStepAdmin(){
+  await loadSecurity();
+  const st = $('tfa-status');
+  if (!SEC.ready) { st.innerHTML = '<span class="chip c-orange">not available yet</span> The database update <b>40-two-step-audit-tidyup.sql</b> has not been run.'; ['tfa-setup-me','tfa-on','tfa-off'].forEach(id => $(id).style.display = 'none'); return; }
+  const r = await sb.rpc('admin_mfa_status');
+  MFA_USERS = Object.fromEntries(((r && r.data) || []).map(x => [x.user_id, x]));
+  const staff = USERS.filter(u => STAFF_ROLES.includes(u.role) && u.active);
+  const missing = staff.filter(u => !MFA_USERS[u.id]);
+  st.innerHTML = (SEC.require_staff_mfa
+      ? '<span class="chip c-green">REQUIRED</span> Staff accounts get their staff powers only after the 6-digit code. '
+      : '<span class="chip c-orange">not required yet</span> Staff can set it up now; switch the requirement on when everyone is ready. ')
+    + `<br><b>${staff.length - missing.length} of ${staff.length}</b> active staff accounts have set it up.`
+    + (missing.length ? ` Still to set up: ${missing.map(u => esc(u.full_name || u.email)).join(', ')}.` : ' ✔ Everyone is ready.')
+    + (SEC.enrolled ? '<br>Your own account: <b>set up ✔</b>' + (SEC.aal === 'aal2' ? ' and signed in with the code.' : ' — sign out and in again with the code.') : '<br>Your own account: <b>not set up yet</b>.');
+  $('tfa-setup-me').style.display = SEC.enrolled ? 'none' : '';
+  $('tfa-on').style.display  = SEC.require_staff_mfa ? 'none' : '';
+  $('tfa-off').style.display = SEC.require_staff_mfa ? '' : 'none';
+  renderUsers();
+}
+function twoStepCell(u){
+  if (!STAFF_ROLES.includes(u.role)) return '<span style="color:var(--muted)">—</span>';
+  if (!SEC.ready) return '';
+  return MFA_USERS[u.id] ? `<span class="chip c-green">on</span>${u.id !== ME.id ? ` <button class="btn btn-ghost btn-sm" data-u-mfa title="Lost phone: remove the authenticator so they can set it up again">Reset</button>` : ''}`
+                         : '<span class="chip c-orange">not set up</span>';
+}
+$('tfa-setup-me').addEventListener('click', async () => {
+  if (await setupTwoStep()) { toast('Done — next time you sign in, type the code after your password'); loadTwoStepAdmin(); }
+});
+$('tfa-on').addEventListener('click', () => {
+  if (!SEC.enrolled) return toast('First set up your own two-step sign-in (📱 button), sign out and sign in again with the code', 'warn');
+  if (SEC.aal !== 'aal2') return toast('Sign out and sign in again with your 6-digit code first', 'warn');
+  const staff = USERS.filter(u => STAFF_ROLES.includes(u.role) && u.active), missing = staff.filter(u => !MFA_USERS[u.id]);
+  confirmDel(`Require two-step sign-in for all Admin, HR and HR Officer accounts?` + (missing.length
+      ? ` ${missing.length} of them (${missing.map(u => u.full_name || u.email).join(', ')}) have not set it up — they will be asked to scan the QR code at their next sign-in.` : ''),
+    async () => { const { error } = await sb.rpc('set_require_staff_mfa', { p_on:true }); if (error) throw error; toast('Two-step sign-in is now REQUIRED for staff'); loadTwoStepAdmin(); });
+  $('del-title').textContent = 'Please confirm'; $('del-ok').textContent = 'Require it'; $('del-ok').className = 'btn btn-success';
+});
+$('tfa-off').addEventListener('click', () => {
+  confirmDel('Switch the two-step requirement OFF? Staff accounts will again get their powers with the password alone. Only do this in an emergency.',
+    async () => { const { error } = await sb.rpc('set_require_staff_mfa', { p_on:false }); if (error) throw error; toast('Requirement switched off', 'warn'); loadTwoStepAdmin(); });
+  $('del-title').textContent = 'Please confirm'; $('del-ok').textContent = 'Switch off'; $('del-ok').className = 'btn btn-danger';
+});
+$('us-tbl').addEventListener('click', e => {
+  const b = e.target.closest('[data-u-mfa]'); if (!b) return;
+  const u = USERS.find(x => x.id === b.closest('tr').dataset.uid); if (!u) return;
+  confirmDel(`Reset two-step sign-in for ${u.full_name || u.email}? Use this when they lost or changed their phone. At their next sign-in they scan a new QR code.`,
+    async () => { const { error } = await sb.rpc('admin_reset_mfa', { p_user:u.id }); if (error) throw error; toast('Two-step sign-in reset'); loadTwoStepAdmin(); });
+  $('del-title').textContent = 'Please confirm'; $('del-ok').textContent = 'Reset'; $('del-ok').className = 'btn btn-danger';
+});
+
+// ═════════════════════════════════════════════════════════
+//  AUDIT LOG (admin only)
+// ═════════════════════════════════════════════════════════
+const AUDIT_AREAS = {
+  employees:'Employees', employee_salary_elements:'Fixed package (salary elements)', salary_elements:'Salary element list', app_users:'Logins & roles',
+  payroll_period_elements:'Monthly entries', payroll_runs:'Payroll approval', salary_change_requests:'Basic salary requests', manager_actions:'Manager penalty / incentive requests',
+  employee_loans:'Loans', employee_penalties:'Penalties', employment_history:'Employment history', project_allowance_rules:'Project allowance rules',
+  public_holidays:'Public holidays', settings:'Settings', attendance:'Attendance (staff edits)', employee_leaves:'Vacations (staff edits)',
+  attendance_permissions:'Permissions (staff edits)', two_step_sign_in:'Two-step sign-in' };
+const AUDIT_ACT = { INSERT:['Added','c-green'], UPDATE:['Changed','c-blue'], DELETE:['Deleted','c-red'] };
+let AUDIT = [];
+(function initAuditFilters(){
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const t = new Date(), f = new Date(); f.setDate(f.getDate() - 30);
+  $('au-from').value = ymd(f); $('au-to').value = ymd(t);
+  $('au-tbl').innerHTML = '<tr><td colspan="7" class="empty">Click ⟳ Refresh</td></tr>';
+  $('au-area').innerHTML = '<option value="">All areas</option>' + Object.entries(AUDIT_AREAS).map(([k,v]) => `<option value="${k}">${esc(v)}</option>`).join('');
+})();
+function auditVal(v){
+  if (v === null || v === undefined || v === '') return '<span style="color:var(--muted)">(empty)</span>';
+  let s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+  if (s.length > 80) s = s.slice(0, 77) + '…';
+  return esc(s);
+}
+function auditWhat(a){
+  if (a.action === 'UPDATE' && a.changed) return a.changed.map(c => `<div><b>${esc(c.replace(/_/g,' '))}</b>: ${auditVal((a.old_data||{})[c])} → ${auditVal((a.new_data||{})[c])}</div>`).join('');
+  const d = a.action === 'DELETE' ? a.old_data : a.new_data; if (!d) return '';
+  const keys = ['name_en','name_ar','full_name','role','element_code','element_name','amount','new_amount','installment','loan_amount','penalty_type','quantity','status','date','name','user','factors_removed'].filter(k => d[k] !== undefined && d[k] !== null && d[k] !== '');
+  return keys.slice(0,5).map(k => `<span style="margin-right:10px"><b>${esc(k.replace(/_/g,' '))}</b>: ${auditVal(d[k])}</span>`).join('');
+}
+async function loadAudit(){
+  if (!ME || ME.role !== 'admin') return;
+  const from = $('au-from').value, to = $('au-to').value;
+  $('au-tbl').innerHTML = '<tr><td colspan="7" class="empty">Loading…</td></tr>';
+  let q = sb.from('audit_log').select('*').order('at', { ascending:false }).limit(2000);
+  // dates are the viewer's own calendar days (Cairo time on company PCs)
+  if (from) q = q.gte('at', new Date(from + 'T00:00:00').toISOString());
+  if (to) { const d = new Date(to + 'T00:00:00'); d.setDate(d.getDate() + 1); q = q.lt('at', d.toISOString()); }
+  const area = $('au-area').value; if (area) q = q.eq('tbl', area);
+  if ($('au-act').value) q = q.eq('action', $('au-act').value);
+  if ($('au-emp').value.trim()) q = q.eq('emp_id', $('au-emp').value.trim());
+  const { data, error } = await q;
+  if (error) { AUDIT = []; $('au-count').textContent = 'Changes';
+    $('au-tbl').innerHTML = `<tr><td colspan="7" class="empty">${/audit_log/.test(error.message) ? 'The audit log is not available yet — run database update 40-two-step-audit-tidyup.sql' : esc(error.message)}</td></tr>`; return; }
+  AUDIT = data || []; renderAudit();
+}
+function renderAudit(){
+  const qq = $('au-q').value.trim().toLowerCase();
+  const list = AUDIT.filter(a => !qq || [a.user_name, a.user_role, a.row_key, a.emp_id, (a.changed||[]).join(' '), JSON.stringify(a.old_data||''), JSON.stringify(a.new_data||'')].join(' ').toLowerCase().includes(qq));
+  $('au-count').textContent = `${list.length.toLocaleString()} change${list.length === 1 ? '' : 's'}${AUDIT.length >= 2000 ? ' (first 2,000 — narrow the dates)' : ''}`;
+  $('au-tbl').innerHTML = list.map(a => { const [lbl, cls] = AUDIT_ACT[a.action] || [a.action, 'c-blue'];
+    const e = a.emp_id ? empById(a.emp_id) : null;
+    return `<tr><td class="mono" style="white-space:nowrap">${esc(new Date(a.at).toLocaleString('en-GB', { timeZone:'Africa/Cairo', day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }))}</td>
+      <td>${esc(a.user_name || '')}${a.user_role ? ` <span class="chip c-blue">${esc(ROLE_LABEL[a.user_role] || a.user_role)}</span>` : ''}${a.aal === 'aal2' ? ' <span title="signed in with the 6-digit code">🔐</span>' : ''}</td>
+      <td>${esc(AUDIT_AREAS[a.tbl] || a.tbl)}</td><td><span class="chip ${cls}">${lbl}</span></td>
+      <td class="mono">${esc(a.tbl === 'app_users' || a.tbl === 'two_step_sign_in' || /^[0-9a-f-]{36}$/.test(a.row_key || '') ? '' : (a.row_key || ''))}</td>
+      <td>${a.emp_id ? esc(a.emp_id + (e ? ' — ' + empName(e) : '')) : ''}</td>
+      <td style="font-size:12px;line-height:1.6;max-width:520px">${auditWhat(a)}</td></tr>`; }).join('')
+    || '<tr><td colspan="7" class="empty">No changes recorded for these filters</td></tr>';
+}
+$('au-load').addEventListener('click', loadAudit);
+['au-from','au-to','au-act'].forEach(id => $(id).addEventListener('change', loadAudit));
+$('au-area').addEventListener('change', loadAudit);
+$('au-emp').addEventListener('change', loadAudit);
+$('au-q').addEventListener('input', renderAudit);
+document.querySelector('[data-page="audit"]').addEventListener('click', loadAudit);
+document.querySelector('[data-page="users"]').addEventListener('click', () => setTimeout(loadTwoStepAdmin, 400));
+$('us-refresh').addEventListener('click', () => setTimeout(loadTwoStepAdmin, 400));
 
 // ═════════════════════════════════════════════════════════
 //  BOOT

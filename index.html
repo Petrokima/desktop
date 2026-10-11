@@ -854,6 +854,10 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
       <div class="field"><label>Default site radius (metres) — used when a site has no radius of its own</label><input id="lr-radius" type="number" min="50" max="5000" step="50"></div>
       <div class="field"><label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="lr-apponly" style="width:auto"> Android employees must use the Petrokima app, not the browser</label></div>
     </div>
+    <div class="grid3" style="align-items:end;margin-top:10px">
+      <div class="field"><label>Oldest Android app allowed (build number — the last part of "Version 1.0.<b>N</b>" on download.petrokima-hr.com). 0 = no limit</label><input id="lr-minbuild" type="number" min="0" step="1"></div>
+      <div class="field" style="grid-column:span 2;font-size:12px;color:var(--muted);line-height:1.6">When set, older Android apps — which cannot detect fake GPS — are refused with "Your app is out of date, install the new version". Set it a few days after a new version is published, once most phones have updated.</div>
+    </div>
     <div style="font-size:12px;color:var(--muted);margin:8px 0 12px;line-height:1.6">A location from a <b>fake-location app</b> is always refused (Android app). Suspicious patterns — the exact same point on another day, "perfect" GPS accuracy, impossible travel speed — are never refused, only shown below. Sites without a map point are not checked.</div>
     <button class="btn btn-primary" id="lr-save">Save rules</button> <span id="lr-note" style="font-size:12px;color:var(--muted);margin-left:8px"></span>
   </div>
@@ -861,7 +865,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="card">
     <div class="toolbar"><span class="toolbar-title" id="lw-count">Check-ins with location warnings</span>
       <div class="toolbar-right">
-        <select class="sel" id="lw-kind"><option value="">All warnings</option><option value="outside_site">Outside the site</option><option value="fake_gps">Fake-location app</option><option value="same_point">Same exact point</option><option value="perfect_accuracy">"Perfect" accuracy</option><option value="impossible_travel">Impossible travel</option><option value="browser_android">Browser instead of app</option><option value="held">Kept for review (not counted)</option></select>
+        <select class="sel" id="lw-kind"><option value="">All warnings</option><option value="outside_site">Outside the site</option><option value="fake_gps">Fake-location app</option><option value="same_point">Same exact point</option><option value="perfect_accuracy">"Perfect" accuracy</option><option value="impossible_travel">Impossible travel</option><option value="browser_android">Browser instead of app</option><option value="old_app">Old app version</option><option value="held">Kept for review (not counted)</option></select>
         <input class="inp" id="lw-q" placeholder="Search code, name or site…">
       </div></div>
     <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Time</th><th>Employee</th><th>Event</th><th>Site</th><th class="num">Distance</th><th>Warnings</th><th>Counted?</th><th>Map</th><th></th></tr></thead><tbody id="lw-tbl"></tbody></table></div>
@@ -6012,7 +6016,8 @@ const LOC_FLAG = {
   same_point:       ['Same exact point as another day', 'c-orange'],
   perfect_accuracy: ['"Perfect" GPS accuracy', 'c-orange'],
   impossible_travel:['Impossible travel speed', 'c-red'],
-  browser_android:  ['Browser instead of app', 'c-blue'] };
+  browser_android:  ['Browser instead of app', 'c-blue'],
+  old_app:          ['Old app version', 'c-blue'] };
 let LOC_RULES = { outside:'flag', default_radius:300, block_mock:true, android_app_only:false };
 let WORK_LOCS = [], wlMissing = false;
 const fmtDist = m => m == null ? '' : (m >= 1000 ? (m/1000).toFixed(1) + ' km' : Math.round(m) + ' m');
@@ -6029,6 +6034,7 @@ function renderLocations(){
   $('lr-outside').value = LOC_RULES.outside || 'flag';
   $('lr-radius').value = num(LOC_RULES.default_radius) || 300;
   $('lr-apponly').checked = !!LOC_RULES.android_app_only;
+  $('lr-minbuild').value = num(LOC_RULES.min_android_build) || 0;
   $('lr-note').textContent = wlMissing ? 'Database update 41-location-integrity.sql has not been run yet — these checks are not active.' : '';
   renderLocWarnings(); renderSites(); renderOffices();
 }
@@ -6182,7 +6188,9 @@ $('wl-add').addEventListener('click', () => {
 $('lr-save').addEventListener('click', async () => {
   const rad = Math.round(Number($('lr-radius').value));
   if (!(rad >= 50 && rad <= 5000)) return toast('Default radius must be between 50 and 5,000 metres', 'warn');
-  const value = { ...LOC_RULES, outside: $('lr-outside').value, default_radius: rad, block_mock: true, android_app_only: $('lr-apponly').checked };
+  const minb = Math.round(Number($('lr-minbuild').value || 0));
+  if (!(minb >= 0)) return toast('The oldest app build must be 0 or a positive number', 'warn');
+  const value = { ...LOC_RULES, outside: $('lr-outside').value, default_radius: rad, block_mock: true, android_app_only: $('lr-apponly').checked, min_android_build: minb };
   const { data, error } = await sb.from('settings').upsert({ key:'location_rules', value }).select('key');
   if (error) return toast(error.message, 'err'); if (!(data && data.length)) return toast('Only an administrator can change these rules', 'err');
   LOC_RULES = value; toast('Location rules saved');

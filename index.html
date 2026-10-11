@@ -302,6 +302,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="nav-item" data-page="hrreq">📨 HR requests <span class="chip c-orange" id="hr-badge" style="margin-left:auto;display:none"></span></div>
   <div class="nav-item" data-page="reporting">🧭 Reporting lines <span class="chip c-orange" id="rl-badge" style="margin-left:auto;display:none"></span></div>
   <div class="nav-item" data-page="exempt">⭐ Exception rule</div>
+  <div class="nav-item" data-page="locations">📍 Location checks <span class="chip c-orange" id="loc-badge" style="margin-left:auto;display:none"></span></div>
   <div class="nav-item" data-page="assign">📌 Project assignments</div>
   <div class="nav-item" data-page="bulk">⬆ Bulk upload</div>
   <div class="nav-item" data-page="news">📢 Announcements</div>
@@ -838,6 +839,55 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
       </div></div>
     <div class="tbl-wrap"><table><thead><tr><th>When</th><th>Who</th><th>Area</th><th>Action</th><th>Record</th><th>Employee</th><th>What changed</th></tr></thead><tbody id="au-tbl"></tbody></table></div>
     <div class="foot" id="au-foot">Shows up to 2,000 lines for the chosen dates — narrow the dates or filters to see older lines.</div>
+  </div>
+</div>
+
+<!-- LOCATION CHECKS -->
+<div class="page" id="page-locations">
+  <div class="page-header"><div><div class="page-title">Location checks</div><div class="page-sub">Site boundaries, fake-GPS detection and suspicious check-ins</div></div></div>
+
+  <div class="card" style="padding:18px">
+    <div class="sec" style="margin-top:0">Rules</div>
+    <div class="grid3" style="align-items:end">
+      <div class="field"><label>A check-in outside the site boundary</label>
+        <select id="lr-outside"><option value="flag">Allow it, but warn HR</option><option value="block">Refuse it (offline taps are kept for HR review)</option></select></div>
+      <div class="field"><label>Default site radius (metres) — used when a site has no radius of its own</label><input id="lr-radius" type="number" min="50" max="5000" step="50"></div>
+      <div class="field"><label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="lr-apponly" style="width:auto"> Android employees must use the Petrokima app, not the browser</label></div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin:8px 0 12px;line-height:1.6">A location from a <b>fake-location app</b> is always refused (Android app). Suspicious patterns — the exact same point on another day, "perfect" GPS accuracy, impossible travel speed — are never refused, only shown below. Sites without a map point are not checked.</div>
+    <button class="btn btn-primary" id="lr-save">Save rules</button> <span id="lr-note" style="font-size:12px;color:var(--muted);margin-left:8px"></span>
+  </div>
+
+  <div class="card">
+    <div class="toolbar"><span class="toolbar-title" id="lw-count">Check-ins with location warnings</span>
+      <div class="toolbar-right">
+        <select class="sel" id="lw-kind"><option value="">All warnings</option><option value="outside_site">Outside the site</option><option value="fake_gps">Fake-location app</option><option value="same_point">Same exact point</option><option value="perfect_accuracy">"Perfect" accuracy</option><option value="impossible_travel">Impossible travel</option><option value="browser_android">Browser instead of app</option><option value="held">Kept for review (not counted)</option></select>
+        <input class="inp" id="lw-q" placeholder="Search code, name or site…">
+      </div></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Time</th><th>Employee</th><th>Event</th><th>Site</th><th class="num">Distance</th><th>Warnings</th><th>Counted?</th><th>Map</th><th></th></tr></thead><tbody id="lw-tbl"></tbody></table></div>
+    <div class="foot">This payroll period. A kept-for-review check-in is not in the attendance — if it is genuine, add the time by hand on the Attendance page.</div>
+  </div>
+
+  <div class="card">
+    <div class="toolbar"><span class="toolbar-title" id="ls-count">Site locations</span>
+      <div class="toolbar-right">
+        <select class="sel" id="ls-show"><option value="used">Sites used this period</option><option value="mapped">Sites with a map point</option><option value="missing">Used, but no map point yet</option><option value="all">All projects</option></select>
+        <input class="inp" id="ls-q" placeholder="Search code or name…">
+      </div></div>
+    <div style="font-size:12px;color:var(--muted);padding:0 18px 10px;line-height:1.6">Get the point from Google Maps: right-click the site → click the numbers at the top (they are copied) → paste them into <b>Latitude</b> (e.g. <span class="mono">30.04442, 31.23571</span>) — both boxes fill in. Or use 📌 on a check-in made at the site.</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Site</th><th>Latitude</th><th>Longitude</th><th>Radius (m)</th><th class="num">Check-ins</th><th></th></tr></thead><tbody id="ls-tbl"></tbody></table></div>
+    <details style="padding:12px 18px"><summary style="cursor:pointer;font-size:13px;font-weight:600">Paste many sites at once</summary>
+      <div style="font-size:12px;color:var(--muted);margin:8px 0">One site per line: <span class="mono">code, latitude, longitude, radius</span> (radius optional). Copy the four columns from Excel and paste.</div>
+      <textarea id="ls-bulk" rows="6" style="width:100%;font-family:monospace;font-size:12px" placeholder="PF-PF-006-26, 30.04442, 31.23571, 300"></textarea>
+      <button class="btn btn-primary" id="ls-bulk-save" style="margin-top:8px">Save these sites</button> <span id="ls-bulk-note" style="font-size:12px;margin-left:8px"></span>
+    </details>
+  </div>
+
+  <div class="card">
+    <div class="toolbar"><span class="toolbar-title">Offices (check-ins without a project)</span>
+      <div class="toolbar-right"><button class="btn btn-ghost" id="wl-add">+ Add office</button></div></div>
+    <div style="font-size:12px;color:var(--muted);padding:0 18px 10px">Employees allowed to check in "without project" are compared with the nearest office. No offices listed = not checked.</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Office</th><th>Latitude</th><th>Longitude</th><th>Radius (m)</th><th>Active</th><th></th></tr></thead><tbody id="wl-tbl"></tbody></table></div>
   </div>
 </div>
 
@@ -2694,11 +2744,13 @@ const REPORTS = [
 
   { id:'att-mobile', g:'Attendance', t:'Mobile check-in log',
     d:'Every check-in and check-out tapped on the mobile app in this payroll cycle — time, site and GPS location. Taps made with no internet are marked offline: their time comes from the phone clock, corrected by the server when the phone reconnected. This log is permanent and cannot be edited.',
-    build:() => ({ cols:[C('date','Date','date'),C('time','Time','mono'),C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('ev','Event'),C('site','Site','id'),C('sname','Site name'),C('acc','GPS accuracy (m)','int'),C('map','Location','link'),C('how','Recorded'),C('state','Status')],
+    build:() => ({ cols:[C('date','Date','date'),C('time','Time','mono'),C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('ev','Event'),C('site','Site','id'),C('sname','Site name'),C('acc','GPS accuracy (m)','int'),C('dist','Distance from site'),C('warn','Location warnings'),C('map','Location','link'),C('how','Recorded'),C('state','Status')],
       rows:S.clocks.map(c=>{ const e=empById(c.emp_id)||{}; return { date:c.local_date, time:c.local_time, code:c.emp_id, name:empName(e), department:e.department, ev:c.event_type==='in'?'Check in':'Check out',
         how: (c.offline ? `📴 offline · sent ${String(c.received_at||'').slice(0,16).replace('T',' ')} UTC` : 'online') + (c.location_exempt ? ' · ⚠ no location (exception)' : ''),
         state: /corrected/.test(c.time_method||'') ? '⚠ phone clock was wrong — time corrected' : 'OK',
-        site:c.project_code||'', sname:c.project_code?projName(c.project_code):(c.event_type==='in'?'No project':''), acc:c.accuracy, map: mapUrl(c) || '' }; })
+        site:c.project_code||'', sname:c.project_code?projName(c.project_code):(c.event_type==='in'?'No project':''), acc:c.accuracy, map: mapUrl(c) || '',
+        dist: c.distance_m != null ? (c.distance_m >= 1000 ? (c.distance_m/1000).toFixed(1)+' km' : c.distance_m+' m') : '',
+        warn: (c.location_flags||[]).map(f => (typeof LOC_FLAG !== 'undefined' && LOC_FLAG[f] ? LOC_FLAG[f][0] : f)).join(', ') + (c.applied === false ? (c.location_flags && c.location_flags.length ? ' · ' : '') + 'kept for review: ' + (c.review_note||'') : '') }; })
         .sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)) }) },
   { id:'att-review', g:'Attendance', t:'Offline check-ins to review',
     d:'Check-ins made with no internet and sent later. Their time comes from the phone clock: the server compares the phone clock with its own when the phone reconnects and corrects any difference. Check the ones marked ⚠ first. Taps more than 72 hours old, or earlier than one already recorded, are refused and stay on the phone — HR records those manually.',
@@ -5950,6 +6002,200 @@ $('au-q').addEventListener('input', renderAudit);
 document.querySelector('[data-page="audit"]').addEventListener('click', loadAudit);
 document.querySelector('[data-page="users"]').addEventListener('click', () => setTimeout(loadTwoStepAdmin, 400));
 $('us-refresh').addEventListener('click', () => setTimeout(loadTwoStepAdmin, 400));
+
+// ═════════════════════════════════════════════════════════
+//  LOCATION CHECKS — site boundaries, fake GPS, suspicious check-ins   (database: 41-location-integrity.sql)
+// ═════════════════════════════════════════════════════════
+const LOC_FLAG = {
+  outside_site:     ['Outside the site', 'c-orange'],
+  fake_gps:         ['Fake-location app', 'c-red'],
+  same_point:       ['Same exact point as another day', 'c-orange'],
+  perfect_accuracy: ['"Perfect" GPS accuracy', 'c-orange'],
+  impossible_travel:['Impossible travel speed', 'c-red'],
+  browser_android:  ['Browser instead of app', 'c-blue'] };
+let LOC_RULES = { outside:'flag', default_radius:300, block_mock:true, android_app_only:false };
+let WORK_LOCS = [], wlMissing = false;
+const fmtDist = m => m == null ? '' : (m >= 1000 ? (m/1000).toFixed(1) + ' km' : Math.round(m) + ' m');
+const locFlagged = () => S.clocks.filter(c => (Array.isArray(c.location_flags) && c.location_flags.length) || (c.applied === false && c.mock_location));
+
+async function loadLocationData(){
+  const [r, w] = await Promise.all([
+    sb.from('settings').select('value').eq('key','location_rules'),
+    sb.from('work_locations').select('*').order('name') ]);
+  if (r.data && r.data[0] && r.data[0].value) LOC_RULES = { ...LOC_RULES, ...r.data[0].value };
+  wlMissing = !!w.error; WORK_LOCS = w.data || [];
+}
+function renderLocations(){
+  $('lr-outside').value = LOC_RULES.outside || 'flag';
+  $('lr-radius').value = num(LOC_RULES.default_radius) || 300;
+  $('lr-apponly').checked = !!LOC_RULES.android_app_only;
+  $('lr-note').textContent = wlMissing ? 'Database update 41-location-integrity.sql has not been run yet — these checks are not active.' : '';
+  renderLocWarnings(); renderSites(); renderOffices();
+}
+PAGE_RENDER.locations = () => { loadLocationData().then(renderLocations, renderLocations); };
+
+// ── warnings ──
+function renderLocWarnings(){
+  const kind = $('lw-kind').value, q = $('lw-q').value.trim().toLowerCase();
+  const list = locFlagged().filter(c => {
+    const fl = c.location_flags || [];
+    if (kind === 'held' ? c.applied !== false : kind && !fl.includes(kind)) return false;
+    if (!q) return true; const e = empById(c.emp_id) || {};
+    return [c.emp_id, empName(e), c.project_code, projName(c.project_code)].some(v => String(v||'').toLowerCase().includes(q));
+  }).sort((a,b) => String(b.at).localeCompare(String(a.at)));
+  $('lw-count').textContent = `${list.length} check-in${list.length===1?'':'s'} with location warnings`;
+  $('lw-tbl').innerHTML = list.slice(0, 500).map(c => { const e = empById(c.emp_id) || {}, u = mapUrl(c);
+    return `<tr><td class="mono">${esc(c.local_date||'')}</td><td class="mono">${esc(c.local_time||'')}</td>
+      <td><span class="mono">${esc(c.emp_id)}</span> ${esc(empName(e))}</td><td>${c.event_type==='in'?'Check in':'Check out'}</td>
+      <td>${c.project_code ? `<span class="mono">${esc(c.project_code)}</span> ${esc(projName(c.project_code))}` : '<span style="color:var(--muted)">no project</span>'}</td>
+      <td class="num">${c.distance_m != null ? esc(fmtDist(c.distance_m)) + (c.site_radius_m ? `<div style="font-size:11px;color:var(--muted)">allowed ${c.site_radius_m} m</div>` : '') : ''}</td>
+      <td>${(c.location_flags||[]).map(f => `<span class="chip ${(LOC_FLAG[f]||[])[1]||'c-blue'}" style="margin:1px">${esc((LOC_FLAG[f]||[f])[0])}</span>`).join(' ')}${c.accuracy!=null?`<div style="font-size:11px;color:var(--muted)">GPS accuracy ${c.accuracy} m</div>`:''}</td>
+      <td>${c.applied === false ? `<span class="chip c-red">kept for review</span><div style="font-size:11px;color:var(--muted)">${esc(c.review_note||'')}</div>` : '<span class="chip c-green">counted</span>'}</td>
+      <td>${u ? `<a href="${u}" target="_blank" rel="noopener">map ↗</a>` : ''}</td>
+      <td>${c.project_code && c.lat != null ? `<button class="btn btn-ghost btn-sm" data-loc-pin="${esc(c.id)}" title="Make this check-in's point the site's map point">📌 Set as site point</button>` : ''}</td></tr>`; }).join('')
+    || '<tr><td colspan="10" class="empty">No location warnings in this period</td></tr>';
+}
+$('lw-kind').addEventListener('change', renderLocWarnings);
+$('lw-q').addEventListener('input', renderLocWarnings);
+$('lw-tbl').addEventListener('click', e => { const b = e.target.closest('[data-loc-pin]'); if (!b) return;
+  const c = S.clocks.find(x => String(x.id) === b.dataset.locPin); if (!c) return;
+  confirmDel(`Use this check-in (${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}) as the map point of site ${c.project_code} — ${projName(c.project_code)}? Only do this if you are sure the employee was really at the site.`,
+    async () => { await saveSite(c.project_code, c.lat, c.lng, null); toast('Site map point saved'); renderSites(); });
+  $('del-title').textContent = 'Please confirm'; $('del-ok').textContent = 'Use this point'; $('del-ok').className = 'btn btn-primary';
+});
+
+// ── sites ──
+function parseLatLng(txt){
+  const s = String(txt || ''), m = s.match(/(-?\d{1,2}\.\d+)\s*[, ]\s*(-?\d{1,3}\.\d+)/);       // "30.0444, 31.2357" or a Maps link with @30.04,31.23
+  return m ? { lat: Number(m[1]), lng: Number(m[2]) } : null;
+}
+const validLatLng = (a, b) => isFinite(a) && isFinite(b) && Math.abs(a) <= 90 && Math.abs(b) <= 180 && !(a === 0 && b === 0);
+async function saveSite(code, lat, lng, radius){
+  const row = { site_lat: lat, site_lng: lng }; if (radius !== null) row.site_radius_m = radius;
+  const { data, error } = await sb.from('projects').update(row).eq('id', code).select('id');
+  if (error) throw error; if (!(data && data.length)) throw new Error(NOPERM);
+  const p = S.projects.find(x => String(x.id) === String(code)); if (p) Object.assign(p, row);
+}
+function renderSites(){
+  const show = $('ls-show').value, q = $('ls-q').value.trim().toLowerCase();
+  const used = {}; S.clocks.forEach(c => { if (c.project_code) used[c.project_code] = (used[c.project_code] || 0) + 1; });
+  (S.empProjects || []).forEach(a => { if (!(a.project_code in used)) used[a.project_code] = 0; });
+  let list = S.projects.filter(p => {
+    const has = p.site_lat != null && p.site_lng != null, u = String(p.id) in used;
+    if (show === 'used' && !u) return false; if (show === 'mapped' && !has) return false; if (show === 'missing' && (!u || has)) return false;
+    return !q || String(p.id).toLowerCase().includes(q) || String(p.name||'').toLowerCase().includes(q);
+  }).sort((a,b) => (used[b.id]||0) - (used[a.id]||0) || String(a.id).localeCompare(String(b.id)));
+  const mapped = S.projects.filter(p => p.site_lat != null).length;
+  $('ls-count').textContent = `Site locations — ${mapped} site${mapped===1?'':'s'} mapped · showing ${Math.min(list.length,300)}${list.length>300?' of '+list.length:''}`;
+  $('ls-tbl').innerHTML = list.slice(0,300).map(p => `<tr data-site="${esc(p.id)}">
+      <td class="mono">${esc(p.id)}</td><td>${esc(p.name||'')}</td>
+      <td><input class="inp" style="width:150px" data-s="lat" value="${p.site_lat != null ? esc(p.site_lat) : ''}" placeholder="paste lat, lng"></td>
+      <td><input class="inp" style="width:120px" data-s="lng" value="${p.site_lng != null ? esc(p.site_lng) : ''}"></td>
+      <td><input class="inp" style="width:80px" type="number" min="50" max="5000" step="50" data-s="rad" value="${p.site_radius_m != null ? p.site_radius_m : ''}" placeholder="${num(LOC_RULES.default_radius)||300}"></td>
+      <td class="num">${used[p.id] || ''}</td>
+      <td style="white-space:nowrap"><button class="btn btn-primary btn-sm" data-s-save>Save</button>${p.site_lat != null ? ` <a class="btn btn-ghost btn-sm" href="https://www.google.com/maps?q=${p.site_lat},${p.site_lng}" target="_blank" rel="noopener">map ↗</a> <button class="btn btn-ghost btn-sm" data-s-clear title="Remove the map point (site no longer checked)">✕</button>` : ''}</td></tr>`).join('')
+    || '<tr><td colspan="7" class="empty">No sites match</td></tr>';
+}
+$('ls-show').addEventListener('change', renderSites);
+$('ls-q').addEventListener('input', renderSites);
+$('ls-tbl').addEventListener('input', e => {         // pasting "30.04, 31.23" into Latitude fills both boxes
+  const i = e.target.closest('[data-s="lat"]'); if (!i || !/[ ,]/.test(i.value.trim())) return;
+  const ll = parseLatLng(i.value); if (!ll) return;
+  i.value = ll.lat; i.closest('tr').querySelector('[data-s="lng"]').value = ll.lng;
+});
+$('ls-tbl').addEventListener('click', async e => {
+  const tr = e.target.closest('tr[data-site]'); if (!tr) return; const code = tr.dataset.site;
+  if (e.target.closest('[data-s-clear]')) {
+    try { const { data, error } = await sb.from('projects').update({ site_lat:null, site_lng:null, site_radius_m:null }).eq('id', code).select('id');
+      if (error) throw error; if (!(data && data.length)) throw new Error(NOPERM);
+      const p = S.projects.find(x => String(x.id) === code); if (p) Object.assign(p, { site_lat:null, site_lng:null, site_radius_m:null });
+      toast('Map point removed — this site is no longer checked'); renderSites(); } catch (err) { toast(err.message, 'err'); }
+    return;
+  }
+  if (!e.target.closest('[data-s-save]')) return;
+  let lat = tr.querySelector('[data-s="lat"]').value.trim(), lng = tr.querySelector('[data-s="lng"]').value.trim();
+  const ll = parseLatLng(lat + (lng ? ',' + lng : '')); if (ll) { lat = ll.lat; lng = ll.lng; } else { lat = Number(lat); lng = Number(lng); }
+  const radTxt = tr.querySelector('[data-s="rad"]').value.trim(), rad = radTxt === '' ? null : Math.round(Number(radTxt));
+  if (!validLatLng(lat, lng)) return toast('Enter a valid latitude and longitude (e.g. 30.04442 and 31.23571)', 'warn');
+  if (rad !== null && !(rad >= 50 && rad <= 5000)) return toast('Radius must be between 50 and 5,000 metres', 'warn');
+  try { await saveSite(code, lat, lng, rad); toast(`Site ${code} saved`); renderSites(); } catch (err) { toast(err.message, 'err'); }
+});
+$('ls-bulk-save').addEventListener('click', async () => {
+  const lines = $('ls-bulk').value.split(/\r?\n/).map(l => l.trim()).filter(Boolean), bad = []; let ok = 0;
+  $('ls-bulk-save').disabled = true;
+  for (const l of lines){
+    const parts = l.split(/[\t,;]+/).map(x => x.trim()).filter(x => x !== '');
+    const code = parts[0], lat = Number(parts[1]), lng = Number(parts[2]), rad = parts[3] ? Math.round(Number(parts[3])) : null;
+    if (!code || !S.projects.some(p => String(p.id) === code)) { bad.push(`${code || l}: unknown site code`); continue; }
+    if (!validLatLng(lat, lng)) { bad.push(`${code}: latitude/longitude not valid`); continue; }
+    if (rad !== null && !(rad >= 50 && rad <= 5000)) { bad.push(`${code}: radius must be 50–5,000 m`); continue; }
+    try { await saveSite(code, lat, lng, rad); ok++; } catch (err) { bad.push(`${code}: ${err.message}`); }
+  }
+  $('ls-bulk-save').disabled = false;
+  $('ls-bulk-note').innerHTML = `<b>${ok}</b> saved` + (bad.length ? ` · <span style="color:var(--red)">${bad.length} not saved: ${esc(bad.slice(0,8).join(' · '))}${bad.length>8?' …':''}</span>` : '');
+  if (ok && !bad.length) $('ls-bulk').value = '';
+  renderSites();
+});
+
+// ── offices ──
+function renderOffices(){
+  $('wl-tbl').innerHTML = wlMissing ? '<tr><td colspan="6" class="empty">Run database update 41-location-integrity.sql first</td></tr>'
+    : WORK_LOCS.map(w => `<tr data-wl="${esc(w.id)}">
+      <td><input class="inp" style="width:200px" data-w="name" value="${esc(w.name)}"></td>
+      <td><input class="inp" style="width:150px" data-w="lat" value="${esc(w.lat)}"></td>
+      <td><input class="inp" style="width:120px" data-w="lng" value="${esc(w.lng)}"></td>
+      <td><input class="inp" style="width:80px" type="number" min="50" max="5000" step="50" data-w="rad" value="${w.radius_m}"></td>
+      <td><input type="checkbox" data-w="active" ${w.active ? 'checked' : ''}></td>
+      <td style="white-space:nowrap"><button class="btn btn-primary btn-sm" data-w-save>Save</button> <a class="btn btn-ghost btn-sm" href="https://www.google.com/maps?q=${w.lat},${w.lng}" target="_blank" rel="noopener">map ↗</a> <button class="btn btn-ghost btn-sm" data-w-del>Delete</button></td></tr>`).join('')
+    || '<tr><td colspan="6" class="empty">No offices yet — click + Add office</td></tr>';
+}
+$('wl-tbl').addEventListener('input', e => {
+  const i = e.target.closest('[data-w="lat"]'); if (!i || !/[ ,]/.test(i.value.trim())) return;
+  const ll = parseLatLng(i.value); if (!ll) return; i.value = ll.lat; i.closest('tr').querySelector('[data-w="lng"]').value = ll.lng;
+});
+$('wl-tbl').addEventListener('click', async e => {
+  const tr = e.target.closest('tr[data-wl]'); if (!tr) return; const id = tr.dataset.wl;
+  if (e.target.closest('[data-w-del]')) {
+    confirmDel('Delete this office? Check-ins without a project will no longer be compared with it.', async () => {
+      const { data, error } = await sb.from('work_locations').delete().eq('id', id).select('id'); if (error) throw error; if (!(data && data.length)) throw new Error(NOPERM);
+      WORK_LOCS = WORK_LOCS.filter(w => w.id !== id); renderOffices(); toast('Office deleted'); });
+    return;
+  }
+  if (!e.target.closest('[data-w-save]')) return;
+  const g = k => tr.querySelector(`[data-w="${k}"]`);
+  const row = { name: g('name').value.trim(), lat: Number(g('lat').value), lng: Number(g('lng').value), radius_m: Math.round(Number(g('rad').value)), active: g('active').checked };
+  if (!row.name) return toast('Give the office a name', 'warn');
+  if (!validLatLng(row.lat, row.lng)) return toast('Enter a valid latitude and longitude', 'warn');
+  if (!(row.radius_m >= 50 && row.radius_m <= 5000)) return toast('Radius must be between 50 and 5,000 metres', 'warn');
+  const q = id === 'new' ? sb.from('work_locations').insert(row).select() : sb.from('work_locations').update(row).eq('id', id).select();
+  const { data, error } = await q; if (error) return toast(error.message, 'err'); if (!(data && data.length)) return toast(NOPERM, 'err');
+  if (id === 'new') WORK_LOCS = WORK_LOCS.filter(w => w.id !== 'new').concat(data); else WORK_LOCS = WORK_LOCS.map(w => w.id === id ? data[0] : w);
+  renderOffices(); toast('Office saved');
+});
+$('wl-add').addEventListener('click', () => {
+  if (wlMissing) return toast('Run database update 41-location-integrity.sql first', 'warn');
+  if (WORK_LOCS.some(w => w.id === 'new')) return;
+  WORK_LOCS = WORK_LOCS.concat({ id:'new', name:'', lat:'', lng:'', radius_m:200, active:true }); renderOffices();
+});
+
+// ── rules ──
+$('lr-save').addEventListener('click', async () => {
+  const rad = Math.round(Number($('lr-radius').value));
+  if (!(rad >= 50 && rad <= 5000)) return toast('Default radius must be between 50 and 5,000 metres', 'warn');
+  const value = { ...LOC_RULES, outside: $('lr-outside').value, default_radius: rad, block_mock: true, android_app_only: $('lr-apponly').checked };
+  const { data, error } = await sb.from('settings').upsert({ key:'location_rules', value }).select('key');
+  if (error) return toast(error.message, 'err'); if (!(data && data.length)) return toast('Only an administrator can change these rules', 'err');
+  LOC_RULES = value; toast('Location rules saved');
+});
+
+// ── dashboard alert + menu badge ──
+const _renderDashboardBase = renderDashboard;
+renderDashboard = function(){
+  _renderDashboardBase();
+  const flagged = locFlagged(), n = flagged.length, held = flagged.filter(c => c.applied === false).length;
+  const el = $('loc-badge'); if (el) { el.style.display = n ? '' : 'none'; el.textContent = n; }
+  if (n) $('dash-alert').insertAdjacentHTML('beforeend', `<div class="alert ${flagged.some(c => (c.location_flags||[]).includes('fake_gps') || (c.location_flags||[]).includes('impossible_travel')) ? 'a-alarm' : 'a-warn'}" style="margin-bottom:10px;cursor:pointer" data-nav="locations">📍 <b>${n}</b> check-in${n>1?'s':''} with location warnings this period${held ? ` (${held} kept for review, not counted)` : ''} — click to review</div>`);
+};
 
 // ═════════════════════════════════════════════════════════
 //  BOOT

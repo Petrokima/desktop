@@ -81,6 +81,21 @@ td.ar{direction:rtl;text-align:right;font-family:'Segoe UI',Tahoma,sans-serif}
 td.num,th.num{text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px}
 .mono{font-family:'JetBrains Mono',monospace;font-size:12px}
 .chip{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:500}
+.calv-seg{display:inline-flex;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.calv-seg .btn{border:0;border-radius:0;background:transparent;color:var(--label)}
+.calv-seg .btn.on{background:var(--accent);color:#fff}
+.calv{padding:0 16px 12px;overflow-x:auto}
+.calv-grid{display:grid;grid-template-columns:repeat(7,minmax(118px,1fr));gap:6px;min-width:860px}
+.calv-hd{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:6px 4px}
+.calv-cell{border:1px solid var(--border);border-radius:10px;padding:7px 8px;min-height:96px;background:var(--surface);display:flex;flex-direction:column;gap:3px;font-size:12px}
+.calv-cell.out{opacity:.38}
+.calv-cell.today{box-shadow:0 0 0 2px var(--accent)}
+.calv-cell.wk{background:transparent}
+.calv-cell.week{min-height:210px}
+.calv-d{display:flex;justify-content:space-between;align-items:center;font-weight:600;color:var(--label);font-size:12px}
+.calv-time{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:var(--text)}
+.calv-hrs{font-weight:700;font-size:14px;color:var(--text)}
+.calv-prj{font-size:11px;color:var(--muted);line-height:1.35;border-top:1px dashed var(--border);padding-top:3px;margin-top:2px}
 .c-green{background:rgba(34,197,160,.15);color:var(--accent2)}.c-blue{background:rgba(59,111,212,.15);color:var(--link)}
 .c-orange{background:rgba(224,123,57,.15);color:var(--warn)}.c-red{background:rgba(217,79,79,.15);color:var(--danger)}.c-grey{background:rgba(122,131,158,.12);color:var(--muted)}
 .tag{background:rgba(59,111,212,.12);border:1px solid rgba(59,111,212,.25);border-radius:4px;padding:2px 7px;font-size:11px;color:var(--link);display:inline-block;margin:1px}
@@ -221,6 +236,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
     <div class="nav-item active" data-spage="req">📋 My requests</div>
     <div class="nav-item" data-spage="team" id="self-team-nav" style="display:none">✅ Team approvals <span class="chip c-orange" id="self-team-badge" style="margin-left:auto;display:none"></span></div>
     <div class="nav-item" data-spage="pcost" id="self-pcost-nav" style="display:none">📊 Project costs</div>
+    <div class="nav-item" data-spage="att">🗓 My attendance</div>
     <div class="nav-item" data-spage="pay">💰 My payslips</div>
     <div class="nav-item" data-spage="prof">👤 My profile</div>
   </nav>
@@ -254,6 +270,20 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
         <div class="toolbar-right"><select class="sel" id="pc-period"></select><button class="btn btn-primary btn-sm" id="pc-xlsx">⬇ Excel</button></div></div>
         <div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Name</th><th class="num">People</th><th class="num">Hours</th><th class="num">Total cost (EGP)</th><th class="num">Cost per hour</th></tr></thead><tbody id="pc-tbl"></tbody></table></div>
         <div class="foot" id="pc-foot"></div></div>
+    </div>
+    <div id="self-att" style="display:none">
+  <div class="card" id="sc-card">
+    <div class="toolbar" style="flex-wrap:wrap;gap:8px"><span class="toolbar-title" id="sc-title">My attendance</span>
+      <div class="toolbar-right" style="flex-wrap:wrap;gap:6px">
+        <button class="btn btn-ghost btn-sm" id="sc-prev" title="Previous">◀</button>
+        <span id="sc-label" style="font-weight:600;min-width:170px;text-align:center"></span>
+        <button class="btn btn-ghost btn-sm" id="sc-next" title="Next">▶</button>
+        <button class="btn btn-ghost btn-sm" id="sc-today">Today</button>
+        <span class="calv-seg"><button class="btn btn-sm" id="sc-vm">Month</button><button class="btn btn-sm" id="sc-vw">Week</button></span>
+      </div></div>
+    <div id="sc-grid" class="calv"></div>
+    <div class="foot" id="sc-sum"></div>
+  </div>
     </div>
     <div id="self-pay" style="display:none">
       <div class="card" id="self-pay-lock" style="max-width:420px;padding:22px;text-align:center"><div style="font-size:40px">🔒</div>
@@ -365,7 +395,22 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
     <div class="btn-group"><button class="btn btn-ghost" id="mi-open">🖐 Import fingerprint machine</button><button class="btn btn-primary" data-act="new-att">+ Add Entry</button></div></div>
   <div class="period-note"></div>
   <div class="lock-note"></div>
-  <div class="card">
+  <div class="calv-seg" style="margin-bottom:14px"><button class="btn btn-sm on" id="att-tab-list">📋 Records</button><button class="btn btn-sm" id="att-tab-cal">📅 Calendar</button></div>
+  <div id="att-cal-wrap" style="display:none">
+  <div class="card" id="hc-card">
+    <div class="toolbar" style="flex-wrap:wrap;gap:8px"><span class="toolbar-title" id="hc-title">Employee calendar</span>
+      <div class="toolbar-right" style="flex-wrap:wrap;gap:6px"><input class="inp" id="hc-emp" list="dl-emp" placeholder="Choose employee — code or name…" style="width:260px">
+        <button class="btn btn-ghost btn-sm" id="hc-prev" title="Previous">◀</button>
+        <span id="hc-label" style="font-weight:600;min-width:170px;text-align:center"></span>
+        <button class="btn btn-ghost btn-sm" id="hc-next" title="Next">▶</button>
+        <button class="btn btn-ghost btn-sm" id="hc-today">Today</button>
+        <span class="calv-seg"><button class="btn btn-sm" id="hc-vm">Month</button><button class="btn btn-sm" id="hc-vw">Week</button></span>
+      </div></div>
+    <div id="hc-grid" class="calv"></div>
+    <div class="foot" id="hc-sum"></div>
+  </div>
+  </div>
+  <div class="card" id="att-list-card">
     <div class="toolbar"><span class="toolbar-title">Records</span>
       <div class="toolbar-right"><input type="date" class="sel" id="att-day" title="Show one day"><button class="btn btn-ghost btn-sm" id="att-all">Whole range</button><input class="inp" id="att-q" placeholder="Search employee…"></div></div>
     <div class="toolbar" style="border-top:1px solid var(--border);padding-top:10px;gap:8px;flex-wrap:wrap">
@@ -3691,7 +3736,7 @@ async function selfCancel(key){
 $('self-list').addEventListener('click', e => { const b=e.target.closest('[data-self-cancel]'); if(b) selfCancel(b.dataset.selfCancel); });
 document.querySelectorAll('[data-spage]').forEach(t => t.addEventListener('click', () => {
   document.querySelectorAll('[data-spage]').forEach(x=>x.classList.toggle('active', x===t));
-  ['req','team','pcost','pay','prof'].forEach(k => $('self-'+k).style.display = t.dataset.spage===k ? '' : 'none');
+  ['req','team','pcost','att','pay','prof'].forEach(k => $('self-'+k).style.display = t.dataset.spage===k ? '' : 'none');
   lockSelfPay();                                                     // payslips need the password every time
   if (t.dataset.spage === 'pcost') loadProjectCosts();
 }));
@@ -6204,6 +6249,126 @@ renderDashboard = function(){
   const el = $('loc-badge'); if (el) { el.style.display = n ? '' : 'none'; el.textContent = n; }
   if (n) $('dash-alert').insertAdjacentHTML('beforeend', `<div class="alert ${flagged.some(c => (c.location_flags||[]).includes('fake_gps') || (c.location_flags||[]).includes('impossible_travel')) ? 'a-alarm' : 'a-warn'}" style="margin-bottom:10px;cursor:pointer" data-nav="locations">📍 <b>${n}</b> check-in${n>1?'s':''} with location warnings this period${held ? ` (${held} kept for review, not counted)` : ''} — click to review</div>`);
 };
+
+// ═════════════════════════════════════════════════════════
+//  ATTENDANCE CALENDAR — monthly / weekly view of one employee
+//  HR: Attendance page → 📅 Calendar (any employee) · Employee: self-service → 🗓 My attendance (own only, RLS)
+// ═════════════════════════════════════════════════════════
+const CAL_WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const CAL_START = 6;                                   // weeks start on Saturday
+const calISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const calDate = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const calAdd = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const calWeekStart = d => calAdd(d, -((d.getDay() - CAL_START + 7) % 7));
+
+function makeAttCalendar(p, opts){
+  const st = { view: 'month', anchor: new Date(), emp: null, rows: [], leaves: [], loading: false, token: 0 };
+  const range = () => {
+    if (st.view === 'week') { const a = calWeekStart(st.anchor); return [a, calAdd(a, 6)]; }
+    const first = new Date(st.anchor.getFullYear(), st.anchor.getMonth(), 1), last = new Date(st.anchor.getFullYear(), st.anchor.getMonth() + 1, 0);
+    return [calWeekStart(first), calAdd(calWeekStart(last), 6)];
+  };
+  async function load(){
+    const emp = opts.getEmp(); st.emp = emp;
+    if (!emp) { $(p+'-grid').innerHTML = `<div class="empty" style="padding:30px">${esc(opts.emptyText || 'Choose an employee')}</div>`; $(p+'-sum').textContent = ''; label(); return; }
+    const [a, b] = range(), from = calISO(a), to = calISO(b), tk = ++st.token;
+    $(p+'-grid').innerHTML = '<div class="empty" style="padding:30px">Loading…</div>'; label();
+    const [att, lv] = await Promise.all([
+      sb.from('attendance').select('*').eq('emp_id', emp.id).gte('date', from).lte('date', to).order('date'),
+      sb.from('employee_leaves').select('*').eq('emp_id', emp.id).lte('date_from', to).gte('date_to', from) ]);
+    if (tk !== st.token) return;                                       // a newer request is on its way
+    if (att.error) { $(p+'-grid').innerHTML = `<div class="empty" style="padding:30px">${esc(att.error.message)}</div>`; return; }
+    st.rows = att.data || []; st.leaves = (lv && lv.data) || [];
+    render();
+  }
+  function label(){
+    const [a, b] = range();
+    $(p+'-label').textContent = st.view === 'week'
+      ? `${a.toLocaleDateString('en-GB', { day:'numeric', month:'short' })} – ${b.toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' })}`
+      : st.anchor.toLocaleDateString('en-GB', { month:'long', year:'numeric' });
+    $(p+'-vm').classList.toggle('on', st.view === 'month'); $(p+'-vw').classList.toggle('on', st.view === 'week');
+    if (opts.title) $(p+'-title').textContent = opts.title(st.emp);
+  }
+  function dayInfo(ds){
+    const rows = st.rows.filter(r => r.date === ds);
+    const ins = rows.map(r => r.check_in).filter(Boolean).sort(), outs = rows.map(r => r.check_out).filter(Boolean).sort();
+    const hours = rows.reduce((s, r) => s + num(r.total_hours), 0);
+    const segs = rows.flatMap(r => Array.isArray(r.projects) ? r.projects : []);
+    const leave = st.leaves.find(l => l.date_from <= ds && l.date_to >= ds && !/reject|cancel/i.test(l.status || ''));
+    return { rows, in: ins[0] || '', out: outs.length ? outs[outs.length - 1] : '', hours, segs, leave,
+             open: segs.some(s => s.in && !s.out), status: rows.map(r => r.status).find(Boolean) || '' };
+  }
+  function cell(ds, inMonth, big){
+    const d = calDate(ds), today = calISO(new Date()), x = dayInfo(ds), emp = st.emp || {};
+    const weekend = (settings.weekendDays || []).includes(d.getDay()), hol = typeof holidayOn === 'function' ? holidayOn(ds) : null;
+    const before = emp.employment_date && ds < emp.employment_date, after = emp.resignation_date && ds > emp.resignation_date;
+    let body = '';
+    if (x.rows.length && (x.in || x.out || x.hours)) {
+      const late = x.in && x.in > (settings.lateAfter || '09:00') && x.in < (settings.eveningShiftAfter || '14:00');
+      body += `<div class="calv-time">In <b>${esc(x.in || '—')}</b>${late ? ' <span class="chip c-orange" style="padding:1px 6px">late</span>' : ''}</div>`
+           +  `<div class="calv-time">Out <b>${esc(x.out || (x.open ? 'open' : '—'))}</b></div>`
+           +  `<div class="calv-hrs">${x.hours ? esc(fmtHM(x.hours)) : '—'}</div>`;
+      if (big && x.segs.length) body += `<div class="calv-prj">${x.segs.map(s => `${esc(s.code || 'No project')} ${esc(s.in || '')}–${esc(s.out || '…')}${s.hours ? ' · ' + esc(fmtHM(s.hours)) : ''}`).join('<br>')}</div>`;
+    } else if (x.rows.length && x.status) {
+      body += `<span class="chip c-grey">${esc(x.status)}</span>`;
+    }
+    if (x.leave) body += `<span class="chip ${/approved/i.test(x.leave.status || '') ? 'c-blue' : 'c-grey'}">🌴 ${esc(x.leave.leave_type || 'Leave')}${/approved/i.test(x.leave.status || '') ? '' : ' (pending)'}</span>`;
+    else if (hol && !x.rows.length) body += `<span class="chip c-green">📅 ${esc(hol.name || 'Holiday')}</span>`;
+    else if (weekend && !x.rows.length) body += `<span style="color:var(--muted)">Weekend</span>`;
+    else if (!x.rows.length && ds < today && !before && !after && inMonth) body += `<span class="chip c-red">No attendance</span>`;
+    const cls = ['calv-cell', inMonth ? '' : 'out', ds === today ? 'today' : '', weekend ? 'wk' : '', big ? 'week' : ''].join(' ');
+    return `<div class="${cls}"><div class="calv-d"><span>${big ? CAL_WD[d.getDay()] + ' ' : ''}${d.getDate()}${big ? ' ' + d.toLocaleDateString('en-GB', { month:'short' }) : ''}</span></div>${body}</div>`;
+  }
+  function render(){
+    const [a, b] = range(), big = st.view === 'week', month = st.anchor.getMonth();
+    let html = '<div class="calv-grid">';
+    for (let i = 0; i < 7; i++) html += `<div class="calv-hd">${CAL_WD[(CAL_START + i) % 7]}</div>`;
+    for (let d = new Date(a); d <= b; d = calAdd(d, 1)) html += cell(calISO(d), big || d.getMonth() === month, big);
+    $(p+'-grid').innerHTML = html + '</div>';
+    // totals for the days shown (the month itself in month view)
+    const days = []; for (let d = new Date(a); d <= b; d = calAdd(d, 1)) if (big || d.getMonth() === month) days.push(calISO(d));
+    const info = days.map(dayInfo), worked = info.filter(x => x.hours > 0 || x.in);
+    const total = info.reduce((s, x) => s + x.hours, 0), lvDays = info.filter(x => x.leave && /approved/i.test(x.leave.status || '')).length;
+    const today = calISO(new Date()), emp = st.emp || {};
+    const missing = days.filter((ds, i) => !info[i].rows.length && !info[i].leave && ds < today && isWorkday(ds)
+                                     && !(emp.employment_date && ds < emp.employment_date) && !(emp.resignation_date && ds > emp.resignation_date)).length;
+    $(p+'-sum').innerHTML = `<b>${worked.length}</b> day${worked.length === 1 ? '' : 's'} worked · <b>${esc(fmtHM(total))}</b> in total`
+      + (info.some(x => x.hours > 0) ? ` · average ${esc(fmtHM(total / info.filter(x => x.hours > 0).length))} a day` : '')
+      + (lvDays ? ` · <b>${lvDays}</b> leave day${lvDays === 1 ? '' : 's'}` : '')
+      + (missing ? ` · <span style="color:var(--danger)"><b>${missing}</b> working day${missing === 1 ? '' : 's'} with no attendance</span>` : '');
+  }
+  const move = n => { if (st.view === 'week') st.anchor = calAdd(st.anchor, 7 * n); else st.anchor = new Date(st.anchor.getFullYear(), st.anchor.getMonth() + n, 1); load(); };
+  $(p+'-prev').addEventListener('click', () => move(-1));
+  $(p+'-next').addEventListener('click', () => move(1));
+  $(p+'-today').addEventListener('click', () => { st.anchor = new Date(); load(); });
+  $(p+'-vm').addEventListener('click', () => { st.view = 'month'; load(); });
+  $(p+'-vw').addEventListener('click', () => { st.view = 'week'; load(); });
+  return { load, st };
+}
+
+// ── HR: Attendance page → Calendar tab ──
+const HR_CAL = makeAttCalendar('hc', {
+  getEmp: () => { const v = $('hc-emp').value.trim(); return v ? empById(v.split(' — ')[0].trim()) || null : null; },
+  emptyText: 'Type an employee code or name in the box above to see their attendance calendar',
+  title: e => e ? `${e.id} — ${empName(e)}` : 'Employee calendar' });
+$('hc-emp').addEventListener('change', () => HR_CAL.load());
+function attTab(cal){
+  $('att-cal-wrap').style.display = cal ? '' : 'none'; $('att-list-card').style.display = cal ? 'none' : '';
+  $('att-tab-cal').classList.toggle('on', cal); $('att-tab-list').classList.toggle('on', !cal);
+  if (cal) {                                           // start with the employee typed in the records search, if it is one
+    if (!$('hc-emp').value.trim()) { const q = $('att-q').value.trim(), e = q && (empById(q) || S.employees.find(x => empName(x).toLowerCase() === q.toLowerCase()));
+      if (e) $('hc-emp').value = `${e.id} — ${empName(e)}`; }
+    HR_CAL.load();
+  }
+}
+$('att-tab-list').addEventListener('click', () => attTab(false));
+$('att-tab-cal').addEventListener('click', () => attTab(true));
+
+// ── Employee: self-service → My attendance ──
+const SELF_CAL = makeAttCalendar('sc', {
+  getEmp: () => (typeof SD !== 'undefined' && SD && SD.emp) || null,
+  emptyText: 'Your employee record could not be found. Please contact HR.' });
+document.querySelector('[data-spage="att"]').addEventListener('click', () => SELF_CAL.load());
 
 // ═════════════════════════════════════════════════════════
 //  BOOT

@@ -1754,12 +1754,15 @@ function loanInstalment(l, p){
 // An approved permission waives up to the permission's hours of late or early time on that day.
 // Employees flagged attendance_exempt get no overtime and no deductions.
 function approvedPerms(empId, date){ return S.permissions.filter(p => p.status==='Approved' && String(p.emp_id)===String(empId) && p.date===date); }
+// a day still waiting for its check-out: a forgotten phone check-out, or a line left open on an earlier day.
+// Its hours are not counted until the check-out is recorded or HR settles it on the Attendance page.
+function attNoOut(a){ return !!a && (a.projects||[]).some(x => x.forgotten || (x.in && !x.out && !x.missing && a.date < todayStr())); }
 function dayRules(a, emp){
   const r = { ot:0, late:0, early:0, lateRaw:0, earlyRaw:0, waived:0, exempt: !!(emp && emp.attendance_exempt) };
   if (!a || r.exempt || !(a.status==='Present' || a.status==='Half Day')) return r;
   if (leaveOn(emp ? emp.id : a.emp_id, a.date)) { r.onLeave = true; return r; }
   // a missing punch, a forgotten phone check-out, or an implausibly long day: no deductions or overtime until HR corrects it
-  if ((a.projects||[]).some(x => x.missing || x.review || x.forgotten)) { r.missing = true; return r; }
+  if ((a.projects||[]).some(x => x.missing || x.review || x.forgotten) || attNoOut(a)) { r.missing = true; r.noOut = attNoOut(a); return r; }
   const std = num(settings.hoursPerDay), tot = num(a.total_hours);
   const extra = Math.round((tot - std) * 100) / 100, thr = num(settings.otThreshold);
   if (extra > 0 && extra >= thr) r.ot = settings.otMode==='after' ? Math.max(0, extra - thr) : extra;
@@ -2147,11 +2150,12 @@ function renderAttendance(){
   const shown = list.slice(0,500);
   $('att-tbl').innerHTML = shown.map(a => `<tr class="click" data-att-edit="${a.id}">
     <td class="strong">${esc(a.emp_name||a.emp_id)} <span class="mono" style="color:var(--muted)">${esc(a.emp_id)}</span></td>
-    <td class="mono">${esc(a.date)}${a.source==='Mobile'?' <span title="Recorded from the mobile app">📱</span>':a.source==='Machine'?' <span title="Imported from the HQ fingerprint machine">🖐</span>':a.source==='Combined'?' <span title="Phone and fingerprint machine combined: first punch to last punch">📱🖐</span>':''}${isHoliday(a.date)?' <span class="chip c-blue" title="Public holiday">Holiday</span>':''}</td><td class="mono">${esc(a.check_in||'—')}</td><td class="mono">${esc(a.check_out||'—')}</td>
-    <td class="num">${fmt(a.total_hours)}</td>
+    <td class="mono">${esc(a.date)}${a.source==='Mobile'?' <span title="Recorded from the mobile app">📱</span>':a.source==='Machine'?' <span title="Imported from the HQ fingerprint machine">🖐</span>':a.source==='Combined'?' <span title="Phone and fingerprint machine combined: first punch to last punch">📱🖐</span>':''}${isHoliday(a.date)?' <span class="chip c-blue" title="Public holiday">Holiday</span>':''}</td><td class="mono">${esc(a.check_in||'—')}</td><td class="mono">${attNoOut(a) ? '<span class="neg" title="No check-out recorded — open the record and enter the time the employee left">⚠ missing</span>' : esc(a.check_out||'—')}</td>
+    <td class="num">${attNoOut(a) ? '<span style="color:var(--muted)" title="Not calculated until the check-out is recorded or settled by HR">—</span>' : fmt(a.total_hours)}</td>
     <td style="white-space:normal">${(a.projects||[]).map(x=>x.missing ? `<span class="tag" style="border-color:rgba(217,79,79,.5);color:var(--danger)" title="Only one punch on the machine — add the missing time">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)} · missing punch</span>`
       : x.review ? `<span class="tag" style="border-color:rgba(224,123,57,.5);color:var(--warn)" title="More than 16 hours between first and last punch — check and correct">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)}–${esc(x.out)} · ${fmt(x.hours)}h to check</span>`
-      : x.forgotten ? `<span class="tag" style="border-color:rgba(217,79,79,.5);color:var(--danger)" title="Checked in from the phone but never checked out — correct this record">⚠ ${esc(x.code)} · ${esc(x.in)}–? forgotten</span>`
+      : x.forgotten ? `<span class="tag" style="border-color:rgba(217,79,79,.5);color:var(--danger)" title="Checked in from the phone but never checked out — open the record and enter the check-out time">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)}–? missing check-out</span>`
+      : !x.out && x.in && a.date < todayStr() ? `<span class="tag" style="border-color:rgba(217,79,79,.5);color:var(--danger)" title="No check-out recorded — open the record and enter the check-out time">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)}–? missing check-out</span>`
       : !x.out && x.in ? `<span class="tag" style="border-color:rgba(34,197,160,.5);color:var(--accent2)">${esc(x.code || 'No project')} · ${esc(x.in)}–on site</span>`
       : `<span class="tag"${x.src==='Machine'?' title="Time recorded only by the fingerprint machine"':''}>${x.src==='Machine'?'🖐 ':''}${esc(x.code || 'No project')}${x.in?` · ${esc(x.in)}–${esc(x.out)}`:''} · ${fmt(x.hours)}h</span>`).join('')||'—'}</td>
     <td style="white-space:normal;min-width:120px">${mapLinks(a.emp_id, a.date)}</td>
@@ -2194,6 +2198,7 @@ function checkSplits(){
   const L=readSplits(), msgs=[]; let total=0;
   L.forEach(l => { const h=segHours(l.tin,l.tout); l.row.querySelector('[data-s="hrs"]').textContent = h ? fmt(h) : '—'; total+=h; });
   const timed = L.filter(l=>l.tin&&l.tout).map(l=>({...l,a:toMin(l.tin),b:toMin(l.tout)})).filter(l=>l.b>l.a).sort((x,y)=>x.a-y.a);
+  L.filter(l => l.tin && !l.tout).forEach(l => msgs.push(`<span class="neg">⚠ ${esc(l.proj || 'No project')} from ${esc(l.tin)} has no check-out — enter the time the employee left, then Save. The day's hours are not counted until then.</span>`));
   for (let i=1;i<timed.length;i++) if (timed[i].a < timed[i-1].b) msgs.push(`<span class="neg">⚠ ${timed[i-1].tin}–${timed[i-1].tout} overlaps ${timed[i].tin}–${timed[i].tout}</span>`);
   const first = timed.length ? timed[0].tin : '', last = timed.length ? timed.reduce((m,l)=>l.b>toMin(m)?l.tout:m, timed[0].tout) : '';
   const emp = empById(parseEmpInput($('a-emp').value));
@@ -2713,7 +2718,7 @@ const REPORTS = [
     d:'Every attendance record for the selected day, with each project line and its times.',
     build:p => ({ cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('status','Status'),C('in','Check-in','mono'),C('out','Check-out','mono'),C('hours','Hours','num',true),C('ot','OT','num',true),C('late','Late','num',true),C('early','Early','num',true),C('split','Project lines')],
       rows:S.attendance.filter(a=>a.date===p.day).map(a=>{ const e=empById(a.emp_id)||{}, R=dayRules(a,e); return { code:a.emp_id, name:a.emp_name||empName(e), department:e.department, status:a.status,
-        in:a.check_in, out:a.check_out, hours:num(a.total_hours), ot:R.ot, late:R.late, early:R.early, split:(a.projects||[]).map(x=>`${x.code}${x.in?' '+x.in+'–'+x.out:''} (${fmt(x.hours)}h)`).join(' | ') }; }) }) },
+        in:a.check_in, out:attNoOut(a) ? 'MISSING' : a.check_out, hours:attNoOut(a) ? 0 : num(a.total_hours), ot:R.ot, late:R.late, early:R.early, split:(a.projects||[]).map(x=>`${x.code}${x.in?' '+x.in+'–'+x.out:''} (${fmt(x.hours)}h)`).join(' | ') }; }) }) },
   { id:'att-missing', g:'Attendance', t:'Missing attendance', param:'day',
     d:'Active employees with no attendance record and no approved vacation on the selected day — use it to chase supervisors before payroll closes.',
     build:p => { if (isHoliday(p.day)) return { cols:[C('code','Code','id')], rows:[], note:`${p.day} is a public holiday (${holidayOn(p.day).name}) — nobody is expected at work` };
@@ -2726,7 +2731,7 @@ const REPORTS = [
     build:() => ({ cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('records','Records','int',true),C('present','Present','int',true),C('half','Half day','int',true),C('annual','Annual leave','int',true),C('sick','Sick leave','int',true),C('absent','Absent','int',true),C('hours','Hours','num',true),C('ot','OT hours','num',true),C('late','Late hours','num',true),C('early','Early hours','num',true),C('waived','Waived','num',true),C('vac','Vacation days','num',true),C('unpaid','of which unpaid','num',true)],
       rows:activeEmps().map(e=>{ const A=S.attendance.filter(a=>String(a.emp_id)===String(e.id)), c=s=>A.filter(a=>a.status===s).length, R=A.map(a=>dayRules(a,e));
         return { code:e.id, name:empName(e), department:e.department, records:A.length, present:c('Present'), half:c('Half Day'), annual:c('Annual Leave'), sick:c('Sick Leave'), absent:c('Absent'),
-          hours:A.reduce((s,a)=>s+num(a.total_hours),0), ot:R.reduce((s,r)=>s+r.ot,0), late:R.reduce((s,r)=>s+r.late,0), early:R.reduce((s,r)=>s+r.early,0), waived:R.reduce((s,r)=>s+r.waived,0),
+          hours:A.reduce((s,a)=>s+(attNoOut(a)?0:num(a.total_hours)),0), ot:R.reduce((s,r)=>s+r.ot,0), late:R.reduce((s,r)=>s+r.late,0), early:R.reduce((s,r)=>s+r.early,0), waived:R.reduce((s,r)=>s+r.waived,0),
           vac:S.leaves.filter(l=>String(l.emp_id)===String(e.id)&&l.status==='Approved').reduce((s,l)=>s+leaveDaysIn(l,periodStart(settings.period),periodEnd(settings.period)),0),
           unpaid:S.leaves.filter(l=>String(l.emp_id)===String(e.id)&&l.status==='Approved'&&l.leave_type==='Unpaid').reduce((s,l)=>s+leaveDaysIn(l,periodStart(settings.period),periodEnd(settings.period)),0) }; }) }) },
   { id:'att-leave', g:'Attendance', t:'Absence & leave',
@@ -2812,16 +2817,16 @@ const REPORTS = [
         .sort((a,b)=>(a.state==='OK')-(b.state==='OK') || (a.date+a.time).localeCompare(b.date+b.time)) }) },
 
   { id:'att-fix', g:'Attendance', t:'Missing punches to correct',
-    d:'Days with only one fingerprint-machine punch, days over 16 hours, and forgotten phone check-outs. They carry no deductions or overtime until HR opens the record on the Attendance page and completes the times.',
-    build:() => { const R=[]; S.attendance.forEach(a => (a.projects||[]).forEach(x => { if (x.missing || x.review || x.forgotten) { const e=empById(a.emp_id)||{};
-        R.push({ issue: x.missing ? 'Missing punch' : x.review ? 'Over 16 hours' : 'Forgotten phone check-out', source: a.source==='Machine' ? 'Fingerprint machine' : a.source==='Mobile' ? 'Phone' : (a.source||''),
+    d:'Days with only one fingerprint-machine punch, days over 16 hours, and phone check-ins with no check-out on a past day. They carry no deductions or overtime until HR opens the record on the Attendance page and completes the times.',
+    build:() => { const R=[]; S.attendance.forEach(a => (a.projects||[]).forEach(x => { if (x.missing || x.review || x.forgotten || (x.in && !x.out && a.date < todayStr())) { const e=empById(a.emp_id)||{};
+        R.push({ issue: x.missing ? 'Missing punch' : x.review ? 'Over 16 hours' : 'Missing phone check-out', source: a.source==='Machine' ? 'Fingerprint machine' : a.source==='Mobile' ? 'Phone' : (a.source||''),
                  date:a.date, code:a.emp_id, name:empName(e), department:e.department, in:x.in||'', out:x.out||'', hours:x.hours }); } }));
       return { cols:[C('issue','Issue','strong'),C('source','Source'),C('date','Date','date'),C('code','Code','id'),C('name','Employee'),C('department','Department'),C('in','In','mono'),C('out','Out','mono'),C('hours','Hours','num')],
         rows:R.sort((a,b)=>a.date.localeCompare(b.date)||String(a.code).localeCompare(String(b.code),undefined,{numeric:true})) }; } },
   { id:'att-open', g:'Attendance', t:'Open and forgotten check-ins',
-    d:'Employees still checked in, and phone check-ins that were never checked out (flagged after 16 hours). Correct forgotten ones on the Attendance page before closing payroll.',
+    d:'Employees still checked in, and phone check-ins with no check-out on a past day (a check-in on the next day never closes them). Correct forgotten ones on the Attendance page before closing payroll.',
     build:() => { const R=[]; S.attendance.forEach(a => (a.projects||[]).forEach(x => { if (!x.out && x.in) { const e=empById(a.emp_id)||{};
-        R.push({ state: x.forgotten ? 'Forgotten — needs correction' : (a.date===todayStr() ? 'On site now' : 'Not checked out'), date:a.date, code:a.emp_id, name:empName(e), department:e.department, site:x.code, sname:projName(x.code), since:x.in }); } }));
+        R.push({ state: a.date===todayStr() && !x.forgotten ? 'On site now' : 'Missing check-out — needs correction', date:a.date, code:a.emp_id, name:empName(e), department:e.department, site:x.code, sname:projName(x.code), since:x.in }); } }));
       return { cols:[C('state','Status','strong'),C('date','Date','date'),C('code','Code','id'),C('name','Employee'),C('department','Department'),C('site','Site','id'),C('sname','Site name'),C('since','Checked in','mono')],
         rows:R.sort((a,b)=>a.state.localeCompare(b.state)||a.date.localeCompare(b.date)) }; } },
 
@@ -2938,7 +2943,7 @@ const REPORTS = [
         else if(String(e.nationality||'Egyptian').toLowerCase().startsWith('egypt') && !/^\d{14}$/.test(String(e.national_id))) add('National ID is not 14 digits',e);
         if(!e.department) add('No department',e);
         if(!e.manager_id && !e.top_of_org) add('No direct manager',e);
-        if(S.attendance.some(a=>String(a.emp_id)===String(e.id) && (a.projects||[]).some(x=>x.forgotten))) add('Forgotten phone check-out in this cycle',e);
+        if(S.attendance.some(a=>String(a.emp_id)===String(e.id) && attNoOut(a))) add('Missing phone check-out in this cycle',e);
       });
       return { cols:[C('issue','Issue','strong'),C('code','Code','id'),C('name','Employee'),C('department','Department')], rows:R,
         note:Object.entries(groupBy(R,r=>r.issue)).map(([k,L])=>`${k}: ${L.length}`).join(' · ') }; } },
@@ -6292,23 +6297,25 @@ function makeAttCalendar(p, opts){
   function dayInfo(ds){
     const rows = st.rows.filter(r => r.date === ds);
     const ins = rows.map(r => r.check_in).filter(Boolean).sort(), outs = rows.map(r => r.check_out).filter(Boolean).sort();
-    const hours = rows.reduce((s, r) => s + num(r.total_hours), 0);
+    const noOut = rows.some(attNoOut);                                // missing check-out: hours not counted until settled
+    const hours = rows.reduce((s, r) => s + (attNoOut(r) ? 0 : num(r.total_hours)), 0);
     const segs = rows.flatMap(r => Array.isArray(r.projects) ? r.projects : []);
     const leave = st.leaves.find(l => l.date_from <= ds && l.date_to >= ds && !/reject|cancel/i.test(l.status || ''));
-    return { rows, in: ins[0] || '', out: outs.length ? outs[outs.length - 1] : '', hours, segs, leave,
-             open: segs.some(s => s.in && !s.out), status: rows.map(r => r.status).find(Boolean) || '' };
+    return { rows, in: ins[0] || '', out: noOut ? '' : (outs.length ? outs[outs.length - 1] : ''), hours, segs, leave, noOut,
+             open: !noOut && segs.some(s => s.in && !s.out), status: rows.map(r => r.status).find(Boolean) || '' };
   }
   function cell(ds, inMonth, big){
     const d = calDate(ds), today = calISO(new Date()), x = dayInfo(ds), emp = st.emp || {};
     const weekend = (settings.weekendDays || []).includes(d.getDay()), hol = typeof holidayOn === 'function' ? holidayOn(ds) : null;
     const before = emp.employment_date && ds < emp.employment_date, after = emp.resignation_date && ds > emp.resignation_date;
     let body = '';
-    if (x.rows.length && (x.in || x.out || x.hours)) {
+    if (x.rows.length && (x.in || x.out || x.hours || x.noOut)) {
       const late = x.in && x.in > (settings.lateAfter || '09:00') && x.in < (settings.eveningShiftAfter || '14:00');
       body += `<div class="calv-time">In <b>${esc(x.in || '—')}</b>${late ? ' <span class="chip c-orange" style="padding:1px 6px">late</span>' : ''}</div>`
-           +  `<div class="calv-time">Out <b>${esc(x.out || (x.open ? 'open' : '—'))}</b></div>`
-           +  `<div class="calv-hrs">${x.hours ? esc(fmtHM(x.hours)) : '—'}</div>`;
-      if (big && x.segs.length) body += `<div class="calv-prj">${x.segs.map(s => `${esc(s.code || 'No project')} ${esc(s.in || '')}–${esc(s.out || '…')}${s.hours ? ' · ' + esc(fmtHM(s.hours)) : ''}`).join('<br>')}</div>`;
+           +  (x.noOut ? `<div class="calv-time" style="color:var(--danger)" title="No check-out recorded — HR must enter it">Out <b>⚠ missing</b></div>`
+                       : `<div class="calv-time">Out <b>${esc(x.out || (x.open ? 'open' : '—'))}</b></div>`)
+           +  `<div class="calv-hrs"${x.noOut ? ' style="color:var(--muted);font-weight:500" title="Not calculated until the check-out is recorded or settled by HR"' : ''}>${x.noOut ? 'not counted' : x.hours ? esc(fmtHM(x.hours)) : '—'}</div>`;
+      if (big && x.segs.length) body += `<div class="calv-prj">${x.segs.map(s => `${esc(s.code || 'No project')} ${esc(s.in || '')}–${esc(s.out || (x.noOut ? '?' : '…'))}${s.hours ? ' · ' + esc(fmtHM(s.hours)) : ''}`).join('<br>')}</div>`;
     } else if (x.rows.length && x.status) {
       body += `<span class="chip c-grey">${esc(x.status)}</span>`;
     }
@@ -6327,13 +6334,14 @@ function makeAttCalendar(p, opts){
     $(p+'-grid').innerHTML = html + '</div>';
     // totals for the days shown (the month itself in month view)
     const days = []; for (let d = new Date(a); d <= b; d = calAdd(d, 1)) if (big || d.getMonth() === month) days.push(calISO(d));
-    const info = days.map(dayInfo), worked = info.filter(x => x.hours > 0 || x.in);
+    const info = days.map(dayInfo), worked = info.filter(x => x.hours > 0 || x.in), noOut = info.filter(x => x.noOut).length;
     const total = info.reduce((s, x) => s + x.hours, 0), lvDays = info.filter(x => x.leave && /approved/i.test(x.leave.status || '')).length;
     const today = calISO(new Date()), emp = st.emp || {};
     const missing = days.filter((ds, i) => !info[i].rows.length && !info[i].leave && ds < today && isWorkday(ds)
                                      && !(emp.employment_date && ds < emp.employment_date) && !(emp.resignation_date && ds > emp.resignation_date)).length;
     $(p+'-sum').innerHTML = `<b>${worked.length}</b> day${worked.length === 1 ? '' : 's'} worked · <b>${esc(fmtHM(total))}</b> in total`
       + (info.some(x => x.hours > 0) ? ` · average ${esc(fmtHM(total / info.filter(x => x.hours > 0).length))} a day` : '')
+      + (noOut ? ` · <span style="color:var(--danger)"><b>${noOut}</b> day${noOut === 1 ? '' : 's'} with a missing check-out (not counted)</span>` : '')
       + (lvDays ? ` · <b>${lvDays}</b> leave day${lvDays === 1 ? '' : 's'}` : '')
       + (missing ? ` · <span style="color:var(--danger)"><b>${missing}</b> working day${missing === 1 ? '' : 's'} with no attendance</span>` : '');
   }

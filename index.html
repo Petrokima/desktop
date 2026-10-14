@@ -6881,6 +6881,24 @@ leaveHint = function(){ const r = _leaveHint27.apply(this, arguments);
   return r; };
 ['pn-emp','pn-qty','pn-type','pn-period'].forEach(id => $(id).addEventListener('input', () => penHint()));
 
+// ── employee window: show the contract end as soon as the start is typed (the database applies the same rule on Save)
+function contractEndPreview(ev){
+  const f = k => document.querySelector(`#emp-form [data-f="${k}"]`);
+  const type = f('contract_type'), start = f('contract_start_date'), end = f('contract_end_date'); if (!type || !start || !end) return;
+  let note = end.parentElement.querySelector('.ce-note');
+  if (!note){ note = document.createElement('div'); note.className = 'ce-note'; note.style.cssText = 'font-size:11px;margin-top:4px;color:var(--muted)'; end.parentElement.appendChild(note); }
+  if (type.value === 'Permanent'){ note.textContent = 'Permanent contract — no end date and no renewal alert. Choose Temporary or Contract for a one-year contract.'; return; }
+  if (start.value && (!end.value || end.dataset.auto === '1') && (ev && (ev.target === start || ev.target === type))){
+    end.value = addYearISO(addDaysISO(start.value, -1)); end.dataset.auto = '1';          // 1 Sep 2026 → 31 Aug 2027
+  }
+  note.textContent = start.value ? 'One year after the start, ending the day before.' : 'Enter the contract start — the end fills in by itself.';
+}
+document.addEventListener('input', e => { if (e.target.closest && e.target.closest('#emp-form') && /^(contract_type|contract_start_date)$/.test(e.target.dataset.f || '')) contractEndPreview(e); });
+document.addEventListener('change', e => { if (e.target.closest && e.target.closest('#emp-form') && /^(contract_type|contract_start_date|contract_end_date)$/.test(e.target.dataset.f || '')){
+  if (e.target.dataset.f === 'contract_end_date') e.target.dataset.auto = ''; else contractEndPreview(e); } });
+const _openEmp27 = openEmp;
+openEmp = function(){ const r = _openEmp27.apply(this, arguments); contractEndPreview(null); return r; };
+
 // ═════════════════════════════════════════════════════════
 //  BOOT
 // ═════════════════════════════════════════════════════════

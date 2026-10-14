@@ -135,10 +135,14 @@ td.num,th.num{text-align:right;font-family:'JetBrains Mono',monospace;font-size:
 #setup{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
 .setup-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:32px;width:100%;max-width:480px}
 /* role-based controls */
-body:not(.can-hr) :is([data-act="new-emp"],[data-act="new-att"],#mi-open,[data-act="new-proj"],[data-act="new-perm"],[data-act="new-leave"],[data-act="new-pen"],[data-act="new-hol"],
-  #emp-save,#a-save,#p-save,#pr-save,#lv-save,#pn-save,#hd-save,#dc-approve,#dc-reject,#ex-add-sel,#ex-remove-sel,#a-add-split,
-  [data-ex-rm],[data-decide],[data-del-att],[data-del-proj],[data-del-perm],[data-del-leave],[data-del-pen],[data-del-hol]){display:none!important}
-body:not(.can-hr) :is([data-lv-approve],[data-lv-reject],[data-hr-handle],[data-dev-reset]){display:none!important}
+body:not(.can-hr) :is([data-act="new-proj"],[data-act="new-hol"],
+  #p-save,#hd-save,#ex-add-sel,#ex-remove-sel,
+  [data-ex-rm],[data-del-proj],[data-del-hol]){display:none!important}
+body:not(.can-hr) :is([data-hr-handle],[data-dev-reset]){display:none!important}
+/* attendance, vacations, permissions, penalties: HR and HR officers (50) */
+body:not(.can-hr):not(.can-master) :is([data-act="new-att"],#mi-open,[data-act="new-perm"],[data-act="new-leave"],[data-act="new-pen"],
+  #a-save,#pr-save,#lv-save,#pn-save,#dc-approve,#dc-reject,#a-add-split,[data-decide],[data-del-att],[data-del-perm],[data-del-leave],[data-del-pen],
+  [data-lv-approve],[data-lv-reject]){display:none!important}
 a.maplink{color:var(--link);text-decoration:none;white-space:nowrap} a.maplink:hover{text-decoration:underline}
 body:not(.can-pay) :is([data-act="new-loan"],#l-save,#pk-add,[data-del-fixed]){display:none!important}
 body:not(.can-var) :is(#mon-save,#mon-add-btn,#mon-pick,#mon-bulk,#mp-attended,#mp-fill,#mp-fill-go,[data-act="new-var"],[data-mon-add],[data-mon-rm]){display:none!important}
@@ -147,7 +151,8 @@ body:not(.can-hr) :is(#as-add-box,#as-bulk-box,[data-as-rm],.as-chk){display:non
 body:not(.can-pay) #pay-publish{display:none!important}
 body:not(.can-pay) :is(#cc-save,#cc-reset){display:none!important}
 body:not(.can-hr) .nav-item:is([data-page="news"],[data-page="voice"]){display:none!important}
-body:not(.can-hr):not(.can-pay) .nav-item[data-page="bulk"]{display:none!important}
+body:not(.can-hr):not(.can-pay):not(.can-master) .nav-item[data-page="bulk"]{display:none!important}
+body:not(.can-hr):not(.can-master) :is([data-act="new-emp"],#emp-save){display:none!important}   /* HR officers edit master data too (49) */
 body:not(.can-hr) :is(#aa-send,#aa-approve-all,[data-aa-ok],[data-aa-no],[data-aa-resend]){display:none!important}
 body.is-officer :is([data-page="payroll"],[data-page="history"],[data-page="loans"],[data-page="settings"],.no-officer){display:none!important}
 body:not(.can-hr):not(.can-pay) .ro-var{display:block}
@@ -2068,7 +2073,7 @@ const EMP_FIELDS = [
   ['Contact', [['business_phone','Business phone','text'],['mobile','Mobile','text'],['email','Email','text'],['address','Address','text']]],
   ['Contract', [['contract_type','Contract type','select',['Permanent','Temporary','Contract']],['contract_start_date','Contract start','date'],
                 ['employment_date','Employment date','date'],['probation_end_date','Probation end (blank = automatic: employment date + 3 months)','date'],
-                ['contract_end_date','Contract end (blank = automatic: contract start + 1 year; not for Permanent)','date'],['resignation_date','Resignation date','date']]],
+                ['contract_end_date','Contract end (blank = automatic: one year after the start, the day before — 1 Sep 2026 → 31 Aug 2027; not for Permanent)','date'],['resignation_date','Resignation date','date']]],
   ['Attendance rules', [['attendance_exempt','Exception rule — no delay deduction and no overtime','bool'],['annual_leave_days','Annual leave days / year — special case only (blank = automatic 15 / 21 / 30)','number'],
                         ['leave_opening_days','Leave balance carried into the first system year (days)','number'],
                         ['leave_early_ok','May request annual / emergency leave before 6 months of service (HR exception)','bool'],
@@ -5106,13 +5111,13 @@ const meName = () => (ME && (ME.full_name || ME.email)) || 'HR';
 const EMP_SKIP = ['id'];
 function empCols(){
   const out = [['id','Code','code',true,'Existing code = update only the filled-in columns · new code = new employee']];
-  EMP_FIELDS.forEach(([, fs]) => fs.forEach(f => { if (EMP_SKIP.includes(f[0])) return; if (f[0]==='location_exempt' && !(ME && ME.role==='admin')) return;
+  EMP_FIELDS.forEach(([, fs]) => fs.forEach(f => { if (EMP_SKIP.includes(f[0])) return; if (f[0]==='location_exempt' && !(ME && ME.role==='admin')) return; if (isOfficer() && PAY_FIELDS.includes(f[0])) return;
     const kind = f[2]==='manager' ? 'emp' : f[2]==='select' ? 'pick' : f[2]==='number' ? 'num' : f[2]==='bool' ? 'bool' : f[2]==='date' ? 'date' : 'text';
     out.push([f[0], f[1].replace(/\s*\(.*\)\s*/,'').replace(/ — .*/,''), kind, false, kind==='pick' ? f[3].filter(Boolean) : kind==='bool' ? 'Yes / No' : kind==='emp' ? 'Manager\'s employee code' : '']); }));
   return out;
 }
 const BU_TYPES = {
-  employees: { t:'Employees', roles:['admin','hr'], d:'Add new employees or update existing ones. For an existing code, only the columns you fill in are changed — blank cells keep what is there.',
+  employees: { t:'Employees', roles:['admin','hr','hr_officer'], d:'Add new employees or update existing ones. For an existing code, only the columns you fill in are changed — blank cells keep what is there.',
     cols: empCols, async prepare(){},
     check(v){ const id = buTxt(v.id).replace(/\.0$/,''); if (!id) return err('Code is required');
       const rec = {}; for (const [k,,kind,,opts] of empCols()){ if (k==='id') continue; const raw = v[k]; if (raw === '' || raw == null) continue;
@@ -5124,7 +5129,7 @@ const BU_TYPES = {
       return ok('new', rec.name_en || rec.name_ar, { id, rec:{ ...rec, id, status: rec.status || 'Active' } }); },
     async save(x){ return x.kind==='update' ? sb.from('employees').update(x.data.rec).eq('id', x.data.id).select('id') : sb.from('employees').insert(x.data.rec).select('id'); } },
 
-  attendance: { t:'Attendance (hand entries)', roles:['admin','hr'], d:'One row per employee per day. Overnight shifts are fine (check-out earlier than check-in = next day). Days that already have a record are skipped unless you tick “Replace existing records”. Approved payroll months cannot be changed.',
+  attendance: { t:'Attendance (hand entries)', roles:['admin','hr','hr_officer'], d:'One row per employee per day. Overnight shifts are fine (check-out earlier than check-in = next day). Days that already have a record are skipped unless you tick “Replace existing records”. Approved payroll months cannot be changed.',
     cols: () => [['emp','Employee code','emp',true],['date','Date','date',true],['in','Check-in','time',false,'e.g. 08:00 (required when Present)'],['out','Check-out','time',false,'e.g. 17:00'],
                  ['project','Project code','proj',false,'blank = no project'],['status','Status','pick',false,['Present','Half Day','Annual Leave','Sick Leave','Absent']],['notes','Notes','text',false]],
     async prepare(rows){ const dates = [...new Set(rows.map(r => buDate(r.date)).filter(Boolean))]; BU.existing = new Map();
@@ -5144,7 +5149,7 @@ const BU_TYPES = {
       return ok(ex ? 'update' : 'new', `${empName(e)} · ${date} · ${tin || st}${tout ? '–' + tout : ''}${proj ? ' · ' + proj : ''}`, { id: ex && ex.id, rec }); },
     async save(x){ return x.kind==='update' ? sb.from('attendance').update(x.data.rec).eq('id', x.data.id).select('id') : sb.from('attendance').insert(x.data.rec).select('id'); } },
 
-  leaves: { t:'Vacations', roles:['admin','hr'], d:'Working days are counted automatically (weekends and public holidays excluded) unless you fill in Days. Overlapping vacations and approved payroll months are refused.',
+  leaves: { t:'Vacations', roles:['admin','hr','hr_officer'], d:'Working days are counted automatically (weekends and public holidays excluded) unless you fill in Days. Overlapping vacations and approved payroll months are refused.',
     cols: () => [['emp','Employee code','emp',true],['type','Leave type','pick',true,['Annual','Casual','Sick','Unpaid','Other paid']],['from','From','date',true],['to','To','date',false,'blank = same day'],
                  ['days','Days','num',false,'blank = counted automatically'],['status','Status','pick',false,['Approved','Pending','Rejected','Cancelled']],['reason','Reason','text',false]],
     check(v){ const emp = buEmp(v.emp); if (!emp) return err(`Employee code “${buTxt(v.emp)}” not found`);
@@ -5155,7 +5160,7 @@ const BU_TYPES = {
       return ok('new', `${empName(empById(emp))} · ${type} · ${f}${t!==f ? ' → ' + t : ''} · ${days} day(s)`, { rec:{ emp_id:emp, leave_type:type, date_from:f, date_to:t, days, status:status || 'Approved', reason:buTxt(v.reason) || null, entered_by:meName(), source:'Desktop' } }); },
     async save(x){ return sb.from('employee_leaves').insert(x.data.rec).select('id'); } },
 
-  permissions: { t:'Permissions', roles:['admin','hr'], d:'Late-arrival / early-leave permissions. The limit per payroll cycle and the maximum hours still apply.',
+  permissions: { t:'Permissions', roles:['admin','hr','hr_officer'], d:'Late-arrival / early-leave permissions. The limit per payroll cycle and the maximum hours still apply.',
     cols: () => [['emp','Employee code','emp',true],['date','Date','date',true],['type','Type','pick',true,['Late arrival','Early leave']],['hours','Hours','num',true],
                  ['status','Status','pick',false,['Approved','Pending']],['reason','Reason','text',false]],
     check(v){ const emp = buEmp(v.emp); if (!emp) return err(`Employee code “${buTxt(v.emp)}” not found`);
@@ -5167,7 +5172,7 @@ const BU_TYPES = {
       return ok('new', `${empName(empById(emp))} · ${date} · ${type} ${h} h`, { rec }); },
     async save(x){ return sb.from('attendance_permissions').insert(x.data.rec).select('id'); } },
 
-  penalties: { t:'Penalties', roles:['admin','hr'], d:'Type: Amount (EGP), Hours (of pay) or Days (of pay). Payroll month as YYYY-MM.',
+  penalties: { t:'Penalties', roles:['admin','hr','hr_officer'], d:'Type: Amount (EGP), Hours (of pay) or Days (of pay). Payroll month as YYYY-MM.',
     cols: () => [['emp','Employee code','emp',true],['date','Incident date','date',true],['period','Payroll month','month',true,'e.g. 2026-10'],['type','Type','pick',true,['Amount','Hours','Days']],
                  ['qty','Quantity','num',true],['req','Requested by','text',true],['status','Status','pick',false,['Approved','Pending','Rejected','Cancelled']],['reason','Reason','text',false]],
     check(v){ const emp = buEmp(v.emp); if (!emp) return err(`Employee code “${buTxt(v.emp)}” not found`);
@@ -5203,7 +5208,7 @@ const BU_TYPES = {
       return ok('new', `${empName(empById(emp))} → ${p}`, { rec:{ emp_id:emp, project_code:p } }); },
     async save(x){ return sb.from('employee_projects').insert(x.data.rec).select('emp_id'); } },
 
-  reporting: { t:'Reporting lines (direct managers)', roles:['admin','hr'], d:'Sets each employee\'s direct manager. Circular reporting lines are refused.',
+  reporting: { t:'Reporting lines (direct managers)', roles:['admin','hr','hr_officer'], d:'Sets each employee\'s direct manager. Circular reporting lines are refused.',
     cols: () => [['emp','Employee code','emp',true],['mgr','Direct manager code','emp',true]],
     check(v){ const emp = buEmp(v.emp), mgr = buEmp(v.mgr); if (!emp) return err(`Employee code “${buTxt(v.emp)}” not found`); if (!mgr) return err(`Manager code “${buTxt(v.mgr)}” not found`);
       if (emp === mgr) return err('An employee cannot be his own manager'); if (String(empById(emp).manager_id||'') === mgr) return skip('Already reports to this manager');
@@ -5829,7 +5834,7 @@ async function renderEmpLife(id){
   const { data } = await sb.from('employment_history').select('*').eq('emp_id', id).order('employment_date', { ascending:true });
   const rows = (data || []).map(h => `<tr><td class="mono">${esc(h.employment_date || '—')}</td><td class="mono">${esc(h.resignation_date || '—')}</td><td>${esc(h.job_name || '')}</td><td>${esc(h.department || '')}</td><td style="color:var(--muted);font-size:12px">${esc(h.note || '')}</td></tr>`);
   rows.push(`<tr style="background:var(--hover)"><td class="mono">${esc(e.employment_date || '—')}</td><td class="mono">${e.status === 'Inactive' ? esc(e.resignation_date || '—') : '<b>current</b>'}</td><td>${esc(e.job_name || '')}</td><td>${esc(e.department || '')}</td><td style="font-size:12px">${e.status === 'Inactive' ? 'Last period' : 'Current period'}</td></tr>`);
-  const canHR = ME && ['admin','hr'].includes(ME.role), sup = !!(ME && ME.super_admin);
+  const canHR = ME && ['admin','hr','hr_officer'].includes(ME.role), sup = !!(ME && ME.super_admin);
   box.innerHTML = (e.blacklisted ? `<div class="alert a-alarm" style="margin:6px 0 10px">⛔ <b>On the blacklist — cannot be re-employed.</b> ${esc(e.blacklist_reason || '')}${e.blacklisted_by ? ` <span style="color:var(--muted)">(${esc(e.blacklisted_by)}${e.blacklisted_at ? ', ' + esc(String(e.blacklisted_at).slice(0,10)) : ''})</span>` : ''}</div>` : '')
     + `<div class="tbl-wrap"><table><thead><tr><th>Employed from</th><th>Resigned on</th><th>Job</th><th>Department</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
     + `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">`
@@ -6463,7 +6468,8 @@ const HR_RULES_DEF = { leave_rules:{ start_year:2026, first_year_days:15, normal
 let HRA = { list:[], loaded:false, loading:false, missing:false };
 let HR_RULES = JSON.parse(JSON.stringify(HR_RULES_DEF));
 const canHRA = () => !!(ME && ['admin','hr','hr_officer'].includes(ME.role));
-const canHRW = () => !!(ME && ['admin','hr'].includes(ME.role));
+const canHRW = () => !!(ME && ['admin','hr'].includes(ME.role));                      // leave / alert rules
+const canEditMaster = () => !!(ME && ['admin','hr','hr_officer'].includes(ME.role));   // employee master data (HR officers too — 49)
 // same as the database: one year later; 29 Feb → 28 Feb
 function addYearISO(s, n = 1){ const [y, m, d] = s.split('-').map(Number), x = new Date(y + n, m - 1, d); if (x.getMonth() !== m - 1) x.setDate(0);
   return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
@@ -6499,10 +6505,10 @@ function renderHRAlerts(){
   $('hra-count').textContent = `${list.length} alert${list.length === 1 ? '' : 's'}${showDone ? '' : ' to handle'}`;
   $('hra-tbl').innerHTML = list.map(a => { const kd = HRA_KIND[a.kind] || [a.kind, 'c-grey'], key = esc(hraKey(a));
     let btns;
-    if (a.kind === 'contract') btns = (canHRW() ? `<button class="btn btn-success btn-sm" data-hra-act="renew" data-k="${key}">Renew 1 year</button> ` : '')
+    if (a.kind === 'contract') btns = (canEditMaster() ? `<button class="btn btn-success btn-sm" data-hra-act="renew" data-k="${key}">Renew 1 year</button> ` : '')
                                     + `<button class="btn btn-ghost btn-sm" data-hra-act="not_renew" data-k="${key}">Not renewing</button>`;
     else if (a.kind === 'probation') btns = `<button class="btn btn-success btn-sm" data-hra-act="confirm" data-k="${key}">Confirm</button> <button class="btn btn-ghost btn-sm" data-hra-act="not_confirm" data-k="${key}">Do not confirm</button>`;
-    else btns = (canHRW() ? `<button class="btn btn-ghost btn-sm" data-hra-emp="${esc(a.emp_id)}">Update the date</button> ` : '') + `<button class="btn btn-ghost btn-sm" data-hra-act="seen" data-k="${key}">Mark handled</button>`;
+    else btns = (canEditMaster() ? `<button class="btn btn-ghost btn-sm" data-hra-emp="${esc(a.emp_id)}">Update the date</button> ` : '') + `<button class="btn btn-ghost btn-sm" data-hra-act="seen" data-k="${key}">Mark handled</button>`;
     return `<tr${a.done ? ' style="opacity:.6"' : ''}><td><span class="chip ${kd[1]}">${kd[0]}</span>${a.detail ? `<div style="font-size:12px;margin-top:4px">${esc(a.kind === 'disability' ? 'Card ' + a.detail : a.detail)}</div>` : ''}</td>
       <td class="strong"><a href="#" data-hra-emp="${esc(a.emp_id)}">${esc(a.name_en || a.name_ar || a.emp_id)}</a> <span class="mono" style="color:var(--muted)">${esc(a.emp_id)}</span>${a.job ? `<div style="font-size:12px;color:var(--muted);font-weight:400">${esc(a.job)}</div>` : ''}</td>
       <td>${esc(a.department || '')}</td><td class="mono">${esc(a.due)}</td><td style="white-space:nowrap">${hraDays(a.days_left)}</td>
@@ -6550,7 +6556,7 @@ document.addEventListener('click', e => {
   const act = b.dataset.hraAct, nm = `<b>${esc(a.name_en || a.name_ar || a.emp_id)}</b> (${esc(a.emp_id)})`;
   HRA_PICK = { a, act };
   const info = {
-    renew: `${nm}'s contract ends on <b>${esc(a.due)}</b>. Renewing sets the new contract <b>${esc(a.due)} → ${esc(addYearISO(a.due))}</b> on the employee record.`,
+    renew: `${nm}'s contract ends on <b>${esc(a.due)}</b>. Renewing sets the new contract <b>${esc(addDaysISO(a.due, 1))} → ${esc(addYearISO(a.due))}</b> (one year, ending the day before) on the employee record.`,
     not_renew: `${nm}'s contract ends on <b>${esc(a.due)}</b>. Record that it will <b>not</b> be renewed. (Nothing else changes — when he leaves, make him Inactive with the resignation date as usual.)`,
     confirm: `${nm}'s probation ends on <b>${esc(a.due)}</b>. Record that he is <b>confirmed</b> in his job.`,
     not_confirm: `${nm}'s probation ends on <b>${esc(a.due)}</b>. Record that he is <b>not confirmed</b>.`,
@@ -6568,7 +6574,7 @@ document.addEventListener('click', async e => {
   const { a, act } = HRA_PICK, btn = $('hra-m-go'); btn.disabled = true;
   try {
     if (act === 'renew'){
-      const upd = { contract_start_date:a.due, contract_end_date:addYearISO(a.due) };
+      const upd = { contract_start_date:addDaysISO(a.due, 1), contract_end_date:addYearISO(a.due) };   // next day → one year later, the day before
       const res = await sb.from('employees').update(upd).eq('id', a.emp_id).select();
       if (res.error) throw res.error; if (!(res.data && res.data.length)) throw new Error(NOPERM);
       const i = S.employees.findIndex(x => String(x.id) === String(a.emp_id)); if (i >= 0) S.employees[i] = { ...S.employees[i], ...res.data[0] };
@@ -6740,9 +6746,9 @@ async function renderCerts(id){
       <td class="mono">${esc(c.issue_date || '')}</td>
       <td class="mono">${c.expiry_date ? esc(c.expiry_date) + (c.expiry_date < today ? ' <span class="chip c-red">expired</span>' : c.expiry_date <= soon ? ' <span class="chip c-orange">soon</span>' : '') : '<span style="color:var(--muted)">no expiry</span>'}</td>
       <td>${c.file_path ? `<a href="#" data-cert-file="${esc(c.file_path)}">📎 open</a>` : '—'}</td>
-      <td style="white-space:nowrap">${canHRW() ? `<button class="icon-btn" data-cert-edit="${c.id}" title="Edit">✎</button><button class="icon-btn" data-cert-del="${c.id}" title="Remove">🗑</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
+      <td style="white-space:nowrap">${canEditMaster() ? `<button class="icon-btn" data-cert-edit="${c.id}" title="Edit">✎</button><button class="icon-btn" data-cert-del="${c.id}" title="Remove">🗑</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
     : '<span style="color:var(--muted)">No certificates recorded.</span>')
-    + (canHRW() ? `<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" id="cert-add">＋ Add certificate</button></div>` : '');
+    + (canEditMaster() ? `<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" id="cert-add">＋ Add certificate</button></div>` : '');
 }
 function addDaysISO(s, n){ const [y, m, d] = s.split('-').map(Number), x = new Date(y, m - 1, d + n);
   return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
@@ -6793,6 +6799,87 @@ saveEmp = async function(){ const r = await _saveEmp26.apply(this, arguments); L
 // the original hint functions were attached directly — attach the new ones too (they run last and replace the text)
 ['lv-emp','lv-t','lv-days'].forEach(id => $(id).addEventListener('input', () => leaveHint()));
 ['sl-type','sl-days'].forEach(id => $(id).addEventListener('input', () => slHint()));
+
+// ═════════════════════════════════════════════════════════
+//  HR OFFICERS SAVE EMPLOYEE MASTER DATA (database: 49-officer-edit-master-data.sql)
+//  HR officers never read the employees table (pay fields) — they read employees_safe and save through
+//  officer_save_employees(), which drops the pay fields. Every screen that saves an employee keeps working
+//  unchanged: for an HR officer, sb.from('employees') is routed here.
+// ═════════════════════════════════════════════════════════
+function officerEmpWrite(kind, rec){
+  const b = { ids:null,
+    eq(c, v){ if (c === 'id') b.ids = [String(v)]; return b; },
+    in(c, v){ if (c === 'id') b.ids = (v || []).map(String); return b; },
+    select(){ return b; },
+    then(res, rej){ return run().then(res, rej); } };
+  async function run(){
+    const recs = [].concat(rec || []);
+    if (kind === 'insert'){
+      const out = [];
+      for (const r of recs){ const { data, error } = await sb.rpc('officer_save_employees', { p_ids:null, p_rec:r, p_insert:true });
+        if (error) return { data:null, error }; out.push(...(data || [])); }
+      return { data:out, error:null };
+    }
+    if (!b.ids || !b.ids.length) return { data:null, error:{ message:'Choose the employee to change' } };
+    const { data, error } = await sb.rpc('officer_save_employees', { p_ids:b.ids, p_rec:recs[0] || {}, p_insert:false });
+    return { data: error ? null : (data || []), error };
+  }
+  return b;
+}
+function officerPatch(client){
+  if (!client || client.__officerPatch) return;
+  const orig = client.from.bind(client);
+  client.from = t => {
+    if (t !== 'employees' || !isOfficer()) return orig(t);
+    return { select: (...a) => orig('employees_safe').select(...a),          // reading: the version without pay fields
+             update: rec => officerEmpWrite('update', rec),
+             insert: rec => officerEmpWrite('insert', rec),
+             upsert: rec => officerEmpWrite('insert', rec),
+             delete: () => orig('employees').delete() };                      // still refused by the database
+  };
+  client.__officerPatch = true;
+}
+const _startApp27 = startApp;
+startApp = async function(){ const r = await _startApp27.apply(this, arguments); officerPatch(sb); return r; };
+const _afterLogin27 = afterLogin;
+afterLogin = async function(){ officerPatch(sb); return _afterLogin27.apply(this, arguments); };
+// HR officers: show the employee Save / New employee / Bulk upload controls (pay stays hidden)
+const _afterLogin27b = afterLogin;
+afterLogin = async function(){ const r = await _afterLogin27b.apply(this, arguments);
+  document.body.classList.toggle('can-master', !!(ME && ['admin','hr','hr_officer'].includes(ME.role))); return r; };
+
+// ── HR officers enter attendance, vacations, permissions, penalties (50). Penalties in days / hours of pay:
+//    officers see the days / hours only — the money value would reveal the employee's pay.
+const _renderPenalties27 = renderPenalties;
+renderPenalties = function(){
+  const r = _renderPenalties27.apply(this, arguments);
+  if (!isOfficer()) return r;
+  document.querySelectorAll('#pn-tbl tr[data-pen]').forEach(tr => { const x = S.penalties.find(p => String(p.id) === tr.dataset.pen);
+    if (x && x.penalty_type !== 'Amount'){ const c = tr.children[4]; if (c){ c.textContent = '—'; c.title = 'Worked out in the payroll from the employee\'s pay'; } } });
+  const thisP = S.penalties.filter(x => x.status === 'Approved' && x.apply_period === settings.period), amt = thisP.filter(x => x.penalty_type === 'Amount');
+  $('pn-sub').textContent = `${thisP.length} approved penalt${thisP.length === 1 ? 'y' : 'ies'} in the ${periodLabel(settings.period)} payroll · ${fmt(amt.reduce((s, x) => s + num(x.quantity), 0))} EGP in fixed amounts`
+    + (thisP.length > amt.length ? ` + ${thisP.length - amt.length} in days / hours of pay (worked out in the payroll)` : '');
+  $('pn-foot').textContent = 'Click a row to edit · penalties in days or hours are turned into money by the payroll';
+  return r;
+};
+const _penHint27 = penHint;
+penHint = function(){
+  if (!isOfficer()) return _penHint27.apply(this, arguments);
+  const t = $('pn-type').value; $('pn-qty-l').textContent = t === 'Amount' ? 'Amount (EGP)' : t === 'Hours' ? 'Number of hours' : 'Number of days';
+  const e = empById(parseEmpInput($('pn-emp').value)), qty = num($('pn-qty').value), out = [];
+  if (e && qty) out.push(t === 'Amount' ? `Deduction: <b class="neg">${fmt(qty)} EGP</b>` : `Deduction: <b class="neg">${fmt(qty)} ${t === 'Hours' ? 'hour' : 'day'}${qty === 1 ? '' : 's'} of pay</b> (the payroll works out the amount)`);
+  const d = $('pn-date').value, per = $('pn-period').value;
+  if (d && per && per !== cycleOf(d)) out.push(`The incident belongs to the ${cycleOf(d)} payroll; it will be deducted in <b>${per}</b> instead.`);
+  if (e && per){ const same = S.penalties.filter(x => x.id !== editingPen && String(x.emp_id) === String(e.id) && x.status === 'Approved' && x.apply_period === per);
+    if (same.length) out.push(`Already ${same.length} approved penalt${same.length === 1 ? 'y' : 'ies'} for this employee in ${per}: ${same.map(penLabel).join(', ')}.`); }
+  $('pn-hint').innerHTML = out.join('<br>');
+};
+// the vacation hint: no "deducts … daily pay" figure for officers
+const _leaveHint27 = leaveHint;
+leaveHint = function(){ const r = _leaveHint27.apply(this, arguments);
+  if (isOfficer()) $('lv-hint').innerHTML = $('lv-hint').innerHTML.replace(/Unpaid: deducts [^<]*?per day in the payroll period it falls in\./, 'Unpaid: deducted in the payroll at the employee\'s daily pay.');
+  return r; };
+['pn-emp','pn-qty','pn-type','pn-period'].forEach(id => $(id).addEventListener('input', () => penHint()));
 
 // ═════════════════════════════════════════════════════════
 //  BOOT

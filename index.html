@@ -1771,11 +1771,12 @@ async function loadAll(){
 
 function buildLists(){
   const act = S.employees.filter(e => e.status !== 'Inactive' || onPayroll(e, settings.period));
-  $('dl-emp').innerHTML = act.map(e => `<option value="${esc(e.id)} — ${esc(empName(e))}">${esc(e.name_ar||'')}</option>`).join('');
+  // the label repeats code + name: Firefox shows and searches only the label (Chrome shows both)
+  $('dl-emp').innerHTML = act.map(e => `<option value="${esc(e.id)} — ${esc(empName(e))}" label="${esc(e.id)} — ${esc(empName(e))}${e.name_ar && e.name_ar !== empName(e) ? ' · ' + esc(e.name_ar) : ''}"></option>`).join('');
   $('dl-emp-mgr') ? null : document.body.insertAdjacentHTML('beforeend','<datalist id="dl-emp-mgr"></datalist>');
   if (!$('dl-jobs')) document.body.insertAdjacentHTML('beforeend','<datalist id="dl-jobs"></datalist>');
   $('dl-jobs').innerHTML = [...new Set(S.employees.filter(e=>e.status!=='Inactive').map(e=>String(e.job_name||'').trim()).filter(Boolean))].sort().map(j=>`<option value="${esc(j)}">`).join('');
-  $('dl-emp-mgr').innerHTML = S.employees.filter(e=>e.status!=='Inactive').map(e=>`<option value="${esc(e.id)} — ${esc(empName(e))}">${esc(e.job_name||'')}</option>`).join('');
+  $('dl-emp-mgr').innerHTML = S.employees.filter(e=>e.status!=='Inactive').map(e=>`<option value="${esc(e.id)} — ${esc(empName(e))}" label="${esc(e.id)} — ${esc(empName(e))}${e.job_name ? ' · ' + esc(e.job_name) : ''}"></option>`).join('');
   $('dl-proj').innerHTML = S.projects.filter(p => p.status !== 'Inactive' && p.status !== 'Completed')
                             .map(p => `<option value="${esc(p.id)} — ${esc(p.name||'')}"></option>`).join('');
   const depts = [...new Set(S.employees.map(e=>e.department).filter(Boolean))].sort();

@@ -961,8 +961,9 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
     <div class="grid3" style="align-items:end">
       <div class="field"><label>Days per year in the first employment year</label><input id="lrl-first" type="number" min="0" step="0.5"></div>
       <div class="field"><label>Days per year after the first year</label><input id="lrl-normal" type="number" min="0" step="0.5"></div>
-      <div class="field"><label>Days per year after 10 years of insurance</label><input id="lrl-senior" type="number" min="0" step="0.5"></div>
+      <div class="field"><label>Days per year after 10 years of insurance or age 50</label><input id="lrl-senior" type="number" min="0" step="0.5"></div>
       <div class="field"><label>Years of insurance for the higher rate</label><input id="lrl-senyears" type="number" min="1" step="1"></div>
+      <div class="field"><label>…or from this age (whichever comes first)</label><input id="lrl-senage" type="number" min="18" step="1"></div>
       <div class="field"><label>Emergency days inside the annual leave (per full year)</label><input id="lrl-emerg" type="number" min="0" step="0.5"></div>
       <div class="field"><label>Months of service before an employee may request leave</label><input id="lrl-wait" type="number" min="0" step="1"></div>
       <div class="field"><label>Most unused days moved to the next year (the joining year always moves in full)</label><input id="lrl-cap" type="number" min="0" step="0.5"></div>
@@ -6457,7 +6458,7 @@ document.querySelector('[data-spage="att"]').addEventListener('click', () => SEL
 const HRA_KIND = { contract:['📄 Contract renewal','c-orange'], probation:['⏳ End of probation','c-blue'], id:['🪪 National ID expiry','c-red'],
                    cert:['🎓 Certificate expiry','c-orange'], disability:['♿ Disability card expiry','c-orange'] };
 const HRA_DEC = { seen:'Handled', renew:'Renew', not_renew:'Do not renew', confirm:'Confirm', not_confirm:'Do not confirm' };
-const HR_RULES_DEF = { leave_rules:{ start_year:2026, first_year_days:15, normal_days:21, senior_days:30, senior_insured_years:10, emergency_days:7, wait_months:6, carry_cap:7 },
+const HR_RULES_DEF = { leave_rules:{ start_year:2026, first_year_days:15, normal_days:21, senior_days:30, senior_insured_years:10, senior_age:50, emergency_days:7, wait_months:6, carry_cap:7 },
                        hr_alerts:{ contract_days:75, probation_days:30, id_days:30, cert_days:30, disability_days:30 } };
 let HRA = { list:[], loaded:false, loading:false, missing:false };
 let HR_RULES = JSON.parse(JSON.stringify(HR_RULES_DEF));
@@ -6512,7 +6513,7 @@ function renderHRAlerts(){
 function renderHRRules(){
   const L = HR_RULES.leave_rules, A = HR_RULES.hr_alerts;
   const set = (id, v) => { const el = $(id); if (el && document.activeElement !== el) el.value = v; };
-  set('lrl-first', L.first_year_days); set('lrl-normal', L.normal_days); set('lrl-senior', L.senior_days); set('lrl-senyears', L.senior_insured_years);
+  set('lrl-first', L.first_year_days); set('lrl-normal', L.normal_days); set('lrl-senior', L.senior_days); set('lrl-senyears', L.senior_insured_years); set('lrl-senage', L.senior_age);
   set('lrl-emerg', L.emergency_days); set('lrl-wait', L.wait_months); set('lrl-cap', L.carry_cap); set('lrl-start', L.start_year);
   set('hal-contract', A.contract_days); set('hal-probation', A.probation_days); set('hal-id', A.id_days); set('hal-cert', A.cert_days); set('hal-dis', A.disability_days);
   const ro = !canHRW();
@@ -6526,11 +6527,11 @@ $('hra-q').addEventListener('input', renderHRAlerts);
 $('hra-refresh').addEventListener('click', () => loadHRAlerts().then(() => { renderHRAlerts(); toast('Alerts refreshed'); }));
 $('hra-save-rules').addEventListener('click', async () => {
   const n = id => Number($(id).value);
-  const L = { ...HR_RULES.leave_rules, first_year_days:n('lrl-first'), normal_days:n('lrl-normal'), senior_days:n('lrl-senior'), senior_insured_years:Math.round(n('lrl-senyears')),
+  const L = { ...HR_RULES.leave_rules, first_year_days:n('lrl-first'), normal_days:n('lrl-normal'), senior_days:n('lrl-senior'), senior_insured_years:Math.round(n('lrl-senyears')), senior_age:Math.round(n('lrl-senage')),
               emergency_days:n('lrl-emerg'), wait_months:Math.round(n('lrl-wait')), carry_cap:n('lrl-cap'), start_year:Math.round(n('lrl-start')) };
   const A = { ...HR_RULES.hr_alerts, contract_days:Math.round(n('hal-contract')), probation_days:Math.round(n('hal-probation')), id_days:Math.round(n('hal-id')),
               cert_days:Math.round(n('hal-cert')), disability_days:Math.round(n('hal-dis')) };
-  if ([L.first_year_days, L.normal_days, L.senior_days, L.emergency_days, L.carry_cap, L.wait_months].some(v => !(v >= 0)) || !(L.senior_insured_years >= 1) || !(L.start_year >= 2000))
+  if ([L.first_year_days, L.normal_days, L.senior_days, L.emergency_days, L.carry_cap, L.wait_months].some(v => !(v >= 0)) || !(L.senior_insured_years >= 1) || !(L.senior_age >= 18) || !(L.start_year >= 2000))
     return toast('Check the leave rules — every box needs a number', 'warn');
   if (Object.values(A).some(v => !(v >= 1 && v <= 400))) return toast('Alert days must be between 1 and 400', 'warn');
   for (const [key, value] of [['leave_rules', L], ['hr_alerts', A]]){
@@ -6607,6 +6608,10 @@ const lbTypes = () => settings.casualCountsAnnual === 'no' ? ['Annual'] : ['Annu
 function lbText(b, reqDays, type, alreadyIn){
   const y = b.year, add = alreadyIn || 0, left = num(b.remaining) + add - reqDays;
   const out = [`Annual balance ${y}: <b>${fmt(b.entitlement)}</b> earned this year (now ${fmt(b.rate_today)} days a year)${num(b.carry_in) ? ` ${num(b.carry_in) < 0 ? '−' : '+'} ${fmt(Math.abs(num(b.carry_in)))} from last year` : ''} − ${fmt(num(b.taken) - add)} taken${num(b.pending) ? ` (${fmt(b.pending)} pending)` : ''}${reqDays ? ` − ${fmt(reqDays)} this request` : ''} → <b class="${left < 0 ? 'neg' : 'pos'}">${fmt(left)} remaining</b>${left < 0 ? ' — exceeds the balance' : ''}`];
+  if (num(b.carry_in) > 0 && b.this_year_left != null){
+    // the request uses this year's days first; carried days only after those are used up
+    const yl = num(b.this_year_left) + add, useYear = Math.min(Math.max(yl, 0), reqDays), useCarry = reqDays - useYear;
+    out.push(`<span style="color:var(--muted)">Of the remaining: this year's days ${fmt(yl - useYear)} · carried days ${fmt(num(b.carry_left) - useCarry)} (carried days are used only after this year's days)</span>`); }
   if (type === 'Casual'){ const el = num(b.emergency_cap) - num(b.emergency_taken) - num(b.emergency_pending) + (alreadyIn || 0) - reqDays;
     out.push(`Emergency leave ${y}: ${fmt(b.emergency_cap)} days allowed · <b class="${el < 0 ? 'neg' : 'pos'}">${fmt(el)} left</b> after this request${el < 0 ? ' — over the emergency limit' : ''}`); }
   return out;
@@ -6713,11 +6718,11 @@ async function renderEmpLeave(id){
   const L = HR_RULES.leave_rules;
   box.innerHTML = `<div class="grid3" style="gap:10px">
       <div><div style="color:var(--muted);font-size:12px">${y} balance</div><div style="font-size:20px;font-weight:700" class="${num(b.remaining) < 0 ? 'neg' : ''}">${fmt(b.remaining)} days</div>
-        <div style="font-size:12px">${fmt(b.entitlement)} earned${num(b.carry_in) ? ` · ${fmt(b.carry_in)} from last year` : ''} · ${fmt(b.taken)} taken${num(b.pending) ? ` · ${fmt(b.pending)} pending` : ''}</div></div>
+        <div style="font-size:12px">${fmt(b.entitlement)} earned${num(b.carry_in) ? ` · ${fmt(b.carry_in)} from last year` : ''} · ${fmt(b.taken)} taken${num(b.pending) ? ` · ${fmt(b.pending)} pending` : ''}${num(b.carry_in) > 0 && b.this_year_left != null ? `<br>left: ${fmt(b.this_year_left)} this year's + ${fmt(b.carry_left)} carried (used last)` : ''}</div></div>
       <div><div style="color:var(--muted);font-size:12px">Emergency leave ${y}</div><div style="font-size:20px;font-weight:700">${fmt(Math.max(0, num(b.emergency_cap) - num(b.emergency_taken)))} left</div>
         <div style="font-size:12px">${fmt(b.emergency_cap)} allowed · ${fmt(b.emergency_taken)} taken</div></div>
       <div><div style="color:var(--muted);font-size:12px">Earning now</div><div style="font-size:20px;font-weight:700">${fmt(b.rate_today)} days / year</div>
-        <div style="font-size:12px">${b.override != null ? 'special case set on this employee' : `${fmt(L.normal_days)} from ${esc(b.normal_from || '—')}${b.senior_from ? ` · ${fmt(L.senior_days)} from ${esc(b.senior_from)}` : ` · ${fmt(L.senior_days)} after ${L.senior_insured_years} insured years (no insurance date)`}`}</div></div>
+        <div style="font-size:12px">${b.override != null ? 'special case set on this employee' : `${fmt(L.normal_days)} from ${esc(b.normal_from || '—')}${b.senior_from ? ` · ${fmt(L.senior_days)} from ${esc(b.senior_from)}${b.senior_reason === 'age' ? ` (age ${L.senior_age || 50})` : b.senior_reason === 'insurance' ? ` (${L.senior_insured_years} insured years)` : ''}` : ` · ${fmt(L.senior_days)} after ${L.senior_insured_years} insured years or age ${L.senior_age || 50}`}`}</div></div>
     </div>
     <div style="font-size:12px;margin-top:8px;color:${b.eligible_from > todayStr() && !b.early_ok ? 'var(--warn)' : 'var(--muted)'}">May request annual / emergency leave from <b>${esc(b.eligible_from || '—')}</b>${b.early_ok ? ' — HR exception: allowed before that' : ''}.</div>`;
 }

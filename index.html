@@ -332,6 +332,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="nav-item" data-page="hrreq">📨 HR requests <span class="chip c-orange" id="hr-badge" style="margin-left:auto;display:none"></span></div>
   <div class="nav-item" data-page="reporting">🧭 Reporting lines <span class="chip c-orange" id="rl-badge" style="margin-left:auto;display:none"></span></div>
   <div class="nav-item" data-page="exempt">⭐ Exception rule</div>
+  <div class="nav-item" data-page="hralerts">🔔 HR alerts <span class="chip c-red" id="hra-badge" style="margin-left:auto;display:none"></span></div>
   <div class="nav-item" data-page="locations">📍 Location checks <span class="chip c-orange" id="loc-badge" style="margin-left:auto;display:none"></span></div>
   <div class="nav-item" data-page="assign">📌 Project assignments</div>
   <div class="nav-item" data-page="bulk">⬆ Bulk upload</div>
@@ -940,6 +941,45 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   </div>
 </div>
 
+<!-- HR ALERTS -->
+<div class="page" id="page-hralerts">
+  <div class="page-header"><div><div class="page-title">HR alerts</div><div class="page-sub">Contracts, probation, national IDs, certificates and disability cards that need attention</div></div>
+    <button class="btn btn-ghost btn-sm" id="hra-refresh">⟳ Refresh</button></div>
+  <div id="hra-missing"></div>
+  <div class="card">
+    <div class="toolbar"><span class="toolbar-title" id="hra-count">Alerts</span>
+      <div class="toolbar-right">
+        <select class="sel" id="hra-kind"><option value="">All alerts</option><option value="contract">Contract renewal</option><option value="probation">End of probation</option><option value="id">National ID expiry</option><option value="cert">Certificate expiry</option><option value="disability">Disability card expiry</option></select>
+        <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--label);cursor:pointer"><input type="checkbox" id="hra-done" style="width:auto"> Show the ones already handled</label>
+        <input class="inp" id="hra-q" placeholder="Search code or name…">
+      </div></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Alert</th><th>Employee</th><th>Department</th><th>Date</th><th>Days left</th><th>Manager / HR response</th><th></th></tr></thead><tbody id="hra-tbl"></tbody></table></div>
+    <div class="foot">An alert leaves this list once someone in HR marks it handled, or when the date is updated (for example a renewed contract or a new ID expiry date). Direct managers see their team's contract and probation alerts on the phone app and can recommend a decision.</div>
+  </div>
+  <div class="card" style="padding:18px" id="hra-rules">
+    <div class="sec" style="margin-top:0">Annual leave rules</div>
+    <div class="grid3" style="align-items:end">
+      <div class="field"><label>Days per year in the first employment year</label><input id="lrl-first" type="number" min="0" step="0.5"></div>
+      <div class="field"><label>Days per year after the first year</label><input id="lrl-normal" type="number" min="0" step="0.5"></div>
+      <div class="field"><label>Days per year after 10 years of insurance</label><input id="lrl-senior" type="number" min="0" step="0.5"></div>
+      <div class="field"><label>Years of insurance for the higher rate</label><input id="lrl-senyears" type="number" min="1" step="1"></div>
+      <div class="field"><label>Emergency days inside the annual leave (per full year)</label><input id="lrl-emerg" type="number" min="0" step="0.5"></div>
+      <div class="field"><label>Months of service before an employee may request leave</label><input id="lrl-wait" type="number" min="0" step="1"></div>
+      <div class="field"><label>Most unused days moved to the next year (the joining year always moves in full)</label><input id="lrl-cap" type="number" min="0" step="0.5"></div>
+      <div class="field"><label>First year counted by the system (balances before it = "leave balance carried in" on the employee)</label><input id="lrl-start" type="number" min="2000" step="1"></div>
+    </div>
+    <div class="sec">Alert days</div>
+    <div class="grid3" style="align-items:end">
+      <div class="field"><label>Contract renewal — days before the end</label><input id="hal-contract" type="number" min="1" step="1"></div>
+      <div class="field"><label>End of probation — days before</label><input id="hal-probation" type="number" min="1" step="1"></div>
+      <div class="field"><label>National ID expiry — days before</label><input id="hal-id" type="number" min="1" step="1"></div>
+      <div class="field"><label>Certificate expiry — days before</label><input id="hal-cert" type="number" min="1" step="1"></div>
+      <div class="field"><label>Disability card expiry — days before</label><input id="hal-dis" type="number" min="1" step="1"></div>
+    </div>
+    <button class="btn btn-primary" id="hra-save-rules" style="margin-top:12px">Save rules</button> <span id="hra-rules-note" style="font-size:12px;color:var(--muted);margin-left:8px"></span>
+  </div>
+</div>
+
 <!-- SETTINGS -->
 <div class="page" id="page-settings">
   <div class="page-header"><div><div class="page-title">Settings</div><div class="page-sub">Payroll rules — saved to the database and shared by all users</div><div class="ro-note ro-set">View only — Finance and Admin can change settings</div></div>
@@ -1024,7 +1064,34 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div id="emp-proj" style="font-size:13px"></div>
   <div class="sec" style="margin-top:16px">📜 Employment history</div>
   <div id="emp-life" style="font-size:13px"></div>
+  <div class="sec" style="margin-top:16px">🌴 Annual leave balance</div>
+  <div id="emp-lbal" style="font-size:13px"></div>
+  <div class="sec" style="margin-top:16px">🎓 Certificates</div>
+  <div id="emp-certs" style="font-size:13px"></div>
   <div class="modal-foot"><button class="btn btn-ghost" data-close="m-emp">Cancel</button><button class="btn btn-primary" id="emp-save">Save employee</button></div>
+</div></div>
+
+<!-- MODAL: CERTIFICATE -->
+<div class="overlay" id="m-cert"><div class="modal" style="max-width:640px">
+  <div class="modal-head"><div class="modal-title" id="cert-title">Certificate</div><button class="x" data-close="m-cert">×</button></div>
+  <div class="grid2">
+    <div class="field full"><label>Certificate name *</label><input id="cert-name" placeholder="e.g. Safety officer — NEBOSH IGC"></div>
+    <div class="field"><label>Issued by</label><input id="cert-issuer"></div>
+    <div class="field"><label>Certificate number</label><input id="cert-no"></div>
+    <div class="field"><label>Issue date</label><input type="date" id="cert-issue"></div>
+    <div class="field"><label>Expiry date (blank = does not expire)</label><input type="date" id="cert-exp"></div>
+    <div class="field full"><label>Scan (PDF or picture, optional, up to 10 MB)</label><input type="file" id="cert-file" accept=".pdf,image/*"><div id="cert-file-now" style="font-size:12px;color:var(--muted);margin-top:4px"></div></div>
+    <div class="field full"><label>Notes</label><textarea id="cert-notes" rows="2"></textarea></div>
+  </div>
+  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-cert">Cancel</button><button class="btn btn-primary" id="cert-save">Save certificate</button></div>
+</div></div>
+
+<!-- MODAL: HR ALERT DECISION -->
+<div class="overlay" id="m-hra"><div class="modal" style="max-width:560px">
+  <div class="modal-head"><div class="modal-title" id="hra-m-title">Decision</div><button class="x" data-close="m-hra">×</button></div>
+  <div id="hra-m-info" style="font-size:13px;line-height:1.6;margin-bottom:10px"></div>
+  <div class="field"><label>Note (optional)</label><textarea id="hra-m-note" rows="3"></textarea></div>
+  <div class="modal-foot" id="hra-m-btns"></div>
 </div></div>
 
 <!-- MODAL: ATTENDANCE -->
@@ -1999,18 +2066,23 @@ const EMP_FIELDS = [
                     ['manager_id','Direct manager','manager']]],
   ['Contact', [['business_phone','Business phone','text'],['mobile','Mobile','text'],['email','Email','text'],['address','Address','text']]],
   ['Contract', [['contract_type','Contract type','select',['Permanent','Temporary','Contract']],['contract_start_date','Contract start','date'],
-                ['employment_date','Employment date','date'],['probation_end_date','Probation end','date'],['resignation_date','Resignation date','date']]],
-  ['Attendance rules', [['attendance_exempt','Exception rule — no delay deduction and no overtime','bool'],['annual_leave_days','Annual leave days / year (blank = company default)','number'],
+                ['employment_date','Employment date','date'],['probation_end_date','Probation end (blank = automatic: employment date + 3 months)','date'],
+                ['contract_end_date','Contract end (blank = automatic: contract start + 1 year; not for Permanent)','date'],['resignation_date','Resignation date','date']]],
+  ['Attendance rules', [['attendance_exempt','Exception rule — no delay deduction and no overtime','bool'],['annual_leave_days','Annual leave days / year — special case only (blank = automatic 15 / 21 / 30)','number'],
+                        ['leave_opening_days','Leave balance carried into the first system year (days)','number'],
+                        ['leave_early_ok','May request annual / emergency leave before 6 months of service (HR exception)','bool'],
                         ['checkin_no_project','Can check in without a project (used when Settings is set to “Only employees HR marks”)','bool'],
                         ['location_exempt','Can check in WITHOUT location — exception (only the administrator can change this)','bool'],
                         ['project_staff','Site staff — must check in at a project from the phone (fingerprint-machine punches kept as records only)','bool']]],
   ['Pay rates & payment', [['daily_pay','Daily pay','number'],['hour_pay','Hour pay','number'],['delay_hour_pay','Delay hour pay','number'],
                  ['payment_method','Payment method','select',['Bank','Cash']],['bank_account','Bank account','text'],['bank_branch','Bank','text']]],
   ['Insurance', [['insurance','Insurance','select',['Insured','Non insured']],['insurance_number','Insurance number','text'],
-                 ['insurance_title','Insurance title','text'],['insurance_amount','Insurable amount','number'],['insurance_date','Insurance date','date']]],
+                 ['insurance_title','Insurance title','text'],['insurance_amount','Insurable amount','number'],['insurance_date','Insurance date (Petrokima)','date'],
+                 ['insurance_date_before','Insurance date before Petrokima (first insured — counts towards 10 years)','date']]],
   ['Personal', [['birth_date','Birth date','date'],['gender','Gender','select',['Male','Female']],['marital_status','Marital status','select',['Single','Married','Divorced','Widowed']],
                 ['religion','Religion','text'],['nationality','Nationality','text'],['military_status','Military status','select',['','Finished','Exempt','Postponed','Not Applicable']],
                 ['national_id','National ID','text'],['national_id_expiry','National ID expiry','date']]],
+  ['Disability', [['has_disability','Has a disability card','bool'],['disability_card_no','Disability card number','text'],['disability_card_expiry','Disability card expiry','date']]],
   ['Education', [['university','University','text'],['college','College','text'],['certification','Certification','text'],['graduation_date','Graduation date','date']]],
   ['Notes', [['notes','Notes','textarea']]]
 ];
@@ -6377,6 +6449,345 @@ const SELF_CAL = makeAttCalendar('sc', {
   getEmp: () => (typeof SD !== 'undefined' && SD && SD.emp) || null,
   emptyText: 'Your employee record could not be found. Please contact HR.' });
 document.querySelector('[data-spage="att"]').addEventListener('click', () => SELF_CAL.load());
+
+// ═════════════════════════════════════════════════════════
+//  HR ALERTS · ANNUAL LEAVE BALANCE · CERTIFICATES   (database: 47-leave-entitlement-hr-alerts.sql)
+//  Alerts: hr_alerts() / hr_alert_respond() · Balance: leave_balance(emp, year) / leave_balances(year) · Rules: save_hr_rules()
+// ═════════════════════════════════════════════════════════
+const HRA_KIND = { contract:['📄 Contract renewal','c-orange'], probation:['⏳ End of probation','c-blue'], id:['🪪 National ID expiry','c-red'],
+                   cert:['🎓 Certificate expiry','c-orange'], disability:['♿ Disability card expiry','c-orange'] };
+const HRA_DEC = { seen:'Handled', renew:'Renew', not_renew:'Do not renew', confirm:'Confirm', not_confirm:'Do not confirm' };
+const HR_RULES_DEF = { leave_rules:{ start_year:2026, first_year_days:15, normal_days:21, senior_days:30, senior_insured_years:10, emergency_days:7, wait_months:6, carry_cap:7 },
+                       hr_alerts:{ contract_days:75, probation_days:30, id_days:30, cert_days:30, disability_days:30 } };
+let HRA = { list:[], loaded:false, loading:false, missing:false };
+let HR_RULES = JSON.parse(JSON.stringify(HR_RULES_DEF));
+const canHRA = () => !!(ME && ['admin','hr','hr_officer'].includes(ME.role));
+const canHRW = () => !!(ME && ['admin','hr'].includes(ME.role));
+// same as the database: one year later; 29 Feb → 28 Feb
+function addYearISO(s, n = 1){ const [y, m, d] = s.split('-').map(Number), x = new Date(y + n, m - 1, d); if (x.getMonth() !== m - 1) x.setDate(0);
+  return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
+
+async function loadHRAlerts(){
+  if (!canHRA()) return;
+  HRA.loading = true;
+  const [a, r] = await Promise.all([ sb.rpc('hr_alerts'), sb.from('settings').select('*').in('key', ['leave_rules','hr_alerts']) ]);
+  HRA.loading = false; HRA.loaded = true;
+  HRA.missing = !!a.error; HRA.list = Array.isArray(a.data) ? a.data : [];
+  (r.data || []).forEach(x => { if (HR_RULES_DEF[x.key]) HR_RULES[x.key] = { ...HR_RULES_DEF[x.key], ...(x.value || {}) }; });
+  hraBadge();
+}
+const hraOpen = () => HRA.list.filter(a => !a.done);
+function hraBadge(){ const n = hraOpen().length, el = $('hra-badge'); if (el){ el.style.display = n ? '' : 'none'; el.textContent = n; } }
+const hraDays = n => { n = Number(n); return n < 0 ? `<span class="neg">${-n} day${n === -1 ? '' : 's'} ago</span>` : n === 0 ? '<span class="neg">today</span>' : `in ${n} day${n === 1 ? '' : 's'}`; };
+const hraKey = a => [a.kind, a.emp_id, a.ref_id || '', a.due].join('|');
+const hraFind = k => HRA.list.find(a => hraKey(a) === k);
+function hraResp(a){
+  return (a.responses || []).map(r => `<div style="font-size:12px;margin-bottom:3px"><span class="chip ${/^(not_|seen)/.test(r.decision) ? 'c-grey' : 'c-green'}" style="padding:1px 6px">${esc(HRA_DEC[r.decision] || r.decision)}</span>
+      ${r.role === 'manager' ? 'Manager' : 'HR'}: ${esc(r.name || r.emp || '')}${r.note ? ` — ${esc(r.note)}` : ''}</div>`).join('') || '<span style="color:var(--muted)">—</span>';
+}
+function renderHRAlerts(){
+  const noStart = S.employees.filter(e => e.status !== 'Inactive' && (e.contract_type || '') !== 'Permanent' && !e.contract_start_date && !e.contract_end_date);
+  $('hra-missing').innerHTML = HRA.missing
+    ? '<div class="alert a-warn" style="margin-bottom:12px">Database update <b>47-leave-entitlement-hr-alerts.sql</b> has not been run yet — alerts are not available.</div>'
+    : noStart.length ? `<div class="alert a-warn" style="margin-bottom:12px">📄 <b>${noStart.length}</b> temporary / contract employee${noStart.length === 1 ? ' has' : 's have'} no contract start date, so no renewal alert can be made for ${noStart.length === 1 ? 'him' : 'them'}.
+        Open the employee → <b>Contract</b> → enter <b>Contract start</b> and save (the end date fills in by itself).
+        <details style="margin-top:6px"><summary style="cursor:pointer">Show them</summary><div style="margin-top:6px;line-height:1.9">${noStart.map(e => `<a href="#" data-hra-emp="${esc(e.id)}">${esc(e.id)} ${esc(empName(e))}</a>`).join(' · ')}</div></details></div>` : '';
+  const k = $('hra-kind').value, showDone = $('hra-done').checked, q = $('hra-q').value.trim().toLowerCase();
+  const list = HRA.list.filter(a => (!k || a.kind === k) && (showDone || !a.done)
+                                 && (!q || [a.emp_id, a.name_en, a.name_ar].some(v => String(v || '').toLowerCase().includes(q))));
+  $('hra-count').textContent = `${list.length} alert${list.length === 1 ? '' : 's'}${showDone ? '' : ' to handle'}`;
+  $('hra-tbl').innerHTML = list.map(a => { const kd = HRA_KIND[a.kind] || [a.kind, 'c-grey'], key = esc(hraKey(a));
+    let btns;
+    if (a.kind === 'contract') btns = (canHRW() ? `<button class="btn btn-success btn-sm" data-hra-act="renew" data-k="${key}">Renew 1 year</button> ` : '')
+                                    + `<button class="btn btn-ghost btn-sm" data-hra-act="not_renew" data-k="${key}">Not renewing</button>`;
+    else if (a.kind === 'probation') btns = `<button class="btn btn-success btn-sm" data-hra-act="confirm" data-k="${key}">Confirm</button> <button class="btn btn-ghost btn-sm" data-hra-act="not_confirm" data-k="${key}">Do not confirm</button>`;
+    else btns = (canHRW() ? `<button class="btn btn-ghost btn-sm" data-hra-emp="${esc(a.emp_id)}">Update the date</button> ` : '') + `<button class="btn btn-ghost btn-sm" data-hra-act="seen" data-k="${key}">Mark handled</button>`;
+    return `<tr${a.done ? ' style="opacity:.6"' : ''}><td><span class="chip ${kd[1]}">${kd[0]}</span>${a.detail ? `<div style="font-size:12px;margin-top:4px">${esc(a.kind === 'disability' ? 'Card ' + a.detail : a.detail)}</div>` : ''}</td>
+      <td class="strong"><a href="#" data-hra-emp="${esc(a.emp_id)}">${esc(a.name_en || a.name_ar || a.emp_id)}</a> <span class="mono" style="color:var(--muted)">${esc(a.emp_id)}</span>${a.job ? `<div style="font-size:12px;color:var(--muted);font-weight:400">${esc(a.job)}</div>` : ''}</td>
+      <td>${esc(a.department || '')}</td><td class="mono">${esc(a.due)}</td><td style="white-space:nowrap">${hraDays(a.days_left)}</td>
+      <td style="white-space:normal;min-width:190px">${hraResp(a)}</td><td style="white-space:nowrap">${a.done ? '<span class="chip c-green">handled</span>' : btns}</td></tr>`; }).join('')
+    || `<tr><td colspan="7" class="empty">${HRA.loaded ? 'Nothing needs attention' : 'Loading…'}</td></tr>`;
+  renderHRRules();
+}
+function renderHRRules(){
+  const L = HR_RULES.leave_rules, A = HR_RULES.hr_alerts;
+  const set = (id, v) => { const el = $(id); if (el && document.activeElement !== el) el.value = v; };
+  set('lrl-first', L.first_year_days); set('lrl-normal', L.normal_days); set('lrl-senior', L.senior_days); set('lrl-senyears', L.senior_insured_years);
+  set('lrl-emerg', L.emergency_days); set('lrl-wait', L.wait_months); set('lrl-cap', L.carry_cap); set('lrl-start', L.start_year);
+  set('hal-contract', A.contract_days); set('hal-probation', A.probation_days); set('hal-id', A.id_days); set('hal-cert', A.cert_days); set('hal-dis', A.disability_days);
+  const ro = !canHRW();
+  document.querySelectorAll('#hra-rules input').forEach(i => { i.disabled = ro; });
+  $('hra-save-rules').style.display = ro ? 'none' : '';
+  $('hra-rules-note').textContent = ro ? 'View only — HR or an administrator can change these rules.' : '';
+}
+PAGE_RENDER.hralerts = () => { renderHRAlerts(); loadHRAlerts().then(renderHRAlerts, renderHRAlerts); };
+['hra-kind','hra-done'].forEach(id => $(id).addEventListener('change', renderHRAlerts));
+$('hra-q').addEventListener('input', renderHRAlerts);
+$('hra-refresh').addEventListener('click', () => loadHRAlerts().then(() => { renderHRAlerts(); toast('Alerts refreshed'); }));
+$('hra-save-rules').addEventListener('click', async () => {
+  const n = id => Number($(id).value);
+  const L = { ...HR_RULES.leave_rules, first_year_days:n('lrl-first'), normal_days:n('lrl-normal'), senior_days:n('lrl-senior'), senior_insured_years:Math.round(n('lrl-senyears')),
+              emergency_days:n('lrl-emerg'), wait_months:Math.round(n('lrl-wait')), carry_cap:n('lrl-cap'), start_year:Math.round(n('lrl-start')) };
+  const A = { ...HR_RULES.hr_alerts, contract_days:Math.round(n('hal-contract')), probation_days:Math.round(n('hal-probation')), id_days:Math.round(n('hal-id')),
+              cert_days:Math.round(n('hal-cert')), disability_days:Math.round(n('hal-dis')) };
+  if ([L.first_year_days, L.normal_days, L.senior_days, L.emergency_days, L.carry_cap, L.wait_months].some(v => !(v >= 0)) || !(L.senior_insured_years >= 1) || !(L.start_year >= 2000))
+    return toast('Check the leave rules — every box needs a number', 'warn');
+  if (Object.values(A).some(v => !(v >= 1 && v <= 400))) return toast('Alert days must be between 1 and 400', 'warn');
+  for (const [key, value] of [['leave_rules', L], ['hr_alerts', A]]){
+    const { error } = await sb.rpc('save_hr_rules', { p_key:key, p_value:value });
+    if (error) return toast(error.message, 'err');
+  }
+  HR_RULES = { leave_rules:L, hr_alerts:A }; LB.clear(); LB_ALL.year = null;
+  await loadHRAlerts(); renderHRAlerts(); toast('Rules saved');
+});
+// decisions
+let HRA_PICK = null;
+document.addEventListener('click', e => {
+  const em = e.target.closest('[data-hra-emp]'); if (em){ e.preventDefault(); return openEmp(em.dataset.hraEmp); }
+  const b = e.target.closest('[data-hra-act]'); if (!b) return;
+  const a = hraFind(b.dataset.k); if (!a) return;
+  const act = b.dataset.hraAct, nm = `<b>${esc(a.name_en || a.name_ar || a.emp_id)}</b> (${esc(a.emp_id)})`;
+  HRA_PICK = { a, act };
+  const info = {
+    renew: `${nm}'s contract ends on <b>${esc(a.due)}</b>. Renewing sets the new contract <b>${esc(a.due)} → ${esc(addYearISO(a.due))}</b> on the employee record.`,
+    not_renew: `${nm}'s contract ends on <b>${esc(a.due)}</b>. Record that it will <b>not</b> be renewed. (Nothing else changes — when he leaves, make him Inactive with the resignation date as usual.)`,
+    confirm: `${nm}'s probation ends on <b>${esc(a.due)}</b>. Record that he is <b>confirmed</b> in his job.`,
+    not_confirm: `${nm}'s probation ends on <b>${esc(a.due)}</b>. Record that he is <b>not confirmed</b>.`,
+    seen: `${HRA_KIND[a.kind] ? HRA_KIND[a.kind][0] : a.kind} for ${nm} on <b>${esc(a.due)}</b>. Mark it handled — it leaves the list. Tip: entering the new expiry date on the employee also clears it.`
+  }[act];
+  const mgr = (a.responses || []).filter(r => r.role === 'manager');
+  $('hra-m-title').textContent = { renew:'Renew contract for 1 year', not_renew:'Contract will not be renewed', confirm:'Confirm after probation', not_confirm:'Not confirmed after probation', seen:'Mark handled' }[act];
+  $('hra-m-info').innerHTML = info + (mgr.length ? `<div style="margin-top:8px">Manager's recommendation: ${hraResp({ responses:mgr })}</div>` : '');
+  $('hra-m-note').value = '';
+  $('hra-m-btns').innerHTML = `<button class="btn btn-ghost" data-close="m-hra">Cancel</button><button class="btn ${/^not_/.test(act) ? 'btn-danger' : 'btn-primary'}" id="hra-m-go">${esc($('hra-m-title').textContent)}</button>`;
+  openM('m-hra');
+});
+document.addEventListener('click', async e => {
+  if (!e.target.closest('#hra-m-go') || !HRA_PICK) return;
+  const { a, act } = HRA_PICK, btn = $('hra-m-go'); btn.disabled = true;
+  try {
+    if (act === 'renew'){
+      const upd = { contract_start_date:a.due, contract_end_date:addYearISO(a.due) };
+      const res = await sb.from('employees').update(upd).eq('id', a.emp_id).select();
+      if (res.error) throw res.error; if (!(res.data && res.data.length)) throw new Error(NOPERM);
+      const i = S.employees.findIndex(x => String(x.id) === String(a.emp_id)); if (i >= 0) S.employees[i] = { ...S.employees[i], ...res.data[0] };
+    }
+    const { error } = await sb.rpc('hr_alert_respond', { p_kind:a.kind, p_emp:a.emp_id, p_ref:a.ref_id || '', p_due:a.due, p_decision:act, p_note:$('hra-m-note').value.trim() || null });
+    if (error) throw error;
+    closeM('m-hra'); toast(act === 'renew' ? `Contract renewed until ${addYearISO(a.due)}` : 'Saved');
+    await loadHRAlerts(); renderHRAlerts(); renderDashboard();
+  } catch (err){ toast(err.message || String(err), 'err'); }
+  btn.disabled = false;
+});
+// dashboard alert + menu badge (loads once after sign-in, again when the page is opened)
+const _renderDashboard26 = renderDashboard;
+renderDashboard = function(){
+  const r = _renderDashboard26.apply(this, arguments);
+  if (canHRA() && !HRA.loaded && !HRA.loading) loadHRAlerts().then(() => renderDashboard(), () => {});
+  const open = hraOpen(), n = open.length, late = open.filter(a => Number(a.days_left) < 0).length;
+  hraBadge();
+  if (n && $('dash-alert')){
+    const by = Object.entries(open.reduce((m, a) => (m[a.kind] = (m[a.kind] || 0) + 1, m), {})).map(([k, c]) => `${c} ${(HRA_KIND[k] || [k])[0].replace(/^\S+\s/, '').toLowerCase()}`).join(' · ');
+    $('dash-alert').insertAdjacentHTML('beforeend', `<div class="alert ${late ? 'a-alarm' : 'a-warn'}" style="margin-bottom:10px;cursor:pointer" data-nav="hralerts">🔔 <b>${n} HR alert${n === 1 ? '' : 's'}</b> need${n === 1 ? 's' : ''} attention${late ? ` — ${late} already past the date` : ''}: ${esc(by)}. <u>Open HR alerts</u></div>`);
+  }
+  return r;
+};
+
+// ═════════════ ANNUAL LEAVE BALANCE (from the database) ═════════════
+const LB = new Map();                       // "emp|year" → balance
+let LB_ALL = { year:null, rows:[] };
+async function getLB(emp, year, force){
+  const k = `${emp}|${year}`; if (!force && LB.has(k)) return LB.get(k);
+  const { data, error } = await sb.rpc('leave_balance', { p_emp:String(emp), p_year:Number(year) });
+  if (error) { LB.set(k, null); return null; }
+  LB.set(k, data); return data;
+}
+const lbTypes = () => settings.casualCountsAnnual === 'no' ? ['Annual'] : ['Annual','Casual'];
+// one line explaining the balance, with the days of a request taken off
+function lbText(b, reqDays, type, alreadyIn){
+  const y = b.year, add = alreadyIn || 0, left = num(b.remaining) + add - reqDays;
+  const out = [`Annual balance ${y}: <b>${fmt(b.entitlement)}</b> earned this year (now ${fmt(b.rate_today)} days a year)${num(b.carry_in) ? ` ${num(b.carry_in) < 0 ? '−' : '+'} ${fmt(Math.abs(num(b.carry_in)))} from last year` : ''} − ${fmt(num(b.taken) - add)} taken${num(b.pending) ? ` (${fmt(b.pending)} pending)` : ''}${reqDays ? ` − ${fmt(reqDays)} this request` : ''} → <b class="${left < 0 ? 'neg' : 'pos'}">${fmt(left)} remaining</b>${left < 0 ? ' — exceeds the balance' : ''}`];
+  if (type === 'Casual'){ const el = num(b.emergency_cap) - num(b.emergency_taken) - num(b.emergency_pending) + (alreadyIn || 0) - reqDays;
+    out.push(`Emergency leave ${y}: ${fmt(b.emergency_cap)} days allowed · <b class="${el < 0 ? 'neg' : 'pos'}">${fmt(el)} left</b> after this request${el < 0 ? ' — over the emergency limit' : ''}`); }
+  return out;
+}
+leaveHint = function(){
+  const emp = parseEmpInput($('lv-emp').value), e = empById(emp), f = $('lv-from').value, t = $('lv-to').value, type = $('lv-t').value, out = [];
+  if (f && t && t < f) out.push('<span class="neg">“To” is before “From”.</span>');
+  if (f && t && t >= f){ const cal = Math.round((dObj(t) - dObj(f)) / 86400000) + 1, wd = workdays(f, t);
+    out.push(`${cal} calendar day${cal > 1 ? 's' : ''}, ${wd} working day${wd === 1 ? '' : 's'} (weekends excluded).`); }
+  if (e && (type === 'Annual' || type === 'Casual')){
+    const y = (f || todayStr()).slice(0, 4), b = LB.get(`${emp}|${y}`);
+    if (b === undefined){ out.push('<span style="color:var(--muted)">Annual balance: loading…</span>'); getLB(emp, y).then(() => leaveHint()); }
+    else if (b === null) out.push('<span style="color:var(--muted)">Annual balance not available (database update 47 not run yet).</span>');
+    else {
+      const self = editingLeave && S.leaves.find(l => l.id === editingLeave && l.status === 'Approved');
+      const inYear = l => leaveDaysIn(l, `${y}-01-01`, `${y}-12-31`);
+      const addAnnual = self && lbTypes().includes(self.leave_type) ? inYear(self) : 0, addEm = self && self.leave_type === 'Casual' ? inYear(self) : 0;
+      const req = num($('lv-days').value);
+      if (type === 'Annual' || lbTypes().includes('Casual')) out.push(...lbText(b, req, type, addAnnual).slice(0, 1));
+      if (type === 'Casual') out.push(lbText(b, req, 'Casual', addEm)[1]);
+      if (f && b.eligible_from && f < b.eligible_from && !b.early_ok)
+        out.push(`<span style="color:var(--warn)">⚠ Before ${esc(b.eligible_from)} — within the first ${num(HR_RULES.leave_rules.wait_months) || 6} months of service. The employee cannot request this himself; as HR you may still enter it.</span>`);
+    }
+  }
+  if (type === 'Unpaid' && e) out.push(`Unpaid: deducts ${fmt(num(e.daily_pay) || 0)} (daily pay) per day in the payroll period it falls in.`);
+  if (e && f && t){ const clash = S.leaves.find(l => l.id !== editingLeave && l.status === 'Approved' && String(l.emp_id) === emp && l.date_from <= t && l.date_to >= f);
+    if (clash) out.push(`<span class="neg">Overlaps an approved ${esc(clash.leave_type)} leave ${clash.date_from} → ${clash.date_to}.</span>`); }
+  $('lv-hint').innerHTML = out.join('<br>');
+};
+const _openLeave26 = openLeave;
+openLeave = function(){ LB.clear(); LB_ALL.year = null; return _openLeave26.apply(this, arguments); };
+
+// employee self-service: own balance
+slHint = function(){
+  const f = $('sl-from').value, t = $('sl-to').value, type = $('sl-type').value, days = num($('sl-days').value), out = [];
+  if (f && t && t < f) out.push('<span class="neg">“To” is before “From”.</span>');
+  if (f && t && t >= f){ const cal = Math.round((dObj(t) - dObj(f)) / 86400000) + 1, wd = workdays(f, t);
+    out.push(`${cal} calendar day${cal > 1 ? 's' : ''} · <b>${wd} working day${wd === 1 ? '' : 's'}</b> (weekends and public holidays are not counted)`); }
+  if (f && f < todayStr()) out.push('<span style="color:var(--warn)">These dates are in the past — HR will review them.</span>');
+  if (SD.emp && (type === 'Annual' || type === 'Casual')){
+    const y = (f || todayStr()).slice(0, 4), b = LB.get(`${SD.emp.id}|${y}`);
+    if (b === undefined){ out.push('<span style="color:var(--muted)">Annual balance: loading…</span>'); getLB(SD.emp.id, y).then(() => slHint()); }
+    else if (b){
+      const lines = lbText(b, days, type, 0);
+      if (type === 'Annual' || lbTypes().includes('Casual')) out.push(lines[0].replace(' — exceeds the balance', ' — more than your balance; HR may reject it'));
+      if (type === 'Casual') out.push(lines[1].replace(' — over the emergency limit', ' — over your emergency limit; it will not be accepted'));
+      if (f && b.eligible_from && f < b.eligible_from && !b.early_ok)
+        out.push(`<span class="neg">You can request annual or emergency leave from <b>${esc(b.eligible_from)}</b> (after ${num(HR_RULES.leave_rules.wait_months) || 6} months of service). Ask HR if you need an exception.</span>`);
+    }
+  }
+  if (type === 'Unpaid') out.push('Unpaid leave is deducted from your salary at your daily rate.');
+  if (type === 'Sick') out.push('Please keep your medical report — HR may ask for it.');
+  if (f && t){ const c = SD.leaves.find(l => (l.status === 'Approved' || l.status === 'Pending') && l.date_from <= t && l.date_to >= f);
+    if (c) out.push(`<span class="neg">Overlaps your ${c.status.toLowerCase()} ${c.leave_type} leave ${c.date_from} → ${c.date_to}.</span>`); }
+  $('sl-hint').innerHTML = out.join('<br>');
+};
+const _openSelfLeave26 = openSelfLeave;
+openSelfLeave = function(){ LB.clear(); return _openSelfLeave26.apply(this, arguments); };
+const _renderSelf26 = renderSelf;
+renderSelf = function(){
+  const r = _renderSelf26.apply(this, arguments);
+  if (SD && SD.emp){ const y = todayStr().slice(0, 4), id = SD.emp.id;
+    const paint = b => { const c = document.querySelector('#self-stats .stat'); if (!c || !b) return;
+      c.innerHTML = `<div class="stat-label">Annual leave ${y}</div><div class="stat-value">${fmt(num(b.remaining) - num(b.pending))}</div>
+        <div class="stat-sub">left of ${fmt(num(b.entitlement) + num(b.carry_in))}${num(b.pending) ? ` · ${fmt(b.pending)} pending` : ''} · emergency ${fmt(Math.max(0, num(b.emergency_cap) - num(b.emergency_taken) - num(b.emergency_pending)))} left${b.eligible_from > todayStr() && !b.early_ok ? `<br>leave can be requested from ${esc(b.eligible_from)}` : ''}</div>`; };
+    const b = LB.get(`${id}|${y}`); if (b !== undefined) paint(b); else getLB(id, y).then(paint);
+  }
+  return r;
+};
+
+// report: Annual leave balance
+const repLB = REPORTS.find(r => r.id === 'lv-balance');
+if (repLB){
+  repLB.d = 'For the year of the current period: days earned (15 / 21 / 30 a year by service and insurance, part-year when joining), carried in from last year, taken, pending and remaining — plus the emergency days allowed and used.';
+  repLB.build = () => {
+    const y = Number(settings.period.slice(0, 4)), by = new Map((LB_ALL.rows || []).map(b => [String(b.emp_id), b]));
+    const take = (id, t) => S.leaves.filter(l => String(l.emp_id) === String(id) && l.status === 'Approved' && l.leave_type === t).reduce((s, l) => s + leaveDaysIn(l, `${y}-01-01`, `${y}-12-31`), 0);
+    return { cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('rate','Days a year now','num'),C('carry','Carried in','num',true),C('ent','Earned this year','num',true),
+                   C('taken','Taken','num',true),C('pend','Pending','num',true),C('rem','Remaining','num',true),C('emcap','Emergency allowed','num',true),C('emused','Emergency taken','num',true),
+                   C('from','May request from','date'),C('sick','Sick taken','num',true),C('unpaid','Unpaid taken','num',true)],
+      rows: LB_ALL.year === y ? activeEmps().map(e => { const b = by.get(String(e.id)) || {};
+        return { code:e.id, name:empName(e), department:e.department, rate:num(b.rate_today), carry:num(b.carry_in), ent:num(b.entitlement), taken:num(b.taken), pend:num(b.pending),
+                 rem:num(b.remaining), emcap:num(b.emergency_cap), emused:num(b.emergency_taken), from:b.eligible_from || '', sick:take(e.id, 'Sick'), unpaid:take(e.id, 'Unpaid') }; }) : [],
+      note: LB_ALL.year === y ? '' : 'Loading the balances…' };
+  };
+}
+const _openReport26 = openReport;
+openReport = function(id){
+  const r = _openReport26.apply(this, arguments);
+  const y = Number(settings.period.slice(0, 4));
+  if (id === 'lv-balance' && LB_ALL.year !== y)
+    sb.rpc('leave_balances', { p_year:y }).then(({ data, error }) => { if (error) return toast(error.message, 'err'); LB_ALL = { year:y, rows:data || [] }; if (repCur === 'lv-balance') runReport(); });
+  return r;
+};
+
+// ═════════════ EMPLOYEE WINDOW: leave balance + certificates ═════════════
+async function renderEmpLeave(id){
+  const box = $('emp-lbal'); if (!box) return;
+  if (!id){ box.innerHTML = '<span style="color:var(--muted)">Save the employee first.</span>'; return; }
+  box.innerHTML = '<span style="color:var(--muted)">Loading…</span>';
+  const y = todayStr().slice(0, 4), b = await getLB(id, y, true);
+  if (String(editingEmp) !== String(id)) return;
+  if (!b){ box.innerHTML = '<span style="color:var(--muted)">Not available — database update 47 has not been run yet.</span>'; return; }
+  const L = HR_RULES.leave_rules;
+  box.innerHTML = `<div class="grid3" style="gap:10px">
+      <div><div style="color:var(--muted);font-size:12px">${y} balance</div><div style="font-size:20px;font-weight:700" class="${num(b.remaining) < 0 ? 'neg' : ''}">${fmt(b.remaining)} days</div>
+        <div style="font-size:12px">${fmt(b.entitlement)} earned${num(b.carry_in) ? ` · ${fmt(b.carry_in)} from last year` : ''} · ${fmt(b.taken)} taken${num(b.pending) ? ` · ${fmt(b.pending)} pending` : ''}</div></div>
+      <div><div style="color:var(--muted);font-size:12px">Emergency leave ${y}</div><div style="font-size:20px;font-weight:700">${fmt(Math.max(0, num(b.emergency_cap) - num(b.emergency_taken)))} left</div>
+        <div style="font-size:12px">${fmt(b.emergency_cap)} allowed · ${fmt(b.emergency_taken)} taken</div></div>
+      <div><div style="color:var(--muted);font-size:12px">Earning now</div><div style="font-size:20px;font-weight:700">${fmt(b.rate_today)} days / year</div>
+        <div style="font-size:12px">${b.override != null ? 'special case set on this employee' : `${fmt(L.normal_days)} from ${esc(b.normal_from || '—')}${b.senior_from ? ` · ${fmt(L.senior_days)} from ${esc(b.senior_from)}` : ` · ${fmt(L.senior_days)} after ${L.senior_insured_years} insured years (no insurance date)`}`}</div></div>
+    </div>
+    <div style="font-size:12px;margin-top:8px;color:${b.eligible_from > todayStr() && !b.early_ok ? 'var(--warn)' : 'var(--muted)'}">May request annual / emergency leave from <b>${esc(b.eligible_from || '—')}</b>${b.early_ok ? ' — HR exception: allowed before that' : ''}.</div>`;
+}
+let CERTS = [], CERT_EDIT = null;
+async function renderCerts(id){
+  const box = $('emp-certs'); if (!box) return;
+  if (!id){ box.innerHTML = '<span style="color:var(--muted)">Save the employee first.</span>'; return; }
+  const { data, error } = await sb.from('employee_certificates').select('*').eq('emp_id', id).order('expiry_date', { ascending:true, nullsFirst:false });
+  if (String(editingEmp) !== String(id)) return;
+  if (error){ box.innerHTML = '<span style="color:var(--muted)">Not available — database update 47 has not been run yet.</span>'; return; }
+  CERTS = data || [];
+  const today = todayStr(), soon = addDaysISO(today, num(HR_RULES.hr_alerts.cert_days) || 30);
+  box.innerHTML = (CERTS.length ? `<div class="tbl-wrap"><table><thead><tr><th>Certificate</th><th>Issued by</th><th>Number</th><th>Issued</th><th>Expires</th><th>Scan</th><th></th></tr></thead><tbody>${CERTS.map(c => `<tr>
+      <td class="strong">${esc(c.name)}${c.notes ? `<div style="font-size:12px;color:var(--muted);font-weight:400">${esc(c.notes)}</div>` : ''}</td><td>${esc(c.issuer || '')}</td><td class="mono">${esc(c.cert_no || '')}</td>
+      <td class="mono">${esc(c.issue_date || '')}</td>
+      <td class="mono">${c.expiry_date ? esc(c.expiry_date) + (c.expiry_date < today ? ' <span class="chip c-red">expired</span>' : c.expiry_date <= soon ? ' <span class="chip c-orange">soon</span>' : '') : '<span style="color:var(--muted)">no expiry</span>'}</td>
+      <td>${c.file_path ? `<a href="#" data-cert-file="${esc(c.file_path)}">📎 open</a>` : '—'}</td>
+      <td style="white-space:nowrap">${canHRW() ? `<button class="icon-btn" data-cert-edit="${c.id}" title="Edit">✎</button><button class="icon-btn" data-cert-del="${c.id}" title="Remove">🗑</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
+    : '<span style="color:var(--muted)">No certificates recorded.</span>')
+    + (canHRW() ? `<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" id="cert-add">＋ Add certificate</button></div>` : '');
+}
+function addDaysISO(s, n){ const [y, m, d] = s.split('-').map(Number), x = new Date(y, m - 1, d + n);
+  return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
+function openCert(c){
+  CERT_EDIT = c ? c.id : null;
+  $('cert-title').textContent = c ? 'Edit certificate' : 'Add certificate';
+  $('cert-name').value = c ? c.name || '' : ''; $('cert-issuer').value = c ? c.issuer || '' : ''; $('cert-no').value = c ? c.cert_no || '' : '';
+  $('cert-issue').value = c ? c.issue_date || '' : ''; $('cert-exp').value = c ? c.expiry_date || '' : ''; $('cert-notes').value = c ? c.notes || '' : '';
+  $('cert-file').value = ''; $('cert-file-now').textContent = c && c.file_path ? 'A scan is attached — choose a new file only to replace it.' : '';
+  openM('m-cert'); setTimeout(() => $('cert-name').focus(), 50);
+}
+document.addEventListener('click', async e => {
+  if (e.target.closest('#cert-add')) return openCert(null);
+  const ed = e.target.closest('[data-cert-edit]'); if (ed) return openCert(CERTS.find(c => c.id === ed.dataset.certEdit));
+  const dl = e.target.closest('[data-cert-del]');
+  if (dl){ const c = CERTS.find(x => x.id === dl.dataset.certDel); if (!c) return;
+    return confirmDel(`Remove the certificate “${c.name}”?`, async () => { await del('employee_certificates', c.id); if (c.file_path) await sb.storage.from('certificates').remove([c.file_path]);
+      toast('Certificate removed'); renderCerts(editingEmp); loadHRAlerts().then(hraBadge); }); }
+  const f = e.target.closest('[data-cert-file]');
+  if (f){ e.preventDefault(); const { data, error } = await sb.storage.from('certificates').createSignedUrl(f.dataset.certFile, 600);
+    if (error || !data) return toast(error ? error.message : 'Could not open the file', 'err'); window.open(data.signedUrl, '_blank'); }
+});
+$('cert-save').addEventListener('click', async () => {
+  const id = editingEmp; if (!id) return;
+  const rec = { emp_id:String(id), name:$('cert-name').value.trim(), issuer:$('cert-issuer').value.trim() || null, cert_no:$('cert-no').value.trim() || null,
+                issue_date:$('cert-issue').value || null, expiry_date:$('cert-exp').value || null, notes:$('cert-notes').value.trim() || null };
+  if (!rec.name) return toast('Enter the certificate name', 'warn');
+  if (rec.issue_date && rec.expiry_date && rec.expiry_date < rec.issue_date) return toast('The expiry date is before the issue date', 'warn');
+  const file = $('cert-file').files[0];
+  if (file && file.size > 10 * 1024 * 1024) return toast('The file is larger than 10 MB', 'warn');
+  const btn = $('cert-save'); btn.disabled = true;
+  try {
+    if (file){ const path = `${id}/${Date.now()}-${file.name.replace(/[^A-Za-z0-9._-]+/g, '_')}`;
+      const up = await sb.storage.from('certificates').upload(path, file, { upsert:false });
+      if (up.error) throw up.error; rec.file_path = path; }
+    if (!CERT_EDIT) rec.created_by = (ME && (ME.full_name || ME.email)) || null;
+    const res = CERT_EDIT ? await sb.from('employee_certificates').update(rec).eq('id', CERT_EDIT).select() : await sb.from('employee_certificates').insert(rec).select();
+    if (res.error) throw res.error; if (!(res.data && res.data.length)) throw new Error(NOPERM);
+    closeM('m-cert'); toast('Certificate saved'); renderCerts(id); loadHRAlerts().then(hraBadge);
+  } catch (err){ toast(err.message || String(err), 'err'); }
+  btn.disabled = false;
+});
+const _openEmp26 = openEmp;
+openEmp = function(id){ const r = _openEmp26.apply(this, arguments); renderEmpLeave(id); renderCerts(id); return r; };
+// after an employee is saved, dates may have been filled in by the database (probation, contract end) — alerts follow
+const _saveEmp26 = saveEmp;
+saveEmp = async function(){ const r = await _saveEmp26.apply(this, arguments); LB.clear(); if (canHRA()) loadHRAlerts().then(hraBadge); return r; };
+// the original hint functions were attached directly — attach the new ones too (they run last and replace the text)
+['lv-emp','lv-t','lv-days'].forEach(id => $(id).addEventListener('input', () => leaveHint()));
+['sl-type','sl-days'].forEach(id => $(id).addEventListener('input', () => slHint()));
 
 // ═════════════════════════════════════════════════════════
 //  BOOT

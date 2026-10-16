@@ -193,7 +193,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="setup-card">
     <div class="logo" style="margin-bottom:20px"><div class="logo-mark" style="width:40px;height:40px">PK</div>
       <div><div class="logo-name">Petrokima HR</div><div class="logo-sub">Connect to your Supabase database</div></div></div>
-    <div class="field" style="margin-bottom:14px"><label>Supabase Project URL</label><input id="cfg-url" placeholder="https://xxxxxxxx.supabase.co"></div>
+    <div class="field" style="margin-bottom:14px"><label>Supabase Project URL</label><input id="cfg-url" placeholder="https://xxxxxxxx.supabase.co  or  http://SERVER-IP:8000"></div>
     <div class="field" style="margin-bottom:18px"><label>Supabase anon / publishable key</label><input id="cfg-key" placeholder="eyJ... or sb_publishable_..."></div>
     <button class="btn btn-primary" id="btn-connect" style="width:100%;justify-content:center">Connect &amp; Launch</button>
     <div id="setup-err" class="alert a-warn" style="display:none;margin-top:14px;margin-bottom:0"></div>
@@ -869,7 +869,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
         <select class="sel" id="us-role"><option value="">All roles</option><option value="admin">Admin</option><option value="hr">HR</option><option value="hr_officer">HR Officer</option><option value="finance">Finance</option><option value="manager">Manager</option><option value="employee">Employee</option><option value="none">No access</option></select>
         <select class="sel" id="us-state"><option value="">Any status</option><option value="pending">Has not set a password</option><option value="locked">Locked / inactive</option><option value="ready">Active</option></select>
       </div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Email</th><th>Full name</th><th>Role</th><th>Linked employee (optional)</th><th>Active</th><th title="Can open Project costs (totals per project, no names) from My requests">Project cost reports</th><th>Password</th><th title="Two-step sign-in (code from an authenticator app)">2-step</th><th>Last sign-in</th><th></th></tr></thead><tbody id="us-tbl"></tbody></table></div>
+    <div class="tbl-wrap"><table><thead><tr><th title="What the person types to sign in: the employee code, or an e-mail address">Sign-in name</th><th>Full name</th><th>Role</th><th>Linked employee (optional)</th><th>Active</th><th title="Can open Project costs (totals per project, no names) from My requests">Project cost reports</th><th>Password</th><th title="Two-step sign-in (code from an authenticator app)">2-step</th><th>Last sign-in</th><th></th></tr></thead><tbody id="us-tbl"></tbody></table></div>
     <div class="foot">Admin: everything · HR: employee and attendance data, payroll view-only · Finance: payroll, HR data view-only · Manager and Employee roles become active in Phase 2</div>
   </div>
 </div>
@@ -1593,7 +1593,8 @@ async function connectFromForm(){
   const url=$('cfg-url').value.trim().replace(/\/+$/,''), key=$('cfg-key').value.trim();
   if(!lib()) return show('The Supabase library did not load. Check your internet connection and reload.');
   if(!url||!key) return show('Both fields are required.');
-  if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)) return show('URL should look like <b>https://xxxxxxxx.supabase.co</b>');
+  // cloud (https://xxxx.supabase.co) or our own server in an emergency (http://192.168.1.20:8000)
+  if(!/^https?:\/\/[a-z0-9.-]+(:\d{2,5})?$/i.test(url)) return show('URL should look like <b>https://xxxxxxxx.supabase.co</b> or, for our own server, <b>http://192.168.1.20:8000</b>');
   const btn=$('btn-connect'); btn.disabled=true; btn.textContent='Connecting…';
   try{
     const c = lib().createClient(url,key);
@@ -1612,7 +1613,7 @@ const isOfficer = () => !!(ME && ME.role === 'hr_officer');
 async function startApp(url,key){
   sb = lib().createClient(url,key);
   $('setup').style.display='none';
-  $('s-db').textContent = 'Connected to ' + url.replace('https://','');
+  $('s-db').textContent = 'Connected to ' + url.replace(/^https?:\/\//,'');
   const { data } = await sb.auth.getSession();
   if (data && data.session) await afterLogin(data.session.user); else showLogin();
 }
@@ -3536,7 +3537,7 @@ function renderUsers(){
   $('us-tbl').innerHTML = list.slice(0,300).map(u => { const me = u.id===ME.id;
     const pw = !u.active ? '<span class="chip c-red">locked</span>' : u.must_change_password ? '<span class="chip c-orange">not set yet</span>' : '<span class="chip c-green">set</span>';
     return `<tr data-uid="${u.id}">
-      <td class="strong">${esc(u.email)}${me?' <span class="chip c-blue">you</span>':''}</td>
+      <td class="strong" title="${esc(u.email)}">${/@petrokima\.local$/i.test(u.email||'') ? esc(u.email.replace(/@petrokima\.local$/i,'')) + ' <span style="font-weight:400;font-size:11px;color:var(--label)">code</span>' : esc(u.email)}${me?' <span class="chip c-blue">you</span>':''}</td>
       <td><input class="inp" style="width:170px" data-u="name" value="${esc(u.full_name||'')}"></td>
       <td><select class="sel" data-u="role" ${me?'disabled':''}>${roles.map(r=>`<option value="${r}" ${r===(u.role||'')?'selected':''}>${r?ROLE_LABEL[r]:'— no access —'}</option>`).join('')}</select></td>
       <td><input class="inp" style="width:200px" list="dl-emp-all" data-u="emp" placeholder="Code — name" value="${u.emp_id?esc(u.emp_id+' — '+empName(empById(u.emp_id))):''}"></td>
@@ -6899,6 +6900,55 @@ document.addEventListener('change', e => { if (e.target.closest && e.target.clos
   if (e.target.dataset.f === 'contract_end_date') e.target.dataset.auto = ''; else contractEndPreview(e); } });
 const _openEmp27 = openEmp;
 openEmp = function(){ const r = _openEmp27.apply(this, arguments); contractEndPreview(null); return r; };
+
+// ═════════════════════════════════════════════════════════
+//  FIT TO SCREEN WIDTH (16 Oct 2026)
+//  One button in the top bar (HR app and self-service): shrinks the open page so wide tables fit the screen
+//  without sideways scrolling. Click again for normal size. Remembered on this computer.
+// ═════════════════════════════════════════════════════════
+(function fitWidth(){
+  const KEY = 'pk_fit_width';
+  let on = false; try { on = localStorage.getItem(KEY) === '1'; } catch (e) {}
+  const btns = [];
+  document.querySelectorAll('.topbar-right').forEach(bar => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn btn-ghost btn-sm fit-btn';
+    b.title = 'Fit wide tables to the screen width (click again for normal size)';
+    const chip = bar.querySelector('.user-chip');
+    chip ? bar.insertBefore(b, chip) : bar.appendChild(b);
+    b.addEventListener('click', () => { on = !on; try { localStorage.setItem(KEY, on ? '1' : '0'); } catch (e) {} label(); fit(); });
+    btns.push(b);
+  });
+  function label(){ btns.forEach(b => { b.textContent = on ? '↔ Normal size' : '↔ Fit width'; b.classList.toggle('btn-primary', on); b.classList.toggle('btn-ghost', !on); }); }
+
+  const targets = () => [...document.querySelectorAll('#app .page.active, #self .main')].filter(el => el.offsetParent !== null);
+  function fit(){
+    document.querySelectorAll('#app .page:not(.active)').forEach(p => { p.style.zoom = ''; });
+    targets().forEach(el => {
+      el.style.zoom = '';
+      if (!on) return;
+      let z = 1;
+      for (let i = 0; i < 4; i++) {                     // shrinking changes the layout a little, so measure again
+        const avail = el.clientWidth;
+        let need = el.scrollWidth;
+        el.querySelectorAll('.tbl-wrap, .calv').forEach(w => {
+          if (w.offsetParent !== null && w.scrollWidth > w.clientWidth + 2) need = Math.max(need, avail + (w.scrollWidth - w.clientWidth));
+        });
+        if (need <= avail + 2) break;
+        z = Math.max(0.5, z * avail / need * 0.995);
+        el.style.zoom = z.toFixed(3);
+        if (z === 0.5) break;
+      }
+    });
+  }
+  window.fitWidthNow = fit;
+  let t = null; const later = () => { clearTimeout(t); t = setTimeout(fit, 120); };
+  window.addEventListener('resize', later);
+  document.addEventListener('click', ev => { if (ev.target.closest('[data-page],[data-nav],[data-spage],.tab,.seg button')) later(); }, true);
+  const mo = new MutationObserver(later);
+  document.querySelectorAll('#app .main, #self .main').forEach(m => mo.observe(m, { childList: true, subtree: true }));
+  label(); later();
+})();
 
 // ═════════════════════════════════════════════════════════
 //  BOOT

@@ -192,9 +192,9 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div id="setup">
   <div class="setup-card">
     <div class="logo" style="margin-bottom:20px"><div class="logo-mark" style="width:40px;height:40px">PK</div>
-      <div><div class="logo-name">Petrokima HR</div><div class="logo-sub">Connect to your Supabase database</div></div></div>
-    <div class="field" style="margin-bottom:14px"><label>Supabase Project URL</label><input id="cfg-url" placeholder="https://xxxxxxxx.supabase.co  or  http://SERVER-IP:8000"></div>
-    <div class="field" style="margin-bottom:18px"><label>Supabase anon / publishable key</label><input id="cfg-key" placeholder="eyJ... or sb_publishable_..."></div>
+      <div><div class="logo-name">Petrokima HR</div><div class="logo-sub">Connect to the HR database</div></div></div>
+    <div class="field" style="margin-bottom:14px"><label>Server address</label><input id="cfg-url" placeholder="https://xxxxxxxx.supabase.co  or  http://SERVER-IP:8000"></div>
+    <div class="field" style="margin-bottom:18px"><label>Access key</label><input id="cfg-key" placeholder="eyJ... or sb_publishable_..."></div>
     <button class="btn btn-primary" id="btn-connect" style="width:100%;justify-content:center">Connect &amp; Launch</button>
     <div id="setup-err" class="alert a-warn" style="display:none;margin-top:14px;margin-bottom:0"></div>
     <div style="margin-top:14px;font-size:11px;color:var(--muted)">Credentials are stored only in this browser.</div>
@@ -313,7 +313,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <button class="menu-btn" id="menu-btn" type="button" aria-label="Menu">☰</button>
   <div class="logo"><div class="logo-mark">PK</div><div><div class="logo-name">Petrokima HR</div><div class="logo-sub">Attendance &amp; Payroll System</div></div></div>
   <div class="topbar-right">
-    <span class="badge"><span class="dot"></span>Supabase</span>
+    <span class="badge" title="Connected to the HR database"><span class="dot"></span>Online</span>
     <span class="badge" id="period-badge">—</span>
     <span class="badge" id="clock">--:--</span>
     <button class="btn btn-ghost btn-sm" data-act="reload" title="Reload all data">⟳ Refresh</button>
@@ -838,8 +838,8 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div class="page" id="page-users">
   <div class="page-header"><div><div class="page-title">Users &amp; roles</div><div class="page-sub">Who can sign in, and what each person can do</div></div>
     <button class="btn btn-ghost" id="us-refresh">⟳ Refresh list</button></div>
-  <div class="alert a-info" style="line-height:1.8"><b>To add a user:</b> Supabase → <b>Authentication</b> → <b>Users</b> → <b>Add user</b> → <b>Create new user</b> → enter their email and a temporary password → tick <b>Auto Confirm User</b> → <b>Create user</b>. Then click <b>⟳ Refresh list</b> here, choose their role and click <b>Save</b>.<br>
-    <b>To reset a password:</b> Supabase → Authentication → Users → click the user → <b>Reset password</b>, or delete and re-create them. <b>To remove access</b> untick Active — it takes effect immediately.</div>
+  <div class="alert a-info" style="line-height:1.8"><b>To add a user:</b> database dashboard → <b>Authentication</b> → <b>Users</b> → <b>Add user</b> → <b>Create new user</b> → enter their email and a temporary password → tick <b>Auto Confirm User</b> → <b>Create user</b>. Then click <b>⟳ Refresh list</b> here, choose their role and click <b>Save</b>.<br>
+    <b>To reset a password:</b> database dashboard → Authentication → Users → click the user → <b>Reset password</b>, or delete and re-create them. <b>To remove access</b> untick Active — it takes effect immediately.</div>
   <div class="card" style="padding:18px" id="tfa-card">
     <div class="sec" style="margin-top:0">🔐 Two-step sign-in (Admin, HR and HR Officer)</div>
     <div style="font-size:13px;color:var(--label);line-height:1.7" id="tfa-status">Checking…</div>
@@ -1591,7 +1591,7 @@ async function connectFromForm(){
   const err=$('setup-err'), show=m=>{ err.innerHTML=m; err.style.display='block'; };
   err.style.display='none';
   const url=$('cfg-url').value.trim().replace(/\/+$/,''), key=$('cfg-key').value.trim();
-  if(!lib()) return show('The Supabase library did not load. Check your internet connection and reload.');
+  if(!lib()) return show('The app could not load. Check your internet connection and reload.');
   if(!url||!key) return show('Both fields are required.');
   // cloud (https://xxxx.supabase.co) or our own server in an emergency (http://192.168.1.20:8000)
   if(!/^https?:\/\/[a-z0-9.-]+(:\d{2,5})?$/i.test(url)) return show('URL should look like <b>https://xxxxxxxx.supabase.co</b> or, for our own server, <b>http://192.168.1.20:8000</b>');
@@ -3137,7 +3137,7 @@ function permUsed(empId, month, exceptId){
 }
 function renderPermissions(){
   const limit = num(settings.permissionsPerMonth)||2;
-  $('perm-missing').innerHTML = permTableMissing ? '<div class="alert a-warn">The permissions table does not exist yet. Run <b>attendance-permissions.sql</b> in the Supabase SQL Editor, then click ⟳ Refresh.</div>' : '';
+  $('perm-missing').innerHTML = permTableMissing ? '<div class="alert a-warn">The permissions table does not exist yet. Run <b>attendance-permissions.sql</b> in the database SQL Editor, then click ⟳ Refresh.</div>' : '';
   const pend = S.permissions.filter(readyForHR).length;
   $('perm-badge').style.display = pend ? '' : 'none'; $('perm-badge').textContent = pend;
   $('perm-sub').textContent = `Period ${periodLabel(settings.period)} · each employee may have ${limit} approved permission${limit>1?'s':''} per payroll cycle, up to ${settings.permissionMaxHours} h each · ${pend} pending`;
@@ -3251,7 +3251,7 @@ function annualTaken(empId, exceptId){
 //  VACATIONS PAGE
 // ═════════════════════════════════════════════════════════
 function renderLeaves(){
-  $('lv-missing').innerHTML = leaveTableMissing ? '<div class="alert a-warn">The vacations table does not exist yet. Run <b>vacations-and-exceptions.sql</b> in the Supabase SQL Editor, then click ⟳ Refresh.</div>' : '';
+  $('lv-missing').innerHTML = leaveTableMissing ? '<div class="alert a-warn">The vacations table does not exist yet. Run <b>vacations-and-exceptions.sql</b> in the database SQL Editor, then click ⟳ Refresh.</div>' : '';
   const scope=$('lv-scope').value, t=$('lv-type').value, d=$('lv-dept').value, q=$('lv-q').value.trim().toLowerCase();
   const ps=periodStart(settings.period), pe=periodEnd(settings.period);
   const list = S.leaves.filter(l => { const e=empById(l.emp_id)||{};
@@ -3393,7 +3393,7 @@ function penaltyValue(x, emp, dailyRate, hourRate){
 }
 function penLabel(x){ return x.penalty_type==='Amount' ? `${fmt(x.quantity)} EGP` : `${fmt(x.quantity)} ${x.penalty_type==='Hours'?'hour':'day'}${num(x.quantity)===1?'':'s'}`; }
 function renderPenalties(){
-  $('pn-missing').innerHTML = penTableMissing ? '<div class="alert a-warn">The penalties table does not exist yet. Run <b>absence-penalties-holidays.sql</b> in the Supabase SQL Editor, then click ⟳ Refresh.</div>' : '';
+  $('pn-missing').innerHTML = penTableMissing ? '<div class="alert a-warn">The penalties table does not exist yet. Run <b>absence-penalties-holidays.sql</b> in the database SQL Editor, then click ⟳ Refresh.</div>' : '';
   const scope=$('pn-scope').value, st=$('pn-status').value, q=$('pn-q').value.trim().toLowerCase();
   const list = S.penalties.filter(x => { const e=empById(x.emp_id)||{};
       return (scope==='year' || x.apply_period===settings.period) && (!st || x.status===st) && orgMatch(e,'pn') &&
@@ -3467,7 +3467,7 @@ $('pn-save').addEventListener('click', savePen);
 //  PUBLIC HOLIDAYS
 // ═════════════════════════════════════════════════════════
 function renderHolidays(){
-  $('hd-missing').innerHTML = holTableMissing ? '<div class="alert a-warn">The holidays table does not exist yet. Run <b>absence-penalties-holidays.sql</b> in the Supabase SQL Editor, then click ⟳ Refresh.</div>' : '';
+  $('hd-missing').innerHTML = holTableMissing ? '<div class="alert a-warn">The holidays table does not exist yet. Run <b>absence-penalties-holidays.sql</b> in the database SQL Editor, then click ⟳ Refresh.</div>' : '';
   const years = [...new Set([settings.period.slice(0,4), String(Number(settings.period.slice(0,4))+1), ...S.holidays.map(h=>h.date.slice(0,4))])].sort();
   const cur = $('hd-year').value || settings.period.slice(0,4);
   $('hd-year').innerHTML = years.map(y=>`<option ${y===cur?'selected':''}>${y}</option>`).join('');
@@ -3850,7 +3850,7 @@ async function decideLeave(id, status){
   $('del-title').textContent='Please confirm'; $('del-ok').textContent = status==='Approved' ? 'Approve' : 'Reject'; $('del-ok').className = status==='Approved' ? 'btn btn-success' : 'btn btn-danger';
 }
 function renderHrRequests(){
-  $('hq-missing').innerHTML = hrTableMissing ? '<div class="alert a-warn">The HR requests table does not exist yet. Run <b>self-service.sql</b> in the Supabase SQL Editor, then click ⟳ Refresh.</div>' : '';
+  $('hq-missing').innerHTML = hrTableMissing ? '<div class="alert a-warn">The HR requests table does not exist yet. Run <b>self-service.sql</b> in the database SQL Editor, then click ⟳ Refresh.</div>' : '';
   const st=$('hq-status').value, ty=$('hq-type').value, q=$('hq-q').value.trim().toLowerCase();
   const list = S.hrreq.filter(r => { const e=empById(r.emp_id)||{};
       return orgMatch(e,'hq') && (st==='open' ? (r.status==='Pending'||r.status==='In progress') : (!st || r.status===st)) && (!ty || r.request_type===ty) &&
@@ -5970,7 +5970,7 @@ function setupTwoStep(opts = {}){
       setTimeout(() => $('tfa-code').focus(), 50);
     } catch (e) {
       return fail(/disabled|not enabled/i.test(e.message || '')
-        ? 'Two-step sign-in is switched off in Supabase. The administrator must open Supabase → <b>Authentication</b> → <b>Multi-Factor</b> (or Sign In / Providers → MFA) and enable <b>TOTP</b>.'
+        ? 'Two-step sign-in is switched off in the database settings. Please ask the administrator to turn it on.'
         : esc(e.message || String(e)));
     }
     const go = async () => {
@@ -6962,7 +6962,7 @@ const EMBED_KEY = 'sb_publishable_yyfkPLo6M7XDe3lwurctmw_6wsmB-2M';
   if (embedded){ localStorage.setItem('sb_url', EMBED_URL); localStorage.setItem('sb_key', EMBED_KEY); $('setup').style.display = 'none'; }
   const url = embedded ? EMBED_URL : localStorage.getItem('sb_url'), key = embedded ? EMBED_KEY : localStorage.getItem('sb_key');
   if (url) $('cfg-url').value = url; if (key) $('cfg-key').value = key;
-  if (!lib()){ const e=$('setup-err'); e.textContent='The Supabase library could not load. Check your internet connection and reload.'; e.style.display='block'; return; }
+  if (!lib()){ const e=$('setup-err'); e.textContent='The app could not load. Check your internet connection and reload.'; e.style.display='block'; return; }
   if (url && key) startApp(url, key).catch(e => { const x=$('setup-err'); x.textContent='Auto-connect failed: '+e.message; x.style.display='block'; $('setup').style.display='flex'; $('app').style.display='none'; });
 })();
 

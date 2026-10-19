@@ -1429,6 +1429,19 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="modal-foot"><button class="btn btn-ghost" id="code-cancel">Sign out</button><button class="btn btn-primary" id="code-ok">Continue</button></div>
 </div></div>
 
+<!-- MODAL: RANDOM PASSWORD (part12.js randomUser) -->
+<div class="overlay" id="m-rndpw"><div class="modal" style="max-width:460px">
+  <div class="modal-head"><div class="modal-title">🎲 New one-time password</div><button class="x" data-close="m-rndpw">×</button></div>
+  <p style="color:var(--label);margin:0 0 6px">For <b id="rp-who"></b></p>
+  <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px;align-items:center;margin:10px 0">
+    <span style="color:var(--label)">Sign-in name</span><b id="rp-code" style="font-family:'JetBrains Mono',monospace;font-size:18px"></b>
+    <span style="color:var(--label)">Password</span><b id="rp-pw" style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:1px;user-select:all"></b>
+  </div>
+  <p style="color:var(--label);font-size:13px">Give it to the employee privately. At the next sign-in they type this password, then their <b>year of birth</b>, then choose their own password. This window is the only time the password is shown — if it is lost, generate a new one.</p>
+  <p id="rp-note" style="color:#b45309;font-size:13px"></p>
+  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-rndpw">Close</button><button class="btn btn-primary" id="rp-copy">📋 Copy message (English + Arabic)</button></div>
+</div></div>
+
 <!-- MODAL: CONFIRM -->
 <div class="overlay" id="m-del"><div class="modal" style="max-width:420px">
   <div class="modal-head"><div class="modal-title" id="del-title">Confirm delete</div><button class="x" data-close="m-del">×</button></div>
@@ -3546,7 +3559,7 @@ function renderUsers(){
       <td>${pw}</td>
       <td style="white-space:nowrap">${typeof twoStepCell === 'function' ? twoStepCell(u) : ''}</td>
       <td class="mono">${u.last_sign_in_at ? esc(String(u.last_sign_in_at).slice(0,16).replace('T',' ')) : '<span style="color:var(--muted)">never</span>'}</td>
-      <td style="white-space:nowrap"><button class="btn btn-primary btn-sm" data-u-save>Save</button>${me?'':` <button class="btn btn-ghost btn-sm" data-u-reset title="Reset to the temporary password">Reset password</button>`}${['hr','hr_officer'].includes(u.role) ? ` <button class="btn btn-ghost btn-sm" data-u-reps title="Choose which reports this user can open">📊 Reports (${Array.isArray(u.allowed_reports) ? u.allowed_reports.length : 'all'})</button>` : ''}</td></tr>`; }).join('')
+      <td style="white-space:nowrap"><button class="btn btn-primary btn-sm" data-u-save>Save</button>${me?'':` <button class="btn btn-ghost btn-sm" data-u-reset title="Reset to the temporary password">Reset password</button> <button class="btn btn-ghost btn-sm" data-u-random title="Give this person a new random one-time password (they then enter their year of birth and choose their own password)">🎲 Random password</button>`}${['hr','hr_officer'].includes(u.role) ? ` <button class="btn btn-ghost btn-sm" data-u-reps title="Choose which reports this user can open">📊 Reports (${Array.isArray(u.allowed_reports) ? u.allowed_reports.length : 'all'})</button>` : ''}</td></tr>`; }).join('')
     || '<tr><td colspan="10" class="empty">No users match</td></tr>';
   let dl = document.getElementById('dl-emp-all');
   if (!dl){ dl=document.createElement('datalist'); dl.id='dl-emp-all'; document.body.appendChild(dl); }
@@ -3589,6 +3602,37 @@ async function resetUser(tr){
   });
   $('del-title').textContent='Please confirm'; $('del-ok').textContent='Reset'; $('del-ok').className='btn btn-danger';
 }
+// ── 🎲 random one-time password for one selected login (19 Oct 2026) ──
+// Same server rule as Reset password with a typed password: must_change_password = true, so at the next sign-in
+// the person enters the YEAR OF BIRTH (as usual) and must choose a new password.
+function makeRandomPassword(){
+  const L='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz', D='23456789', ALL=L+D;   // no 0/O, 1/l/I look-alikes
+  const pick = set => { const b=new Uint8Array(1), lim=256-(256%set.length); do crypto.getRandomValues(b); while(b[0]>=lim); return set[b[0]%set.length]; };
+  for(;;){
+    const chars=[]; for(let i=0;i<8;i++) chars.push(pick(ALL));
+    const pw=chars.slice(0,4).join('')+'-'+chars.slice(4).join('');
+    if (/[A-Za-z]/.test(pw) && /[0-9]/.test(pw)) return pw;
+  }
+}
+function randomUser(tr){
+  const u=USERS.find(x=>x.id===tr.dataset.uid); if(!u) return;
+  const who = (u.emp_id ? u.emp_id+' — '+empName(empById(u.emp_id)) : (u.full_name||u.email));
+  confirmDel(`Give ${who} a new random password? Their current password stops working at once. At the next sign-in they type the new password, then their year of birth, then choose their own password.`, async () => {
+    const pw = makeRandomPassword();
+    const { error } = await sb.rpc('admin_reset_password', { p_user:u.id, p_temp: pw });
+    if (error) throw error;
+    const e = u.emp_id ? empById(u.emp_id) : null, code = String(u.email||'').endsWith('@petrokima.local') ? u.email.split('@')[0] : u.email;
+    $('rp-who').textContent = who; $('rp-code').textContent = code; $('rp-pw').textContent = pw;
+    $('rp-note').textContent = (e && !e.birth_date) ? '⚠ This employee has no date of birth on record, so the year-of-birth question will NOT be asked. Add the date of birth on the employee window first if you want that check.' : '';
+    setTimeout(()=>openM('m-rndpw'), 0);
+    loadUsers();
+  });
+  $('del-title').textContent='🎲 Random password'; $('del-ok').textContent='Generate'; $('del-ok').className='btn btn-danger';
+}
+$('rp-copy') && $('rp-copy').addEventListener('click', async () => {
+  const t=`Sign-in: ${$('rp-code').textContent}\nTemporary password: ${$('rp-pw').textContent}\nAt first sign-in enter your year of birth, then choose your own password.\nاسم الدخول: ${$('rp-code').textContent}\nكلمة المرور المؤقتة: ${$('rp-pw').textContent}\nعند أول دخول اكتب سنة ميلادك ثم اختر كلمة مرور جديدة.`;
+  try { await navigator.clipboard.writeText(t); toast('Copied — paste it into WhatsApp or a message to the employee'); } catch(_) { toast('Copy failed — select the password and copy it by hand','warn'); }
+});
 async function saveUser(tr){
   const u = USERS.find(x=>x.id===tr.dataset.uid); if(!u) return;
   const role = tr.querySelector('[data-u="role"]').value, name = tr.querySelector('[data-u="name"]').value.trim();
@@ -3605,6 +3649,7 @@ async function saveUser(tr){
 }
 $('us-tbl').addEventListener('click', e => { const b=e.target.closest('[data-u-save]'); if(b) return saveUser(b.closest('tr'));
   const r=e.target.closest('[data-u-reset]'); if(r) return resetUser(r.closest('tr'));
+  const rn=e.target.closest('[data-u-random]'); if(rn) return randomUser(rn.closest('tr'));
   const rp=e.target.closest('[data-u-reps]'); if(rp) return openReps(rp.closest('tr').dataset.uid); });
 // ── which reports each HR user may open (admin only) ──
 let repsUser = null;

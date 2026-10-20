@@ -93,6 +93,7 @@ td.num,th.num{text-align:right;font-family:'JetBrains Mono',monospace;font-size:
 .calv-cell.wk{background:transparent}
 .calv-cell.week{min-height:210px}
 .calv-d{display:flex;justify-content:space-between;align-items:center;font-weight:600;color:var(--label);font-size:12px}
+.calv-src{font-size:13px;letter-spacing:2px;cursor:help;font-weight:400}
 .calv-time{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:var(--text)}
 .calv-hrs{font-weight:700;font-size:14px;color:var(--text)}
 .calv-prj{font-size:11px;color:var(--muted);line-height:1.35;border-top:1px dashed var(--border);padding-top:3px;margin-top:2px}
@@ -6403,12 +6404,13 @@ function makeAttCalendar(p, opts){
     if (!emp) { $(p+'-grid').innerHTML = `<div class="empty" style="padding:30px">${esc(opts.emptyText || 'Choose an employee')}</div>`; $(p+'-sum').textContent = ''; label(); return; }
     const [a, b] = range(), from = calISO(a), to = calISO(b), tk = ++st.token;
     $(p+'-grid').innerHTML = '<div class="empty" style="padding:30px">Loading…</div>'; label();
-    const [att, lv] = await Promise.all([
+    const [att, lv, who] = await Promise.all([
       sb.from('attendance').select('*').eq('emp_id', emp.id).gte('date', from).lte('date', to).order('date'),
-      sb.from('employee_leaves').select('*').eq('emp_id', emp.id).lte('date_from', to).gte('date_to', from) ]);
+      sb.from('employee_leaves').select('*').eq('emp_id', emp.id).lte('date_from', to).gte('date_to', from),
+      opts.who ? sb.rpc('attendance_entered_by', { p_emp: emp.id, p_from: from, p_to: to }).then(r => r.error ? [] : (r.data || []), () => []) : Promise.resolve([]) ]);
     if (tk !== st.token) return;                                       // a newer request is on its way
     if (att.error) { $(p+'-grid').innerHTML = `<div class="empty" style="padding:30px">${esc(att.error.message)}</div>`; return; }
-    st.rows = att.data || []; st.leaves = (lv && lv.data) || [];
+    st.rows = att.data || []; st.leaves = (lv && lv.data) || []; st.who = who || [];
     render();
   }
   function label(){
@@ -6428,6 +6430,23 @@ function makeAttCalendar(p, opts){
     const leave = st.leaves.find(l => l.date_from <= ds && l.date_to >= ds && !/reject|cancel/i.test(l.status || ''));
     return { rows, in: ins[0] || '', out: noOut ? '' : (outs.length ? outs[outs.length - 1] : ''), hours, segs, leave, noOut,
              open: !noOut && segs.some(s => s.in && !s.out), status: rows.map(r => r.status).find(Boolean) || '' };
+  }
+  // 🖐 fingerprint machine · 📱 phone · ✍ typed / changed by HR (who + when from the audit log, staff only) — 20 Oct 2026
+  function daySource(ds, rows){
+    if (!rows.length) return null;
+    const segs = rows.flatMap(r => Array.isArray(r.projects) ? r.projects : []);
+    const machine = rows.some(r => /machine|combined/i.test(r.source || '')) || segs.some(s => /machine/i.test(s.src || ''));
+    const phone   = rows.some(r => /mobile|combined/i.test(r.source || ''));
+    const handRow = rows.some(r => !/machine|mobile|combined/i.test(r.source || ''));
+    const who = (st.who || []).filter(w => w.day === ds), ins = who.find(w => w.action === 'INSERT'), upd = who.find(w => w.action === 'UPDATE');
+    const when = w => new Date(w.at).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+    const hand = handRow || !!upd, icons = [], tip = [];
+    if (machine) { icons.push('🖐'); tip.push('🖐 Fingerprint machine' + (ins && !handRow ? ` — imported by ${ins.by_name} · ${when(ins)}` : '')); }
+    if (phone)   { icons.push('📱'); tip.push('📱 Phone check-in'); }
+    if (hand)    { icons.push('✍');
+      if (handRow) tip.push(ins ? `✍ Entered by ${ins.by_name} · ${when(ins)}` : '✍ Entered by HR');
+      if (upd)     tip.push(`✍ Changed by ${upd.by_name} · ${when(upd)}`); }
+    return icons.length ? { icons: icons.join(''), tip: tip.join('\n') } : null;
   }
   function cell(ds, inMonth, big){
     const d = calDate(ds), today = calISO(new Date()), x = dayInfo(ds), emp = st.emp || {};
@@ -6449,7 +6468,8 @@ function makeAttCalendar(p, opts){
     else if (weekend && !x.rows.length) body += `<span style="color:var(--muted)">Weekend</span>`;
     else if (!x.rows.length && ds < today && !before && !after && inMonth) body += `<span class="chip c-red">No attendance</span>`;
     const cls = ['calv-cell', inMonth ? '' : 'out', ds === today ? 'today' : '', weekend ? 'wk' : '', big ? 'week' : ''].join(' ');
-    return `<div class="${cls}"><div class="calv-d"><span>${big ? CAL_WD[d.getDay()] + ' ' : ''}${d.getDate()}${big ? ' ' + d.toLocaleDateString('en-GB', { month:'short' }) : ''}</span></div>${body}</div>`;
+    const src = daySource(ds, x.rows);
+    return `<div class="${cls}"><div class="calv-d"><span>${big ? CAL_WD[d.getDay()] + ' ' : ''}${d.getDate()}${big ? ' ' + d.toLocaleDateString('en-GB', { month:'short' }) : ''}</span>${src ? `<span class="calv-src" title="${esc(src.tip)}">${src.icons}</span>` : ''}</div>${body}</div>`;
   }
   function render(){
     const [a, b] = range(), big = st.view === 'week', month = st.anchor.getMonth();
@@ -6483,7 +6503,7 @@ function makeAttCalendar(p, opts){
 const HR_CAL = makeAttCalendar('hc', {
   getEmp: () => { const v = $('hc-emp').value.trim(); return v ? empById(v.split(' — ')[0].trim()) || null : null; },
   emptyText: 'Type an employee code or name in the box above to see their attendance calendar',
-  title: e => e ? `${e.id} — ${empName(e)}` : 'Employee calendar' });
+  title: e => e ? `${e.id} — ${empName(e)}` : 'Employee calendar', who: true });
 $('hc-emp').addEventListener('change', () => HR_CAL.load());
 function attTab(cal){
   $('att-cal-wrap').style.display = cal ? '' : 'none'; $('att-list-card').style.display = cal ? 'none' : '';

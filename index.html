@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script id="theme-boot">try{document.documentElement.dataset.theme=localStorage.getItem('pk_theme')||'dark'}catch(e){}</script>
 <title>Petrokima HR — Attendance & Payroll</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{--bg:#0f1117;--surface:#181c27;--card:#1e2336;--border:#2a2f45;--accent:#3b6fd4;--accent2:#22c5a0;--warn:#e07b39;--danger:#d94f4f;--text:#e8ecf4;--muted:#7a839e;--label:#aeb5cc;--r:10px;--rs:6px;--link:#6fa3f7;--info:#89aaee;--hover:rgba(255,255,255,.025);--overlay:rgba(15,17,23,.85);color-scheme:dark}
@@ -61,7 +61,7 @@ body.nav-mini .sidebar .nav-item .chip{position:absolute;top:5px;right:7px;width
 .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:24px}
 .stat{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:18px}
 .stat-label{font-size:12px;color:var(--muted);margin-bottom:8px}
-.stat-value{font-size:24px;font-weight:700;font-family:'JetBrains Mono',monospace}
+.stat-value{font-size:24px;font-weight:700;font-family:'Inter',system-ui,'Segoe UI',Arial,sans-serif;font-variant-numeric:tabular-nums}
 .stat-sub{font-size:12px;color:var(--muted);margin-top:4px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin-bottom:20px}
 .toolbar{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);flex-wrap:wrap}
@@ -78,8 +78,8 @@ tbody tr:hover{background:var(--hover)}
 tr.click{cursor:pointer}
 td.strong{color:var(--text);font-weight:500}
 td.ar{direction:rtl;text-align:right;font-family:'Segoe UI',Tahoma,sans-serif}
-td.num,th.num{text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px}
-.mono{font-family:'JetBrains Mono',monospace;font-size:12px}
+td.num,th.num{text-align:right;font-family:'Inter',system-ui,'Segoe UI',Arial,sans-serif;font-variant-numeric:tabular-nums;font-size:12.5px}
+.mono{font-family:'Inter',system-ui,'Segoe UI',Arial,sans-serif;font-variant-numeric:tabular-nums;font-size:12.5px}   /* codes, dates and amounts: plain 0 (the old code font's dotted 0 looked like 8) */
 .chip{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:500}
 .calv-seg{display:inline-flex;border:1px solid var(--border);border-radius:10px;overflow:hidden}
 .calv-seg .btn{border:0;border-radius:0;background:transparent;color:var(--label)}
@@ -94,7 +94,7 @@ td.num,th.num{text-align:right;font-family:'JetBrains Mono',monospace;font-size:
 .calv-cell.week{min-height:210px}
 .calv-d{display:flex;justify-content:space-between;align-items:center;font-weight:600;color:var(--label);font-size:12px}
 .calv-src{font-size:13px;letter-spacing:2px;cursor:help;font-weight:400}
-.calv-time{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:var(--text)}
+.calv-time{font-family:'Inter',system-ui,'Segoe UI',Arial,sans-serif;font-variant-numeric:tabular-nums;font-size:12px;color:var(--text)}
 .calv-hrs{font-weight:700;font-size:14px;color:var(--text)}
 .calv-prj{font-size:11px;color:var(--muted);line-height:1.35;border-top:1px dashed var(--border);padding-top:3px;margin-top:2px}
 .c-green{background:rgba(34,197,160,.15);color:var(--accent2)}.c-blue{background:rgba(59,111,212,.15);color:var(--link)}
@@ -1435,8 +1435,8 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="modal-head"><div class="modal-title">🎲 New one-time password</div><button class="x" data-close="m-rndpw">×</button></div>
   <p style="color:var(--label);margin:0 0 6px">For <b id="rp-who"></b></p>
   <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px;align-items:center;margin:10px 0">
-    <span style="color:var(--label)">Sign-in name</span><b id="rp-code" style="font-family:'JetBrains Mono',monospace;font-size:18px"></b>
-    <span style="color:var(--label)">Password</span><b id="rp-pw" style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:1px;user-select:all"></b>
+    <span style="color:var(--label)">Sign-in name</span><b id="rp-code" style="font-variant-numeric:tabular-nums;font-size:18px"></b>
+    <span style="color:var(--label)">Password</span><b id="rp-pw" style="font-family:Consolas,'Courier New',monospace;font-size:24px;letter-spacing:1px;user-select:all"></b>
   </div>
   <p style="color:var(--label);font-size:13px">Give it to the employee privately. At the next sign-in they type this password, then their <b>year of birth</b>, then choose their own password. This window is the only time the password is shown — if it is lost, generate a new one.</p>
   <p id="rp-note" style="color:#b45309;font-size:13px"></p>

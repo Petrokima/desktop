@@ -145,7 +145,11 @@ body:not(.can-hr):not(.can-master) :is([data-act="new-att"],#mi-open,[data-act="
   #a-save,#pr-save,#lv-save,#pn-save,#dc-approve,#dc-reject,#a-add-split,[data-decide],[data-del-att],[data-del-perm],[data-del-leave],[data-del-pen],
   [data-lv-approve],[data-lv-reject]){display:none!important}
 a.maplink{color:var(--link);text-decoration:none;white-space:nowrap} a.maplink:hover{text-decoration:underline}
-body:not(.can-pay) :is([data-act="new-loan"],#l-save,#pk-add,[data-del-fixed]){display:none!important}
+body:not(.can-pay) :is(#pk-add,[data-del-fixed]){display:none!important}
+/* loans: HR adds loans and postpones instalments too (62) */
+body:not(.can-pay):not(.can-hr) :is([data-act="new-loan"],#l-save,[data-del-loan],[data-lpp],[data-lpp-undo],#lpp-save){display:none!important}
+.lpp-chip{display:inline-flex;align-items:center;gap:4px;margin:3px 4px 0 0;font-size:11px}
+.lpp-chip button{border:0;background:none;cursor:pointer;color:inherit;padding:0 2px;font-size:12px}
 body:not(.can-var) :is(#mon-save,#mon-add-btn,#mon-pick,#mon-bulk,#mp-attended,#mp-fill,#mp-fill-go,[data-act="new-var"],[data-mon-add],[data-mon-rm]){display:none!important}
 body:not(.can-hr):not(.can-pay) :is(#par-new,[data-par-edit],[data-par-del]){display:none!important}
 body:not(.can-hr) :is(#as-add-box,#as-bulk-box,[data-as-rm],.as-chk){display:none!important}
@@ -1151,6 +1155,18 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="modal-foot"><button class="btn btn-ghost" data-close="m-loan">Cancel</button><button class="btn btn-primary" id="l-save">Save loan</button></div>
 </div></div>
 
+<!-- MODAL: POSTPONE A LOAN INSTALMENT (62) -->
+<div class="overlay" id="m-lpp"><div class="modal">
+  <div class="modal-head"><div class="modal-title">⏸ Postpone a loan instalment</div><button class="x" data-close="m-lpp">×</button></div>
+  <div id="lpp-info" style="font-size:13px;margin-bottom:12px"></div>
+  <div class="grid2">
+    <div class="field full"><label>Month to postpone (no deduction that month)</label><select id="lpp-month"></select></div>
+    <div class="field full"><label>Who approved it — required (the request and approval are handled outside the app)</label><input id="lpp-note" maxlength="300" placeholder="e.g. Employee asked on 19 Oct · approved by Dalia on 20 Oct"></div>
+  </div>
+  <div id="lpp-preview" style="font-size:12px;color:var(--muted);margin-top:10px"></div>
+  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-lpp">Cancel</button><button class="btn btn-primary" id="lpp-save">Postpone</button></div>
+</div></div>
+
 <!-- MODAL: PAYSLIP -->
 <div class="overlay" id="m-slip"><div class="modal">
   <div class="modal-head"><div class="modal-title" id="slip-title">Payslip</div><button class="x" data-close="m-slip">×</button></div>
@@ -1843,10 +1859,26 @@ function fixedActive(row, p){
   const s = periodStart(p), e = periodEnd(p);
   return row.effective_from <= e && (!row.effective_to || row.effective_to >= s);
 }
+// Is an instalment of loan l due in month number i (year*12 + month-1)?  Postponed months (62) are skipped and the loan
+// runs that many months longer. MUST stay identical to _pk_loan_due() in the database (file 62).
+const PER_RE = /^\d{4}-\d{1,2}$/;
+function loanPostponedIdx(l){ return [...new Set((Array.isArray(l.postponed)?l.postponed:[]).filter(x=>PER_RE.test(String(x))).map(periodIdx))]; }
+function loanDue(l, i){
+  const pp = loanPostponedIdx(l);
+  if (pp.includes(i)) return false;
+  if (!PER_RE.test(String(l.start_period||''))) return true;
+  const s = periodIdx(l.start_period);
+  return i >= s && (i - s - pp.filter(x => x >= s && x < i).length) < num(l.periods);
+}
+function loanEnd(l){            // 'YYYY-MM' of the last instalment
+  if (!PER_RE.test(String(l.start_period||''))) return '';
+  const s = periodIdx(l.start_period);
+  for (let g = s + num(l.periods) + 240; g >= s; g--) if (loanDue(l, g)) return `${Math.floor(g/12)}-${pad(g%12+1)}`;
+  return '';
+}
 function loanInstalment(l, p){
   if (l.status !== 'Active') return 0;
-  const i = periodIdx(p), s = periodIdx(l.start_period);
-  if (i < s || i >= s + num(l.periods)) return 0;
+  if (!loanDue(l, periodIdx(p))) return 0;
   const inst = num(l.installment) || (num(l.loan_amount) / Math.max(1,num(l.periods)));
   return Math.round(inst * 100) / 100;
 }
@@ -2521,11 +2553,63 @@ function renderLoans(){
   $('loan-tbl').innerHTML = S.loans.map(l => { const e=empById(l.emp_id); const inst=loanInstalment(l,p);
     return `<tr><td class="strong">${esc(empName(e)||l.emp_id)} <span class="mono" style="color:var(--muted)">${esc(l.emp_id)}</span></td>
       <td class="mono">${esc(l.reference||'—')}</td><td class="num">${fmt(l.loan_amount)}</td><td class="num">${esc(l.periods)}</td>
-      <td class="num">${fmt(l.installment)}</td><td class="mono">${esc(l.start_period)}</td><td class="num">${fmt(l.amount_settled)}</td>
+      <td class="num">${fmt(l.installment)}</td><td class="mono">${esc(l.start_period)}${loanEndCell(l)}</td><td class="num">${fmt(l.amount_settled)}</td>
       <td class="num">${fmt(num(l.loan_amount)-num(l.amount_settled))}</td>
       <td>${inst?`<span class="chip c-orange">−${fmt(inst)}</span>`:'<span class="chip c-grey">none</span>'}</td>
-      <td>${chip(l.status)}</td><td><button class="icon-btn" data-del-loan="${l.id}">🗑</button></td></tr>`; }).join('')
+      <td>${chip(l.status)}</td><td style="white-space:nowrap">${l.status==='Active'?`<button class="icon-btn" data-lpp="${l.id}" title="Postpone an instalment">⏸️</button>`:''}<button class="icon-btn" data-del-loan="${l.id}">🗑</button></td></tr>`; }).join('')
     || '<tr><td colspan="11" class="empty">No loans recorded</td></tr>';
+}
+// "ends 2027-03" under the first deduction month, plus one chip per postponed month (✕ = undo)
+function loanEndCell(l){
+  const pp = (Array.isArray(l.postponed)?l.postponed:[]).slice().sort();
+  const end = loanEnd(l);
+  return (end ? `<div style="font-size:11px;color:var(--muted)">ends ${esc(end)}</div>` : '') +
+    pp.map(m => `<span class="chip c-blue lpp-chip" title="Instalment postponed — not deducted in ${esc(m)}">⏸️ ${esc(m)}<button data-lpp-undo="${esc(l.id)}|${esc(m)}" title="Undo: deduct in ${esc(m)} again">✕</button></span>`).join('');
+}
+let LPP = null;
+function approvedPeriods(){ return new Set((S.runs||[]).map(r => r.period)); }
+function openLoanPostpone(id){
+  const l = S.loans.find(x => String(x.id) === String(id)); if (!l) return;
+  const e = empById(l.emp_id), done = approvedPeriods(), from = periodIdx(settings.period), opts = [];
+  for (let i = from; i < from + 36 && opts.length < 18; i++){
+    const p = `${Math.floor(i/12)}-${pad(i%12+1)}`;
+    if (!done.has(p) && loanDue(l, i)) opts.push(p);
+  }
+  if (!opts.length) return toast('This loan has no instalment left to postpone from '+settings.period+' onwards','warn');
+  LPP = l;
+  $('lpp-info').innerHTML = `<b>${esc(empName(e)||l.emp_id)}</b> <span class="mono" style="color:var(--muted)">${esc(l.emp_id)}</span> · loan ${fmt(l.loan_amount)} EGP · instalment ${fmt(loanInstalment(l, opts[0]))} EGP`;
+  $('lpp-month').innerHTML = opts.map(p => `<option value="${p}">${p}${p===settings.period?' (this payroll)':''}</option>`).join('');
+  $('lpp-note').value = '';
+  lppPreview(); openM('m-lpp');
+}
+function lppPreview(){
+  if (!LPP) return;
+  const m = $('lpp-month').value, before = loanEnd(LPP), after = loanEnd({ ...LPP, postponed:[...(LPP.postponed||[]), m] });
+  $('lpp-preview').textContent = `No deduction in ${m}. The instalment amount stays the same; the last instalment moves from ${before} to ${after}.`;
+}
+async function refreshLoan(id){
+  const { data } = await sb.from('employee_loans').select('*').eq('id', id);
+  if (data && data[0]) S.loans = S.loans.map(x => String(x.id) === String(id) ? data[0] : x);
+  renderLoans(); renderPayroll(); renderDashboard();
+}
+async function saveLoanPostpone(){
+  if (!LPP) return;
+  const note = $('lpp-note').value.trim();
+  if (!note) return toast('Write who approved the postponement','warn');
+  const m = $('lpp-month').value;
+  const { data, error } = await sb.rpc('postpone_loan_instalment', { p_loan: LPP.id, p_period: m, p_note: note });
+  if (error) return toast(error.message,'err');
+  closeM('m-lpp'); await refreshLoan(LPP.id);
+  toast(`Postponed: no deduction in ${m}. The loan now ends ${data||loanEnd(LPP)}.`);
+}
+function undoLoanPostpone(key){
+  const [id, m] = key.split('|');
+  confirmDel(`Undo the postponement? The instalment will be deducted in ${m} again.`, async () => {
+    const { error } = await sb.rpc('undo_loan_postponement', { p_loan: id, p_period: m });
+    if (error) throw error;
+    await refreshLoan(id); toast(`${m} will be deducted again`);
+  });
+  $('del-title').textContent = 'Undo postponement'; $('del-ok').textContent = 'Undo'; $('del-ok').className = 'btn btn-primary';
 }
 function loanPreview(){
   const a=num($('l-amt').value), n=num($('l-per').value), s=$('l-start').value;
@@ -2747,6 +2831,8 @@ document.addEventListener('click', async ev => {
   const dp = t.closest('[data-del-proj]');
   if (dp){ const id=dp.dataset.delProj; return confirmDel(`Delete project ${id}? Attendance already logged against it keeps the code.`, async()=>{ await del('projects',id); S.projects=S.projects.filter(p=>String(p.id)!==id); buildLists(); renderProjects(); toast('Deleted'); }); }
   const ae = t.closest('[data-att-edit]'); if (ae && !t.closest('[data-del-att]')) { const r=attRows().find(x=>String(x.id)===ae.dataset.attEdit); if(r) return openAtt(r); }
+  const lp = t.closest('[data-lpp]'); if (lp) return openLoanPostpone(lp.dataset.lpp);
+  const lu = t.closest('[data-lpp-undo]'); if (lu) return undoLoanPostpone(lu.dataset.lppUndo);
   const dl = t.closest('[data-del-loan]');
   if (dl){ const id=dl.dataset.delLoan; return confirmDel('Delete this loan record?', async()=>{ await del('employee_loans',id); S.loans=S.loans.filter(l=>l.id!==id); renderLoans(); renderPayroll(); renderDashboard(); toast('Deleted'); }); }
 });
@@ -2775,6 +2861,8 @@ $('emp-save').addEventListener('click', saveEmp);
 $('emp-pkg').addEventListener('click', e => { if (e.target.id==='pk-add') addPackageRow(); });
 $('p-save').addEventListener('click', saveProj);
 $('l-save').addEventListener('click', saveLoan);
+$('lpp-save').addEventListener('click', saveLoanPostpone);
+$('lpp-month').addEventListener('change', lppPreview);
 $('mon-save').addEventListener('click', saveMonthly);
 $('pay-export').addEventListener('click', exportPayroll);
 $('set-save').addEventListener('click', saveSettings);
@@ -3009,9 +3097,9 @@ const REPORTS = [
         note:Object.entries(G).map(([k,L])=>`${k}: ${L.length} employees, ${fmt(L.reduce((s,r)=>s+r.net,0))} EGP`).join(' · ') }; } },
   { id:'pay-loans', g:'Payroll', t:'Loans',
     d:'All staff loans with the amount settled, the balance outstanding and this period\'s deduction.',
-    build:() => ({ cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('ref','Reference','mono'),C('amt','Loan','num',true),C('months','Months','int'),C('inst','Instalment','num'),C('start','First deduction','mono'),C('settled','Settled','num',true),C('out','Outstanding','num',true),C('now','This period','num',true),C('status','Status')],
+    build:() => ({ cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('ref','Reference','mono'),C('amt','Loan','num',true),C('months','Months','int'),C('inst','Instalment','num'),C('start','First deduction','mono'),C('settled','Settled','num',true),C('out','Outstanding','num',true),C('now','This period','num',true),C('end','Last instalment','mono'),C('pp','Postponed months'),C('status','Status')],
       rows:S.loans.map(l=>{ const e=empById(l.emp_id)||{}; return { code:l.emp_id, name:empName(e), department:e.department, ref:l.reference, amt:num(l.loan_amount), months:num(l.periods), inst:num(l.installment),
-        start:l.start_period, settled:num(l.amount_settled), out:num(l.loan_amount)-num(l.amount_settled), now:loanInstalment(l,settings.period), status:l.status }; }) }) },
+        start:l.start_period, settled:num(l.amount_settled), out:num(l.loan_amount)-num(l.amount_settled), now:loanInstalment(l,settings.period), end:loanEnd(l), pp:(l.postponed||[]).join(', '), status:l.status }; }) }) },
 
   // ── HR ──────────────────────────────────────────────────
   { id:'hr-headcount', g:'HR', t:'Headcount analysis', param:'group',

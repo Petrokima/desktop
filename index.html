@@ -958,6 +958,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
         <select class="sel" id="hra-kind"><option value="">All alerts</option><option value="contract">Contract renewal</option><option value="probation">End of probation</option><option value="id">National ID expiry</option><option value="cert">Certificate expiry</option><option value="disability">Disability card expiry</option></select>
         <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--label);cursor:pointer"><input type="checkbox" id="hra-done" style="width:auto"> Show the ones already handled</label>
         <input class="inp" id="hra-q" placeholder="Search code or name…">
+        <button class="btn btn-ghost btn-sm" id="hra-doc-all" title="Send a request to every employee in the list whose national ID alert has no request yet">📄 Request new ID from all listed</button>
       </div></div>
     <div class="tbl-wrap"><table><thead><tr><th>Alert</th><th>Employee</th><th>Department</th><th>Date</th><th>Days left</th><th>Manager / HR response</th><th></th></tr></thead><tbody id="hra-tbl"></tbody></table></div>
     <div class="foot">An alert leaves this list once someone in HR marks it handled, or when the date is updated (for example a renewed contract or a new ID expiry date). Direct managers see their team's contract and probation alerts on the phone app and can recommend a decision.</div>
@@ -1448,6 +1449,13 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="modal-head"><div class="modal-title">⏱ Are you still there?</div></div>
   <p style="color:var(--label)">For security you will be signed out in <b id="idle-sec">60</b> seconds because there was no activity for 9 minutes. Anything not saved will be lost.</p>
   <div class="modal-foot"><button class="btn btn-ghost" onclick="idleSignOut()">Sign out now</button><button class="btn btn-primary" onclick="idleTouch()">Stay signed in</button></div>
+</div></div>
+
+<!-- MODAL: DOCUMENT REQUESTS (part31.js) -->
+<div class="overlay" id="m-doc"><div class="modal" style="max-width:520px">
+  <div class="modal-head"><div class="modal-title" id="doc-m-title"></div><button class="x" data-close="m-doc">×</button></div>
+  <div id="doc-m-body"></div>
+  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-doc">Cancel</button><button class="btn btn-primary" id="doc-m-ok">OK</button></div>
 </div></div>
 
 <!-- MODAL: CONFIRM -->
@@ -6583,7 +6591,8 @@ function addYearISO(s, n = 1){ const [y, m, d] = s.split('-').map(Number), x = n
 async function loadHRAlerts(){
   if (!canHRA()) return;
   HRA.loading = true;
-  const [a, r] = await Promise.all([ sb.rpc('hr_alerts'), sb.from('settings').select('*').in('key', ['leave_rules','hr_alerts']) ]);
+  const [a, r] = await Promise.all([ sb.rpc('hr_alerts'), sb.from('settings').select('*').in('key', ['leave_rules','hr_alerts']),
+                                    typeof loadDocRequests === 'function' ? loadDocRequests().catch(()=>{}) : null ]);
   HRA.loading = false; HRA.loaded = true;
   HRA.missing = !!a.error; HRA.list = Array.isArray(a.data) ? a.data : [];
   (r.data || []).forEach(x => { if (HR_RULES_DEF[x.key]) HR_RULES[x.key] = { ...HR_RULES_DEF[x.key], ...(x.value || {}) }; });
@@ -6614,7 +6623,8 @@ function renderHRAlerts(){
     if (a.kind === 'contract') btns = (canEditMaster() ? `<button class="btn btn-success btn-sm" data-hra-act="renew" data-k="${key}">Renew 1 year</button> ` : '')
                                     + `<button class="btn btn-ghost btn-sm" data-hra-act="not_renew" data-k="${key}">Not renewing</button>`;
     else if (a.kind === 'probation') btns = `<button class="btn btn-success btn-sm" data-hra-act="confirm" data-k="${key}">Confirm</button> <button class="btn btn-ghost btn-sm" data-hra-act="not_confirm" data-k="${key}">Do not confirm</button>`;
-    else btns = (canEditMaster() ? `<button class="btn btn-ghost btn-sm" data-hra-emp="${esc(a.emp_id)}">Update the date</button> ` : '') + `<button class="btn btn-ghost btn-sm" data-hra-act="seen" data-k="${key}">Mark handled</button>`;
+    else btns = (a.kind === 'id' && typeof hraDocCell === 'function' ? hraDocCell(a) : '')
+              + (canEditMaster() ? `<button class="btn btn-ghost btn-sm" data-hra-emp="${esc(a.emp_id)}">Update the date</button> ` : '') + `<button class="btn btn-ghost btn-sm" data-hra-act="seen" data-k="${key}">Mark handled</button>`;
     return `<tr${a.done ? ' style="opacity:.6"' : ''}><td><span class="chip ${kd[1]}">${kd[0]}</span>${a.detail ? `<div style="font-size:12px;margin-top:4px">${esc(a.kind === 'disability' ? 'Card ' + a.detail : a.detail)}</div>` : ''}</td>
       <td class="strong"><a href="#" data-hra-emp="${esc(a.emp_id)}">${esc(a.name_en || a.name_ar || a.emp_id)}</a> <span class="mono" style="color:var(--muted)">${esc(a.emp_id)}</span>${a.job ? `<div style="font-size:12px;color:var(--muted);font-weight:400">${esc(a.job)}</div>` : ''}</td>
       <td>${esc(a.department || '')}</td><td class="mono">${esc(a.due)}</td><td style="white-space:nowrap">${hraDays(a.days_left)}</td>
@@ -7136,6 +7146,85 @@ document.addEventListener('change', e => {
     const u = document.querySelector('#emp-form [data-f="unit"]');
     if (u && u.tagName === 'SELECT') { const keep = pickOptions('unit', el.value).includes(u.value) ? u.value : ''; u.outerHTML = pickSelect('unit', 'unit', keep, el.value); }   // a unit of another department is cleared
   }
+});
+
+// ═════════════════════════════════════════════════════════
+//  DOCUMENT REQUESTS from the HR alerts page (61-document-requests.sql, 21 Oct 2026)
+//  National ID alerts: "📄 Request new ID" → the employee answers from the phone with a photo + the new expiry date →
+//  HR views the copy, Accepts (the employee's ID expiry date is updated, the alert disappears) or Returns it with a note.
+// ═════════════════════════════════════════════════════════
+let DOCS = { byEmp: new Map(), missing: false }, DOC_PICK = null;
+async function loadDocRequests(){
+  const r = await sb.from('doc_requests').select('*').eq('kind', 'national_id').neq('status', 'Cancelled').order('requested_at', { ascending:false });
+  DOCS.missing = !!r.error; DOCS.byEmp = new Map();
+  (r.data || []).forEach(d => { if (!DOCS.byEmp.has(d.emp_id)) DOCS.byEmp.set(d.emp_id, d); });     // latest per employee
+}
+const docOpen = d => d && ['Requested', 'Submitted', 'Returned'].includes(d.status);
+const docDay = t => t ? new Date(t).toLocaleDateString('en-GB', { day:'numeric', month:'short' }) : '';
+// the status line + buttons shown on a national-ID alert row
+function hraDocCell(a){
+  if (DOCS.missing) return '';
+  const d = DOCS.byEmp.get(a.emp_id);
+  if (d && d.status === 'Submitted') return `<div style="margin-bottom:4px"><span class="chip c-blue">📄 Copy received ${esc(docDay(d.submitted_at))}</span></div>
+      <button class="btn btn-ghost btn-sm" data-doc-view="${esc(d.id)}">👁 View copy</button> <button class="btn btn-success btn-sm" data-doc-ok="${esc(d.id)}">✓ Accept</button> <button class="btn btn-ghost btn-sm" data-doc-back="${esc(d.id)}">↩ Return</button> `;
+  if (docOpen(d)) return `<div style="margin-bottom:4px"><span class="chip c-orange" title="${esc(d.review_note || '')}">📄 ${d.status === 'Returned' ? 'Returned' : 'Requested'} ${esc(docDay(d.status === 'Returned' ? d.reviewed_at : d.requested_at))} — waiting for the employee</span></div>
+      <button class="btn btn-ghost btn-sm" data-doc-cancel="${esc(d.id)}">Cancel request</button> `;
+  return `<button class="btn btn-primary btn-sm" data-doc-req="${esc(a.emp_id)}">📄 Request new ID</button> `;
+}
+function docModal(title, html, okText, okClass, onOk){
+  $('doc-m-title').textContent = title; $('doc-m-body').innerHTML = html;
+  $('doc-m-ok').textContent = okText; $('doc-m-ok').className = 'btn ' + okClass;
+  $('doc-m-ok').onclick = async () => { $('doc-m-ok').disabled = true; try { await onOk(); } catch(e){ toast(e.message, 'err'); } $('doc-m-ok').disabled = false; };
+  openM('m-doc');
+}
+const DOC_MSG = 'Your national ID card has expired (or expires soon). Please send a photo of the renewed card. · بطاقة الرقم القومي منتهية أو قاربت على الانتهاء — يرجى إرسال صورة البطاقة الجديدة.';
+function docRequest(emps){
+  const n = emps.length, who = n === 1 ? `<b>${esc(empName(empById(emps[0])) || emps[0])}</b> (${esc(emps[0])})` : `<b>${n}</b> employees`;
+  docModal('📄 Request the renewed national ID',
+    `<p style="color:var(--label)">${who} will get a request in the phone app (and a notification) to attach a photo of the new ID card and its expiry date.</p>
+     <div class="field"><label>Message to the employee (optional)</label><textarea id="doc-msg" rows="3">${esc(DOC_MSG)}</textarea></div>`,
+    n === 1 ? 'Send request' : `Send ${n} requests`, 'btn-primary', async () => {
+      const { data, error } = await sb.rpc('request_documents', { p_emps: emps, p_kind: 'national_id', p_message: $('doc-msg').value.trim() });
+      if (error) throw error;
+      closeM('m-doc'); toast(`${data} request${data === 1 ? '' : 's'} sent${data < n ? ` · ${n - data} skipped (already asked, or not active)` : ''}`);
+      await loadDocRequests(); renderHRAlerts();
+    });
+}
+document.addEventListener('click', async e => {
+  const rq = e.target.closest('[data-doc-req]'); if (rq) return docRequest([rq.dataset.docReq]);
+  if (e.target.closest('#hra-doc-all')) {
+    const emps = [...new Set([...document.querySelectorAll('#hra-tbl [data-doc-req]')].map(b => b.dataset.docReq))];
+    return emps.length ? docRequest(emps) : toast('Every national-ID alert listed already has a request', 'warn');
+  }
+  const vw = e.target.closest('[data-doc-view]');
+  if (vw) { const d = [...DOCS.byEmp.values()].find(x => x.id === vw.dataset.docView); if (!d) return;
+    const { data, error } = await sb.storage.from('employee-docs').createSignedUrl(d.file_path, 600);
+    return error ? toast(error.message, 'err') : window.open(data.signedUrl, '_blank', 'noopener'); }
+  const ok = e.target.closest('[data-doc-ok]');
+  if (ok) { const d = [...DOCS.byEmp.values()].find(x => x.id === ok.dataset.docOk); if (!d) return;
+    return docModal('✓ Accept the new ID',
+      `<p style="color:var(--label)"><b>${esc(empName(empById(d.emp_id)) || d.emp_id)}</b> (${esc(d.emp_id)}) sent the copy on ${esc(docDay(d.submitted_at))}. Check the photo first (👁 View copy).</p>
+       <div class="field"><label>New national ID expiry date (as typed by the employee — correct it if the card shows another date)</label><input type="date" id="doc-exp" value="${esc(d.new_expiry || '')}"></div>`,
+      'Accept and update the date', 'btn-success', async () => {
+        const { error } = await sb.rpc('review_document', { p_id: d.id, p_accept: true, p_new_expiry: $('doc-exp').value || null, p_note: null });
+        if (error) throw error;
+        const emp = empById(d.emp_id); if (emp) emp.national_id_expiry = $('doc-exp').value;
+        closeM('m-doc'); toast('Accepted — the national ID expiry date is updated'); await loadDocRequests(); await loadHRAlerts(); renderHRAlerts();
+      }); }
+  const bk = e.target.closest('[data-doc-back]');
+  if (bk) { const d = [...DOCS.byEmp.values()].find(x => x.id === bk.dataset.docBack); if (!d) return;
+    return docModal('↩ Return to the employee',
+      `<p style="color:var(--label)">The employee is asked to send it again, with your note.</p>
+       <div class="field"><label>What is wrong? (the employee sees this)</label><textarea id="doc-note" rows="3" placeholder="e.g. The photo is not clear — please take it again in good light · الصورة غير واضحة"></textarea></div>`,
+      'Return', 'btn-danger', async () => {
+        const { error } = await sb.rpc('review_document', { p_id: d.id, p_accept: false, p_new_expiry: null, p_note: $('doc-note').value.trim() });
+        if (error) throw error;
+        closeM('m-doc'); toast('Returned to the employee'); await loadDocRequests(); renderHRAlerts();
+      }); }
+  const cn = e.target.closest('[data-doc-cancel]');
+  if (cn) return confirmDel('Cancel this document request? The employee will no longer see it.', async () => {
+    const { error } = await sb.rpc('cancel_document_request', { p_id: cn.dataset.docCancel }); if (error) throw error;
+    toast('Request cancelled'); await loadDocRequests(); renderHRAlerts(); });
 });
 
 // ═════════════════════════════════════════════════════════

@@ -2090,7 +2090,7 @@ function renderEmployees(){
 // ═════════════════════════════════════════════════════════
 const EMP_FIELDS = [
   ['Identity', [['id','Code','text'],['name_ar','Arabic name','text','ar'],['name_en','English name','text']]],
-  ['Organisation', [['department','Department','text'],['unit','Unit','text'],['entity','Entity','select',['Petrokima Egypt HQ','Petrokima Saudi Branch','Affiliate — Cairo']],
+  ['Organisation', [['department','Department','pick','dept'],['unit','Unit','pick','unit'],['entity','Entity','select',['Petrokima Egypt HQ','Petrokima Saudi Branch','Affiliate — Cairo']],
                     ['job_name','Job name','text'],['job_type','Job type','text'],['status','Status','select',['Active','Inactive']],
                     ['manager_id','Direct manager','manager']]],
   ['Contact', [['business_phone','Business phone','text'],['mobile','Mobile','text'],['email','Email','text'],['address','Address','text']]],
@@ -2112,7 +2112,7 @@ const EMP_FIELDS = [
                 ['religion','Religion','text'],['nationality','Nationality','text'],['military_status','Military status','select',['','Finished','Exempt','Postponed','Not Applicable']],
                 ['national_id','National ID','text'],['national_id_expiry','National ID expiry','date']]],
   ['Disability', [['has_disability','Has a disability card','bool'],['disability_card_no','Disability card number','text'],['disability_card_expiry','Disability card expiry','date']]],
-  ['Education', [['university','University','text'],['college','College','text'],['certification','Certification','text'],['graduation_date','Graduation date','date']]],
+  ['Education', [['university','University','pick','univ'],['college','College','pick','coll'],['certification','Certification','text'],['graduation_date','Graduation date','date']]],
   ['Notes', [['notes','Notes','textarea']]]
 ];
 let editingEmp = null;
@@ -2144,6 +2144,7 @@ function openEmp(id){
       else if (type==='bool') ctl = `<select data-f="${k}"><option ${v===true?'':'selected'}>No</option><option ${v===true?'selected':''}>Yes</option></select>`;
       else if (type==='select'){ const opts=[...opt]; if (v && !opts.includes(v)) opts.push(v);
         ctl = `<select data-f="${k}">${opts.map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select>`; }
+      else if (type==='pick') ctl = pickSelect(k, opt, v, opt==='unit' ? pickNorm(e ? e.department : '') : '');
       else if (type==='textarea') ctl = `<textarea data-f="${k}">${esc(v)}</textarea>`;
       else ctl = `<input type="${type}" data-f="${k}" value="${esc(v)}" ${ro} ${dir}>`;
       return `<div class="field ${type==='textarea'?'full':''}"><label>${label}</label>${ctl}</div>`;
@@ -7095,6 +7096,47 @@ showLogin = function(msg){
   let idle = false; try { idle = sessionStorage.getItem('pk_idle_out') === '1'; sessionStorage.removeItem('pk_idle_out'); } catch(e){}
   showLoginBeforeIdle(msg || (idle ? 'You were signed out automatically after 10 minutes without activity. Please sign in again.' : undefined));
 };
+
+// ═════════════════════════════════════════════════════════
+//  DROP-DOWN LISTS for the employee window (21 Oct 2026)
+//  University and College: the lists HR provided (Universities.xlsx, Faculty.xlsx) + any value already used on an
+//  employee. Department: values in use. Unit: units already used in the chosen department. Every list ends with
+//  "➕ Other…" to type a new value (it then appears in the list for everyone).
+// ═════════════════════════════════════════════════════════
+const PICK_UNIVERSITIES = ["جامعة القاهرة", "معهد الجزيرة العالى", "دبلوم المدارس الثانوية الفنية التجارية", "جامعة حلوان", "جامعة عين شمس", "الاكاديمية المصرية للهندسة و التكنولوجيا المتقدمة", "الاكاديمية العربية للعلووم والتكنولوجيا والنقل البحري", "جامعة 6 أكتوبر", "مودرن اكاديمى بالمعادى", "جامعة المنيا", "دبلوم المدارس الفنية الصناعية", "معهد العالى للإدارة و التكنولوجيا - شبرامنت", "شهادة قياس مستوى المهارة", "معهد الجزيرة العالى للحاسب الالى و نظم المعلومات الادارية", "معهد العباسية للحاسبات الآلية و العلوم التجارية", "ثانوية عامة", "دبلوم المدارس الثانوية الفنية للإدارة و الخدمات", "معهد القاهرة العالى للغات و الترجمه الفورية و العلوم الادارية", "جامعة المنوفية", "جامعة طنطا", "محو امية", "دبلوم المدارس الثانوية الفنية الزراعية", "مرحلة التعليم الاساسي", "معهد طيبة العالي لتكنولوجيا الادارة و المعلومات", "معهد الفراعنة العالي للحاسب الالي و نظم المعلومات و الادارة", "المعهد العالي للدراسات النوعية", "دبلوم المدارس الثانوية الفنية للشئون الفندقية والخدمات السياحية", "بدون مؤهل", "جامعة بنها", "الجامعة العمالية", "المعهد العالى للحاسبات و المعلومات و تكنولوجيا الادارة", "المعهد العالى للدراسات المتطورة", "جامعة المنصورة", "المعهد العالى للهندسة و التكنولوجيا", "الاكاديمية العربية للعلوم و التكنولوجيا و النقل البحرى", "معهد هندسة و تكنولوجيا الطيران", "المعهد الفنى الصناعى", "وزارة الانتاج الحربى", "المجمع التكنولوجى المتكامل", "المعهد الفني التجاري بالروضة", "معهد المدينة العالى للهندسة و التكنولوجيا - شبرامنت", "الازهر الشريف", "المعهد الفنى التجارى", "الجامعة الالمانية بالقاهرة", "المعهد العالى للدراسات التعاونية و الادارية", "الجهاز القومى لتنظيم الاتصالات", "جامعة الاهرام الكندية", "معهد طيبة العالى للهندسة", "جامعة الزقازيق", "جامعة الفيوم", "جامعة الاسكندرية", "المعهد التكنولوجى العالى", "جامعة بورسعيد", "جامعة مصر للعلوم و التكنولوجيا", "جامعة اكتوبر للعلوم الحديثة والاداب", "الجامعة الامريكية بالقاهرة", "جامعة السويس", "المعهد العالي للهندسة والتكنولوجيا بطنطا", "جامعة النيل", "جامعة سيجي الماليزية", "معهد اكتوبر العالى للهندسة و التكنولوجيا", "دبلوم التلمذة الصناعية", "معهد فني صناعي", "جامعة الازهر", "المعهد العالى للتعاون الزراعى", "المعهد العالي للهندسة بالشروق", "معهد القاهرة الجديدة للعلوم الاداربة و الحاسب الالي", "معهد الاهرامات العالي للهندسة والتكنولوجيا", "معهد الجيزة العالى للهندسة و التكنولوجيا", "ثانوي فني للصم و ضعاف السمع", "التكنولوجيا بالصحافة", "معهد الشروق", "جامعة حورس", "جاممة جنوب الوادي", "المعهد العالي للدراسات التعاونية و الادارية", "جامعة اسوان", "معهد الفراعنة العالي للسياحة و الفادق", "وزارة التجارة و الصناعه", "المعهد الفني التجاري", "معهد فني تجاري"];
+const PICK_COLLEGES = ["نظم معلومات", "دبلوم تجارة", "بكالوريوس هندسة القوى و الالات الكهربية", "بكالوريوس فى الهندسة الميكانيكية", "بكالوريوس تجارة", "بكالوريوس الهندسة فى الميكاترونيات", "بكالوريوس فى الهندسة و التكنولوجيا", "دبلوم صنايع", "نظم المعلومات الادارية", "كهربائى", "بكالوريوس اعلام", "بكالوريوس فى التعليم الصناعى", "ليسانس حقوق", "دبلوم شئون فندقية", "ليسانس آداب", "ليسانس الالسن", "بكالوريوس فى الهندسة الإلكترونية", "بكالوريوس فى العلوم فى الهندسة الكهربائية", "محو امية", "دبلوم زراعة", "الاعدادية", "بكالوريوس العلوم التجارية", "الابتدائية", "دبلوم سياحة وفنادق", "بكالوريوس إدارة صناعية", "بكالوريوس فى الهندسة الكهربية و التحكم الآلى", "دبلوم المعاهد الفنيه الصناعية", "بكالوريوس هندسة الالكترونيات و الاتصالات الكهربية", "دبلوم تدريب مهنى", "بكالوريوس فى تكنولوجيا الكهرباء و الالكترونيات", "بكالوريوس الهندسة الكهربية و الحاسبات", "ثانوى ازهرى", "بكالوريوس اخصائى رقابة الجودة", "دبلوم المعاهد الفنية التجارية", "مشغل لاسلكى", "بكالوريوس ادارة", "بكالوريوس هندسة الحاسبات و الالكترونيات", "بكالوريوس هندسة اتصالات و كهروفيزياء", "بكالوريوس حاسبات و معلومات", "بكالوريوس فى العلوم شعبه فيزياء", "بكالوريوس في تكنولوجيا المعلومات", "بكالوريوس فى علوم الحاسب", "بكالوريوس ادارة الأعمال", "بكالوريوس هندسة انتاج", "بكالوريوس زراعه", "بكالوريوس تربية رياضية", "ليسانس اداب", "بكالوريوس هندسة الكهروميكانيكا", "بكالوريوس فى هندسة الاتصالات و الالكترونيات", "دبلوم الثانوي الفني للصم و ضعاف السمع", "معهد فني صناعي", "المعهد الدولي العالي للاعلام", "بكالوريوس الدراسات التعاونية و الادارية", "ادارة الاعمال السياحية", "دبلوم التلمذة الصناعية"];
+const PICK_OTHER = '__other__';
+const pickNorm = v => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+function pickOptions(src, dept){
+  const used = k => (S.employees || []).map(e => pickNorm(e[k]));
+  let list = src === 'univ' ? [...PICK_UNIVERSITIES, ...used('university')]
+           : src === 'coll' ? [...PICK_COLLEGES, ...used('college')]
+           : src === 'dept' ? used('department')
+           : (S.employees || []).filter(e => !dept || pickNorm(e.department) === dept).map(e => pickNorm(e.unit));
+  list = [...new Set(list.filter(Boolean))];
+  const ar = src === 'univ' || src === 'coll';
+  return list.sort((a, b) => a.localeCompare(b, ar ? 'ar' : 'en'));
+}
+function pickSelect(k, src, v, dept){
+  v = pickNorm(v);
+  const opts = pickOptions(src, dept); if (v && !opts.includes(v)) opts.unshift(v);
+  const dir = (src === 'univ' || src === 'coll') ? ' dir="rtl"' : '';
+  return `<select data-f="${k}" data-pick="${src}"${dir}><option value="">—</option>${opts.map(o => `<option${o === v ? ' selected' : ''}>${esc(o)}</option>`).join('')}`
+       + `<option value="${PICK_OTHER}">➕ Other — type a new one…</option></select>`;
+}
+// choosing "Other" turns the list into a text box; changing the department refreshes the unit list
+document.addEventListener('change', e => {
+  const el = e.target; if (!el.closest || !el.closest('#emp-form') || !el.dataset || !el.dataset.pick) return;
+  if (el.value === PICK_OTHER) {
+    const inp = document.createElement('input'); inp.type = 'text'; inp.dataset.f = el.dataset.f;
+    inp.placeholder = 'Type the new ' + (el.closest('.field').querySelector('label') || {}).textContent.toLowerCase() + '…';
+    if (el.dir) inp.dir = el.dir; el.replaceWith(inp); inp.focus(); return;
+  }
+  if (el.dataset.pick === 'dept') {
+    const u = document.querySelector('#emp-form [data-f="unit"]');
+    if (u && u.tagName === 'SELECT') { const keep = pickOptions('unit', el.value).includes(u.value) ? u.value : ''; u.outerHTML = pickSelect('unit', 'unit', keep, el.value); }   // a unit of another department is cleared
+  }
+});
 
 // ═════════════════════════════════════════════════════════
 //  BOOT

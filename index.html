@@ -1736,7 +1736,7 @@ async function loadPeriodData(){
     fetchAll('attendance','date', q => q.gte('date', ps).lte('date', pe)),
     fetchAll('payroll_period_elements','emp_id', q => q.eq('period', p)),
     soft(fetchAll('attendance_permissions','date', q => q.gte('date', ps).lte('date', pe))),
-    soft(fetchAll('employee_leaves','date_from', q => q.lte('date_from', `${y}-12-31`).gte('date_to', `${y}-01-01`))),
+    soft(fetchAll('employee_leaves','date_from', q => q.lte('date_from', pe > `${y}-12-31` ? pe : `${y}-12-31`).gte('date_to', ps < `${y}-01-01` ? ps : `${y}-01-01`))),   // whole year AND the whole cycle (a January cycle starts in December)
     soft(fetchAll('employee_penalties','incident_date', q => q.gte('apply_period', `${y}-01`).lte('apply_period', `${y}-12`))),
     soft(fetchAll('public_holidays','date')),
     soft(fetchAll('payroll_runs','period')),
@@ -3983,6 +3983,39 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 //  PAYROLL APPROVAL (permanent snapshot)
 // ═════════════════════════════════════════════════════════
 function nextPeriod(p){ const [y,m]=p.split('-').map(Number); return m===12 ? `${y+1}-01` : `${y}-${pad(m+1)}`; }
+function payrollLines(run){
+  const keys = ['basic','otherAdd','ot','otH','si','loans','otherDed','days','factor','partial','joiner','leaver','hasPackage','delay','absence','absentDays','penalty','holiday','holDays','lateH','earlyH','waivedH'];
+  return run.map(r => ({ emp_id:String(r.emp.id), name_en:r.emp.name_en||null, name_ar:r.emp.name_ar||null, department:r.emp.department||null, unit:r.emp.unit||null,
+    entity:r.emp.entity||null, payment_method:r.emp.payment_method||null, bank_branch:(r.emp.bank_branch||'').trim()||null, bank_account:r.emp.bank_account||null,
+    gross:Math.round(r.gross*100)/100, deductions:Math.round(r.ded*100)/100, net:Math.round(r.net*100)/100,
+    summary:Object.fromEntries(keys.map(k=>[k, r[k] ?? null])), lines:r.lines }));
+}
+// Compare the desktop's payroll with the database's own calculation (payroll_calc) — shown in the approval window
+function payrollDiffs(mine, srv){
+  const key = l => `${l.code}|${l.type}`, sum = ls => { const m = {}; (ls||[]).forEach(l => { m[key(l)] = (m[key(l)]||0) + num(l.amount); }); return m; };
+  const S2 = new Map((srv||[]).map(x => [String(x.emp_id), x])), out = [];
+  mine.forEach(c => { const s = S2.get(c.emp_id);
+    if (!s) { out.push({ emp:c.emp_id, what:'not in the database calculation' }); return; }
+    S2.delete(c.emp_id);
+    const a = sum(c.lines), b = sum(s.lines);
+    new Set([...Object.keys(a), ...Object.keys(b)]).forEach(k => { if (Math.abs((a[k]||0) - (b[k]||0)) > 0.005) {
+      const [code, type] = k.split('|'), el = elByCode(code);
+      out.push({ emp:c.emp_id, what:`${(el && el.name_en) || 'element ' + code} (${type}): desktop ${fmt(a[k]||0)} · database ${fmt(b[k]||0)}` }); } });
+    if (Math.abs(num(c.net) - num(s.net)) > 0.005) out.push({ emp:c.emp_id, what:`net: desktop ${fmt(c.net)} · database ${fmt(s.net)}` });
+  });
+  S2.forEach((s, id) => out.push({ emp:id, what:'only in the database calculation' }));
+  return out;
+}
+async function checkWithDatabase(){
+  const box = $('ap-check'); if (!box) return;
+  box.innerHTML = '<div class="alert a-info" style="margin:12px 0 0">🔍 Checking against the database calculation…</div>';
+  const { data, error } = await sb.rpc('payroll_calc', { p_period: settings.period });
+  if (error) { box.innerHTML = `<div class="alert a-warn" style="margin:12px 0 0">🔍 The database calculation is not available yet (${esc(error.message)}). Run <b>57-payroll-server-calculation.sql</b> first — approval needs it.</div>`; return; }
+  const d = payrollDiffs(payrollLines(computeAll()), (data && data.employees) || []);
+  box.innerHTML = d.length
+    ? `<div class="alert a-warn" style="margin:12px 0 0">🔍 <b>${d.length} difference${d.length>1?'s':''}</b> between the desktop and the database — the database will refuse this approval:<br>• ${d.slice(0,12).map(x => `${esc(x.emp)} ${esc(empName(empById(x.emp)) || '')}: ${esc(x.what)}`).join('<br>• ')}${d.length>12?`<br>… and ${d.length-12} more`:''}</div>`
+    : `<div class="alert a-info" style="margin:12px 0 0">🔍 ✓ The database calculated the same payroll — every employee and every amount matches.</div>`;
+}
 function openApprove(){
   if (runsTableMissing) return toast('Run managers-and-payroll-history.sql first','warn');
   if (currentRun()) return toast(`The ${settings.period} payroll is already approved`,'warn');
@@ -4008,21 +4041,19 @@ function openApprove(){
     ${warn.length ? `<div class="alert a-warn" style="margin:12px 0 0">Check before approving:<br>• ${warn.join('<br>• ')}</div>` : '<div class="alert a-info" style="margin:12px 0 0">No open items found.</div>'}
     <div style="margin-top:12px">Approval saves every payslip permanently. <b>It cannot be undone, changed or deleted</b> — not even by the administrator. Attendance, monthly entries, penalties and approved leave for this cycle will be locked. Corrections go into the next payroll.</div>`;
   $('ap-type-l').textContent = `Type ${settings.period} to confirm`; $('ap-type').value=''; $('ap-next').checked=true;
+  if (!$('ap-check')) $('ap-body').insertAdjacentHTML('afterend', '<div id="ap-check"></div>');
   openM('m-approve'); setTimeout(()=>$('ap-type').focus(),50);
+  checkWithDatabase();
 }
 async function doApprove(){
   const p = settings.period;
   if ($('ap-type').value.trim() !== p) return toast(`Type ${p} exactly to confirm`,'warn');
-  const run = computeAll();
+  const lines = payrollLines(computeAll());
   const costDetail = laborCost();                                     // project totals, published after approval
-  const keys = ['basic','otherAdd','ot','otH','si','loans','otherDed','days','factor','partial','joiner','leaver','hasPackage','delay','absence','absentDays','penalty','holiday','holDays','lateH','earlyH','waivedH'];
-  const lines = run.map(r => ({ emp_id:String(r.emp.id), name_en:r.emp.name_en||null, name_ar:r.emp.name_ar||null, department:r.emp.department||null, unit:r.emp.unit||null,
-    entity:r.emp.entity||null, payment_method:r.emp.payment_method||null, bank_branch:(r.emp.bank_branch||'').trim()||null, bank_account:r.emp.bank_account||null,
-    gross:Math.round(r.gross*100)/100, deductions:Math.round(r.ded*100)/100, net:Math.round(r.net*100)/100,
-    summary:Object.fromEntries(keys.map(k=>[k, r[k] ?? null])), lines:r.lines }));
   const b=$('ap-go'); b.disabled=true; b.textContent='Approving…';
-  const { data, error } = await sb.rpc('approve_payroll', { p_period:p, p_start:periodStart(p), p_end:periodEnd(p), p_settings:settings, p_lines:lines,
-                                                           p_approved_by: (ME && (ME.full_name || ME.email)) || 'unknown' });
+  // 57-payroll-server-calculation.sql: the DATABASE calculates and stores the payroll; these lines are only a cross-check
+  // (the database refuses the approval when its own numbers differ)
+  const { data, error } = await sb.rpc('approve_payroll', { p_period:p, p_check:lines });
   b.disabled=false; b.textContent='Approve and lock';
   if (error) return toast(error.message,'err');
   closeM('m-approve');

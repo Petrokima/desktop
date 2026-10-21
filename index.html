@@ -1018,7 +1018,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
         <div class="field full"><label>Check-in from the phone without a project</label><select id="s-noproj">
           <option value="everyone">Everyone can choose — at a site, or without a project</option>
           <option value="selected">Only employees HR marks on their employee record</option></select></div>
-        <div class="field full"><label>Vacation and permission requests from employees</label><select id="s-reqflow">
+        <div class="field full"><label>Permission requests (late arrival / early leave) from employees — vacations always need HR's final approval after the manager</label><select id="s-reqflow">
           <option value="hr">Direct manager approves, then HR gives the final approval</option>
           <option value="manager">Direct manager's approval is final</option></select></div>
         <div class="field"><label>Free permissions per month</label><input type="number" id="s-perm-n"></div>
@@ -1441,6 +1441,13 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <p style="color:var(--label);font-size:13px">Give it to the employee privately. At the next sign-in they type this password, then their <b>year of birth</b>, then choose their own password. This window is the only time the password is shown — if it is lost, generate a new one.</p>
   <p id="rp-note" style="color:#b45309;font-size:13px"></p>
   <div class="modal-foot"><button class="btn btn-ghost" data-close="m-rndpw">Close</button><button class="btn btn-primary" id="rp-copy">📋 Copy message (English + Arabic)</button></div>
+</div></div>
+
+<!-- MODAL: IDLE WARNING (part29.js) -->
+<div class="overlay" id="m-idle"><div class="modal" style="max-width:400px">
+  <div class="modal-head"><div class="modal-title">⏱ Are you still there?</div></div>
+  <p style="color:var(--label)">For security you will be signed out in <b id="idle-sec">60</b> seconds because there was no activity for 9 minutes. Anything not saved will be lost.</p>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="idleSignOut()">Sign out now</button><button class="btn btn-primary" onclick="idleTouch()">Stay signed in</button></div>
 </div></div>
 
 <!-- MODAL: CONFIRM -->
@@ -7045,6 +7052,49 @@ openEmp = function(){ const r = _openEmp27.apply(this, arguments); contractEndPr
   document.querySelectorAll('#app .main, #self .main').forEach(m => mo.observe(m, { childList: true, subtree: true }));
   label(); later();
 })();
+
+// ═════════════════════════════════════════════════════════
+//  AUTO SIGN-OUT after 10 minutes without activity (21 Oct 2026, desktop only)
+//  · Activity = mouse, keyboard, scroll or touch in ANY open tab of the app (shared through localStorage).
+//  · At 9 minutes a window warns "You will be signed out in 60 seconds" with a button to stay signed in.
+//  · At 10 minutes the app signs out and shows the sign-in screen with an explanation.
+// ═════════════════════════════════════════════════════════
+const IDLE_LIMIT_MS = 10 * 60 * 1000, IDLE_WARN_MS = 9 * 60 * 1000, IDLE_KEY = 'pk_last_active';
+let idleLast = Date.now(), idleOut = false;
+function idleStore(t){ try { localStorage.setItem(IDLE_KEY, String(t)); } catch(e){} }
+function idleRead(){ try { return Number(localStorage.getItem(IDLE_KEY)) || 0; } catch(e){ return 0; } }
+function idleSignedIn(){ return !!(typeof ME !== 'undefined' && ME && sb); }
+function idleTouch(){
+  const now = Date.now();
+  if (now - idleLast > 5000) { idleLast = now; idleStore(now); }     // write at most every 5 s
+  else idleLast = now;
+  const w = $('m-idle'); if (w && w.classList.contains('open')) closeM('m-idle');
+}
+['mousemove','mousedown','keydown','wheel','scroll','touchstart'].forEach(ev => document.addEventListener(ev, idleTouch, { passive:true, capture:true }));
+async function idleSignOut(){
+  if (idleOut) return; idleOut = true;
+  try { sessionStorage.setItem('pk_idle_out', '1'); } catch(e){}
+  try { await sb.auth.signOut(); } catch(e){}
+  location.reload();
+}
+function idleCheck(){
+  if (!idleSignedIn() || idleOut) return;
+  const last = Math.max(idleLast, idleRead()), quiet = Date.now() - last;
+  if (quiet >= IDLE_LIMIT_MS) return idleSignOut();
+  const w = $('m-idle');
+  if (quiet >= IDLE_WARN_MS && w) {
+    $('idle-sec').textContent = Math.max(1, Math.ceil((IDLE_LIMIT_MS - quiet) / 1000));
+    if (!w.classList.contains('open')) openM('m-idle');
+  } else if (w && w.classList.contains('open')) closeM('m-idle');
+}
+setInterval(idleCheck, 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) idleCheck(); });   // a computer waking from sleep
+// the sign-in screen explains why the user was signed out
+const showLoginBeforeIdle = showLogin;
+showLogin = function(msg){
+  let idle = false; try { idle = sessionStorage.getItem('pk_idle_out') === '1'; sessionStorage.removeItem('pk_idle_out'); } catch(e){}
+  showLoginBeforeIdle(msg || (idle ? 'You were signed out automatically after 10 minutes without activity. Please sign in again.' : undefined));
+};
 
 // ═════════════════════════════════════════════════════════
 //  BOOT

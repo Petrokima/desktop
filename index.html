@@ -144,6 +144,13 @@ body:not(.can-hr) :is([data-hr-handle],[data-dev-reset]){display:none!important}
 body:not(.can-hr):not(.can-master) :is([data-act="new-att"],#mi-open,[data-act="new-perm"],[data-act="new-leave"],[data-act="new-pen"],
   #a-save,#pr-save,#lv-save,#pn-save,#dc-approve,#dc-reject,#a-add-split,[data-decide],[data-del-att],[data-del-perm],[data-del-leave],[data-del-pen],
   [data-lv-approve],[data-lv-reject]){display:none!important}
+/* payroll run table: column search boxes, expanded view (part32) */
+#pay-table tr.pay-filter th{padding:4px 6px;position:static}
+#pay-table tr.pay-filter input{width:100%;min-width:56px;box-sizing:border-box;padding:4px 6px;font-size:11.5px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-family:inherit;font-weight:400;text-transform:none;letter-spacing:0}
+#pay-table tfoot td{border-top:2px solid var(--border);font-weight:600;white-space:nowrap}
+#pay-table.pay-expanded th,#pay-table.pay-expanded td{white-space:nowrap}
+#pay-table.pay-expanded th.pay-el{max-width:130px;overflow:hidden;text-overflow:ellipsis}
+#pay-table.pay-expanded :is(th,td):nth-child(2){position:sticky;left:0;z-index:2;background:var(--card);box-shadow:1px 0 0 var(--border)}
 a.maplink{color:var(--link);text-decoration:none;white-space:nowrap} a.maplink:hover{text-decoration:underline}
 body:not(.can-pay) :is(#pk-add,[data-del-fixed]){display:none!important}
 /* loans: HR adds loans and postpones instalments too (62) */
@@ -791,8 +798,8 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="stats" id="pay-stats"></div>
   <div class="card">
     <div class="toolbar"><span class="toolbar-title">Employee payroll — click a row for the full payslip</span>
-      <div class="toolbar-right"><input class="inp" id="pay-q" placeholder="Search employee…"><select class="sel" id="pay-dept"><option value="">All departments</option></select></div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Name</th><th>Department</th><th class="num">Days</th><th class="num">Basic</th><th class="num">Other add.</th><th class="num">OT</th><th class="num">Gross</th><th class="num">Soc. Ins.</th><th class="num">Loans</th><th class="num">Other ded.</th><th class="num">Net</th></tr></thead><tbody id="pay-tbl"></tbody></table></div>
+      <div class="toolbar-right"><button class="btn btn-ghost btn-sm" id="pay-exp" title="Show every addition and deduction as its own column">⊞ Expanded view</button><button class="btn btn-ghost btn-sm" id="pay-fclear" style="display:none">✕ Clear column filters</button><input class="inp" id="pay-q" placeholder="Search employee…"><select class="sel" id="pay-dept"><option value="">All departments</option></select></div></div>
+    <div class="tbl-wrap"><table id="pay-table"><thead id="pay-thead"></thead><tbody id="pay-tbl"></tbody><tfoot id="pay-tfoot"></tfoot></table></div>
     <div class="foot" id="pay-foot"></div>
   </div>
 </div>
@@ -2649,13 +2656,7 @@ function renderPayroll(){
     + `Joiners and leavers are paid fixed additions for the days employed in the cycle ÷ ${num(settings.daysPerMonth)||30}. Overtime: hours beyond ${settings.hoursPerDay} a day, only when at least ${settings.otThreshold} h, paid at ${settings.otMultiplier}× hour pay. Late (after ${settings.lateAfter}) and early/short hours are each deducted at delay hour pay, less up to ${settings.permissionMaxHours} h per approved permission (${settings.permissionsPerMonth} a month). Exception employees get no overtime and no deductions. Penalties are not yet captured and show as zero. Payroll taxes are not calculated.`;
   $('pay-stats').innerHTML = [['Gross',T('gross')],['Social insurance',T('si')],['Loans',T('loans')],['Other deductions',T('otherDed')],['Net payroll',T('net')]]
     .map(([l,v])=>`<div class="stat"><div class="stat-label">${l}</div><div class="stat-value" style="font-size:19px">${fmt(v)}</div></div>`).join('');
-  $('pay-tbl').innerHTML = list.map(r=>`<tr class="click" data-slip="${esc(r.emp.id)}">
-    <td class="mono">${esc(r.emp.id)}</td><td class="strong">${esc(empName(r.emp))}${r.joiner?' <span class="chip c-blue">Joiner</span>':''}${r.leaver?' <span class="chip c-orange">Leaver</span>':''}</td><td>${esc(r.emp.department)}</td>
-    <td class="num">${r.partial?`<span style="color:var(--warn)">${r.days}</span>`:'full'}</td><td class="num">${fmt(r.basic)}</td><td class="num">${fmt(r.otherAdd)}</td><td class="num">${r.ot?fmt(r.ot):'—'}</td>
-    <td class="num strong">${fmt(r.gross)}</td><td class="num neg">${fmt(r.si)}</td><td class="num neg">${r.loans?fmt(r.loans):'—'}</td>
-    <td class="num neg">${fmt(r.otherDed)}</td><td class="num pos strong">${fmt(r.net)}</td></tr>`).join('')
-    || '<tr><td colspan="12" class="empty">No employees match</td></tr>';
-  $('pay-foot').textContent = `Showing ${list.length} of ${lastRun.length}. Totals above are for all active employees.`;
+  renderPayTable(list);     // part32.js: compact / expanded view + per-column search
 }
 function openSlip(id){
   const r = lastRun.find(x=>String(x.emp.id)===String(id)) || computeEmployee(empById(id));
@@ -7313,6 +7314,97 @@ document.addEventListener('click', async e => {
   if (cn) return confirmDel('Cancel this document request? The employee will no longer see it.', async () => {
     const { error } = await sb.rpc('cancel_document_request', { p_id: cn.dataset.docCancel }); if (error) throw error;
     toast('Request cancelled'); await loadDocRequests(); renderHRAlerts(); });
+});
+
+// ═════════════════════════════════════════════════════════
+//  PAYROLL RUN TABLE — compact / expanded view + a search box under every column (21 Oct 2026)
+//   · Compact: Basic, Other add., OT, Gross, Soc. Ins., Loans, Other ded., Net (as before).
+//   · Expanded: one column per addition element, Gross, one column per deduction element, Total ded., Net.
+//   · Number boxes accept  >1000   <500   >=0   =0   1000-2000   or plain digits (contains). Text boxes: contains.
+//   · The last row totals the rows that are showing.
+// ═════════════════════════════════════════════════════════
+let PAY_EXP = (() => { try { return localStorage.getItem('payExpanded') === '1'; } catch (e) { return false; } })();
+let PAY_F = {}, PAY_SIG = '', PAY_LIST = [];
+
+function payElCols(list, type){
+  const M = new Map();
+  list.forEach(r => (r.lines || []).forEach(l => {
+    if (l.type !== type) return;
+    const k = String(l.code);
+    if (!M.has(k)) { const el = elByCode(l.code);
+      M.set(k, { code: num(l.code), name: l.code === 0 ? 'Basic (employee record)' : (el && el.name_en) || String(l.name || '').replace(/ — automatic$/, '') }); }
+  }));
+  return [...M.entries()].sort((a, b) => a[1].code - b[1].code).map(([k, x]) => ({
+    k: (type === 'Addition' ? 'a' : 'd') + k, t: (x.code ? x.code + ' · ' : '') + x.name, n: 1, neg: type === 'Deduction', el: 1,
+    v: r => (r.lines || []).filter(l => l.type === type && String(l.code) === k).reduce((s, l) => s + num(l.amount), 0) }));
+}
+function payCols(list){
+  const name = { k: 'name', t: 'Name', v: r => empName(r.emp), s: r => [r.emp.name_en, r.emp.name_ar].join(' '),
+                 h: r => `${esc(empName(r.emp))}${r.joiner ? ' <span class="chip c-blue">Joiner</span>' : ''}${r.leaver ? ' <span class="chip c-orange">Leaver</span>' : ''}`, cls: 'strong' };
+  const days = { k: 'days', t: 'Days', v: r => r.partial ? String(r.days) : 'full',
+                 h: r => r.partial ? `<span style="color:var(--warn)">${esc(r.days)}</span>` : 'full', cls: 'num' };
+  const head = [{ k: 'code', t: 'Code', v: r => String(r.emp.id), cls: 'mono' }, name, { k: 'dept', t: 'Department', v: r => r.emp.department || '' }];
+  const N = (k, t, f, o = {}) => ({ k, t, v: f, n: 1, ...o });
+  if (!PAY_EXP) return [...head, days,
+    N('basic', 'Basic', r => r.basic), N('oadd', 'Other add.', r => r.otherAdd), N('ot', 'OT', r => r.ot),
+    N('gross', 'Gross', r => r.gross, { b: 1 }), N('si', 'Soc. Ins.', r => r.si, { neg: 1 }), N('loans', 'Loans', r => r.loans, { neg: 1 }),
+    N('oded', 'Other ded.', r => r.otherDed, { neg: 1 }), N('net', 'Net', r => r.net, { b: 1, pos: 1 })];
+  return [...head, { k: 'unit', t: 'Unit', v: r => r.emp.unit || '' }, days,
+    ...payElCols(list, 'Addition'), N('gross', 'Gross', r => r.gross, { b: 1, tot: 1 }),
+    ...payElCols(list, 'Deduction'), N('ded', 'Total ded.', r => r.ded, { neg: 1, tot: 1 }), N('net', 'Net', r => r.net, { b: 1, pos: 1, tot: 1 })];
+}
+function payNumMatch(val, f){
+  f = f.replace(/,/g, '').replace(/\s+/g, ''); let m;
+  if ((m = f.match(/^(>=|<=|>|<|=)(-?\d+(?:\.\d+)?)$/))) { const x = +m[2];
+    return { '>': val > x + 0.004, '<': val < x - 0.004, '>=': val >= x - 0.004, '<=': val <= x + 0.004, '=': Math.abs(val - x) < 0.005 }[m[1]]; }
+  if ((m = f.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/))) return val >= +m[1] - 0.004 && val <= +m[2] + 0.004;
+  return String(Math.round(val * 100) / 100).includes(f);
+}
+function payRowMatch(r, cols){
+  return cols.every(c => {
+    const f = String(PAY_F[c.k] || '').trim(); if (!f) return true;
+    if (c.n) return payNumMatch(num(c.v(r)), f);
+    return String(c.s ? c.s(r) : c.v(r)).toLowerCase().includes(f.toLowerCase());
+  });
+}
+function payCell(c, r){
+  if (c.h) return `<td class="${c.cls || ''}">${c.h(r)}</td>`;
+  if (!c.n) return `<td class="${c.cls || ''}">${esc(c.v(r))}</td>`;
+  const v = num(c.v(r));
+  return `<td class="num${c.b ? ' strong' : ''}${c.neg && v ? ' neg' : ''}${c.pos ? ' pos' : ''}">${v || c.b ? fmt(v) : '—'}</td>`;
+}
+function renderPayTable(list){
+  PAY_LIST = list;
+  const cols = payCols(lastRun);                       // columns from the whole run, so they don't jump while filtering
+  const sig = (PAY_EXP ? 'x' : 'c') + cols.map(c => c.k).join(',');
+  $('pay-table').classList.toggle('pay-expanded', PAY_EXP);
+  $('pay-exp').textContent = PAY_EXP ? '⊟ Compact view' : '⊞ Expanded view';
+  if (sig !== PAY_SIG) {
+    PAY_SIG = sig;
+    Object.keys(PAY_F).forEach(k => { if (!cols.some(c => c.k === k)) delete PAY_F[k]; });
+    $('pay-thead').innerHTML = `<tr>${cols.map(c => `<th class="${c.n ? 'num' : ''}${c.el ? ' pay-el' : ''}${c.tot ? ' pay-tot' : ''}" title="${esc(c.t)}">${esc(c.t)}</th>`).join('')}</tr>
+      <tr class="pay-filter">${cols.map(c => `<th><input data-pf="${c.k}" value="${esc(PAY_F[c.k] || '')}" placeholder="filter" title="${c.n ? 'Numbers: >1000  <500  =0  1000-2000  or digits' : 'Type part of the text'}"></th>`).join('')}</tr>`;
+  }
+  const rows = list.filter(r => payRowMatch(r, cols));
+  $('pay-tbl').innerHTML = rows.map(r => `<tr class="click" data-slip="${esc(r.emp.id)}">${cols.map(c => payCell(c, r)).join('')}</tr>`).join('')
+    || `<tr><td colspan="${cols.length}" class="empty">No employees match</td></tr>`;
+  $('pay-tfoot').innerHTML = rows.length ? `<tr>${cols.map((c, i) => i === 0 ? `<td class="strong">Total</td>`
+      : i === 1 ? `<td style="color:var(--muted)">${rows.length} employee${rows.length > 1 ? 's' : ''}</td>`
+      : c.n ? `<td class="num strong">${fmt(rows.reduce((s, r) => s + num(c.v(r)), 0))}</td>` : '<td></td>').join('')}</tr>` : '';
+  const nf = Object.values(PAY_F).filter(v => String(v).trim()).length;
+  $('pay-fclear').style.display = nf ? '' : 'none';
+  $('pay-foot').textContent = `Showing ${rows.length} of ${lastRun.length}${nf ? ` · ${nf} column filter${nf > 1 ? 's' : ''} on` : ''}. The cards above total all employees; the last table row totals the rows showing.`;
+}
+$('pay-exp').addEventListener('click', () => {
+  PAY_EXP = !PAY_EXP; try { localStorage.setItem('payExpanded', PAY_EXP ? '1' : '0'); } catch (e) {}
+  renderPayTable(PAY_LIST);
+});
+$('pay-fclear').addEventListener('click', () => {
+  PAY_F = {}; document.querySelectorAll('#pay-thead [data-pf]').forEach(i => i.value = ''); renderPayTable(PAY_LIST);
+});
+$('pay-thead').addEventListener('input', ev => {
+  const i = ev.target.closest('[data-pf]'); if (!i) return;
+  PAY_F[i.dataset.pf] = i.value; renderPayTable(PAY_LIST);
 });
 
 // ═════════════════════════════════════════════════════════

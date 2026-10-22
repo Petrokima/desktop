@@ -380,6 +380,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="period-note"></div>
   <div id="dash-alert"></div>
   <div id="dash-bday"></div>
+  <div id="dash-board"></div>
   <div class="stats">
     <div class="stat"><div class="stat-label">Active Employees</div><div class="stat-value" id="st-emp">—</div><div class="stat-sub" id="st-emp-sub"></div></div>
     <div class="stat"><div class="stat-label">Logged Today</div><div class="stat-value" id="st-today">—</div><div class="stat-sub" id="st-today-sub"></div></div>
@@ -7406,6 +7407,76 @@ $('pay-thead').addEventListener('input', ev => {
   const i = ev.target.closest('[data-pf]'); if (!i) return;
   PAY_F[i.dataset.pf] = i.value; renderPayTable(PAY_LIST);
 });
+
+// ═════════════════════════════════════════════════════════
+//  BOARD MEMBER DASHBOARD — pending requests from managers, in three groups (22 Oct 2026)
+//  Shown only to the super admin / board approver (Dalia). Read-only overview; a row opens the same
+//  detail window as the Employee voice page.
+//   1. Hiring requests (any manager)                — status New / In progress
+//   2. Other requests from the DIRECTORS            — penalties / incentives / variable elements (waiting for the
+//   3. Other requests from the other managers          board member or HR) and training requests (New / In progress)
+// ═════════════════════════════════════════════════════════
+const DIRECTORS = ['189', '212', '333', '748'];   // Hamdy Ragab · Ghadeer Nassar · Khaled Aman · Tamer Nour (employee codes)
+let BRD = { at: 0, busy: false };
+const isBoardViewer = () => !!(ME && (ME.super_admin || ME.board_approver));
+
+async function loadBoardRequests(force){
+  if (BRD.busy || (!force && Date.now() - BRD.at < 60000)) return false;
+  BRD.busy = true;
+  try {
+    const [h, t, m] = await Promise.all([
+      sb.from('hiring_requests').select('*').in('status', ['New', 'In progress']).order('created_at', { ascending: false }),
+      sb.from('training_requests').select('*').in('status', ['New', 'In progress']).order('created_at', { ascending: false }),
+      sb.from('manager_actions').select('*').in('status', ['Waiting for board', 'Waiting for HR']).order('created_at', { ascending: false })]);
+    const merge = (arr, rows) => { const ids = new Set(rows.map(r => r.id)); return [...rows, ...arr.filter(r => !ids.has(r.id))]; };
+    V.hire = merge(V.hire, h.data || []); V.train = merge(V.train, t.data || []); V.act = merge(V.act, m.data || []);   // the row click reuses V
+    BRD.hire = h.data || []; BRD.train = t.data || []; BRD.act = m.data || []; BRD.at = Date.now();
+    return true;
+  } finally { BRD.busy = false; }
+}
+function boardRow(kind, x){
+  const who = kind === 'act' ? (x.manager_name ? `${x.manager_name} (${x.manager_emp})` : vName(x.manager_emp)) : vName(x.manager_emp);
+  const what = kind === 'hire' ? `👥 <b>${esc(x.headcount)} × ${esc(x.job_name)}</b>${x.needed_by ? ` <span style="color:var(--muted)">· needed by ${esc(x.needed_by)}</span>` : ''}`
+    : kind === 'train' ? `🎓 Training: <b>${esc(x.topic)}</b> <span style="color:var(--muted)">· ${(x.emp_ids || []).length} employee${(x.emp_ids || []).length === 1 ? '' : 's'}</span>`
+    : `${x.kind === 'penalty' ? '⚖️ Penalty' : '💰 ' + esc(x.element_name || 'Incentive')} for <b>${esc(x.emp_name || vName(x.emp_id))}</b>
+       <span style="color:var(--muted)">· ${fmt(x.quantity)} ${x.action_type === 'Amount' ? 'EGP' : x.action_type === 'Days' ? 'day(s)' : 'hour(s)'} · ${esc(x.apply_period || '')}</span>`;
+  const mine = kind === 'act' && x.status === 'Waiting for board';
+  return `<tr data-vo="${kind}:${esc(x.id)}" style="cursor:pointer${mine ? ';background:rgba(224,123,57,.08)' : ''}">
+    <td class="mono" style="white-space:nowrap">${esc(vDate(x.created_at))}</td><td>${esc(who)}</td><td style="white-space:normal">${what}</td>
+    <td>${mine ? '<span class="chip c-orange">Waiting for your approval</span>' : vChip(x.status)}</td></tr>`;
+}
+function boardGroup(icon, title, rows, empty){
+  return `<div class="sec" style="margin:14px 0 6px">${icon} ${title} <span class="chip ${rows.length ? 'c-orange' : 'c-grey'}" style="margin-left:6px">${rows.length}</span></div>
+    ${rows.length ? `<div class="tbl-wrap"><table><thead><tr><th style="width:110px">Sent</th><th style="width:240px">From</th><th>Request</th><th style="width:190px">Status</th></tr></thead>
+      <tbody>${rows.join('')}</tbody></table></div>` : `<div style="font-size:12px;color:var(--muted);padding:4px 0 6px">${empty}</div>`}`;
+}
+function renderBoardRequests(){
+  const box = $('dash-board'); if (!box) return;
+  if (!isBoardViewer()) { box.innerHTML = ''; return; }
+  if (!BRD.at) { box.innerHTML = ''; return; }
+  const isDir = id => DIRECTORS.includes(String(id));
+  const byDate = (a, b) => String(b.x.created_at).localeCompare(String(a.x.created_at));
+  const other = [...BRD.train.map(x => ({ k: 'train', x })), ...BRD.act.map(x => ({ k: 'act', x }))].sort(byDate);
+  const hire = BRD.hire.map(x => boardRow('hire', x));
+  const dir = other.filter(o => isDir(o.x.manager_emp)).map(o => boardRow(o.k, o.x));
+  const mgr = other.filter(o => !isDir(o.x.manager_emp)).map(o => boardRow(o.k, o.x));
+  const waiting = BRD.act.filter(x => x.status === 'Waiting for board').length;
+  box.innerHTML = `<div class="card" style="padding:16px 18px;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <div class="toolbar-title">📋 Pending requests from managers</div>
+      <div style="font-size:12px;color:var(--muted)">${waiting ? `<b style="color:var(--warn)">${waiting} waiting for your approval</b> (approve on the phone app → Approvals) · ` : ''}click a row for details</div></div>
+    ${boardGroup('👥', 'Hiring requests from managers', hire, 'No open hiring requests.')}
+    ${boardGroup('⭐', 'Other requests from directors', dir, 'Nothing pending from the directors.')}
+    ${boardGroup('🧑‍💼', 'Other requests from other managers', mgr, 'Nothing pending from other managers.')}
+  </div>`;
+}
+const _renderDashboardBoard = renderDashboard;
+renderDashboard = function(){
+  const r = _renderDashboardBoard.apply(this, arguments);
+  if (isBoardViewer()) { renderBoardRequests(); loadBoardRequests(false).then(ch => { if (ch) renderBoardRequests(); }).catch(() => {}); }
+  else { const b = $('dash-board'); if (b) b.innerHTML = ''; }
+  return r;
+};
 
 // ═════════════════════════════════════════════════════════
 //  BOOT

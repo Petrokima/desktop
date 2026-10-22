@@ -1047,9 +1047,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
         <div class="field"><label>Casual leave counts against annual?</label><select id="s-casual"><option value="yes">Yes</option><option value="no">No</option></select></div>
         <div class="field full"><label>Working on a public holiday pays, on top of the normal monthly salary…</label><select id="s-hol-x">
           <option value="1">1 extra day's pay (total for the day = double)</option><option value="2">2 extra days' pay (total for the day = triple)</option></select></div>
-        <div class="field full"><label>Check-in from the phone without a project</label><select id="s-noproj">
-          <option value="everyone">Everyone can choose — at a site, or without a project</option>
-          <option value="selected">Only employees HR marks on their employee record</option></select></div>
         <div class="field full"><label>Permission requests (late arrival / early leave) from employees — vacations always need HR's final approval after the manager</label><select id="s-reqflow">
           <option value="hr">Direct manager approves, then HR gives the final approval</option>
           <option value="manager">Direct manager's approval is final</option></select></div>
@@ -1556,7 +1553,7 @@ const DEFAULTS = {
   companyName:'Petrokima Engineering & Contracting S.A.E.', period:'',
   hoursPerDay:8, daysPerMonth:30, otMultiplier:1.5,
   cycleStartDay:21, shiftStart:'08:00', lateAfter:'09:00', eveningShiftAfter:'14:00', otThreshold:1, otMode:'threshold', permissionsPerMonth:2, permissionMaxHours:2,
-  weekendDays:[5,6], annualLeaveDefault:21, casualCountsAnnual:'yes', noProjectMode:'selected', requestFlow:'hr', permDeadlineMin:30, annualNoticeDays:1, acctMinEmployees:3, codeUnpaid:40, codeProjAllow:12, codeAbsent:41, codeHoliday:42, holidayExtraDays:1,
+  weekendDays:[5,6], annualLeaveDefault:21, casualCountsAnnual:'yes', noProjectMode:'everyone', requestFlow:'hr', permDeadlineMin:30, annualNoticeDays:1, acctMinEmployees:3, codeUnpaid:40, codeProjAllow:12, codeAbsent:41, codeHoliday:42, holidayExtraDays:1,
   siRateEG:11, siRateSA:10,
   codeOT:5, codeSI:15, codeLoan:6, codeDelay:4, codePenalty:2
 };
@@ -2205,8 +2202,6 @@ const EMP_FIELDS = [
   ['Attendance rules', [['attendance_exempt','Exception rule — no delay deduction and no overtime','bool'],['annual_leave_days','Annual leave days / year — special case only (blank = automatic 15 / 21 / 30)','number'],
                         ['leave_opening_days','Leave balance carried into the first system year (days)','number'],
                         ['leave_early_ok','May request annual / emergency leave before 6 months of service (HR exception)','bool'],
-                        ['checkin_no_project','Can check in without a project (used when Settings is set to “Only employees HR marks”)','bool'],
-                        ['location_exempt','Can check in WITHOUT location — exception (only the administrator can change this)','bool'],
                         ['project_staff','Site staff — must check in at a project from the phone (fingerprint-machine punches kept as records only)','bool']]],
   ['Pay rates & payment', [['daily_pay','Daily pay','number'],['hour_pay','Hour pay','number'],['delay_hour_pay','Delay hour pay','number'],
                  ['payment_method','Payment method','select',['Bank','Cash']],['bank_account','Bank account','text'],['bank_branch','Bank','text']]],
@@ -2448,8 +2443,8 @@ async function saveAtt(){
   if (working){
     for (const l of readSplits()){
       if (!l.proj && !l.tin && !l.tout) continue;
-      const code = (!l.proj && empRec && !empRec.project_staff && (empRec.checkin_no_project || settings.noProjectMode==='everyone')) ? '' : parseProjInput(l.proj);
-      if (code === null) return toast(l.proj ? `"${l.proj}" is not a valid project — pick it from the suggestions` : 'Every line needs a project (this employee is not allowed to work without one)','warn');
+      const code = (!l.proj && empRec && !empRec.project_staff) ? '' : parseProjInput(l.proj);
+      if (code === null) return toast(l.proj ? `"${l.proj}" is not a valid project — pick it from the suggestions` : 'Every line needs a project (site staff must always work at a project)','warn');
       if (!l.tin || !l.tout) return toast(`Enter both check-in and check-out for ${code || 'the no-project line'}`,'warn');
       const h=segHours(l.tin,l.tout); if (!h) return toast(`Check-out must be after check-in for ${code || 'the no-project line'}`,'warn');
       segs.push({ code, in:l.tin, out:l.tout, hours:h });
@@ -2810,7 +2805,7 @@ $('mp-fill-go').addEventListener('click', () => {
 // ═════════════════════════════════════════════════════════
 //  SETTINGS
 // ═════════════════════════════════════════════════════════
-const SET_MAP = [['s-company','companyName','t'],['s-period','period','t'],['s-cycle','cycleStartDay'],['s-hours','hoursPerDay'],['s-shift','shiftStart','t'],['s-late','lateAfter','t'],['s-evening','eveningShiftAfter','t'],['s-ot-thr','otThreshold'],['s-ot-mode','otMode','t'],['s-perm-n','permissionsPerMonth'],['s-noproj','noProjectMode','t'],['s-reqflow','requestFlow','t'],['s-perm-deadline','permDeadlineMin','n'],['s-acct-min','acctMinEmployees','n'],['s-annual-notice','annualNoticeDays','n'],['s-annual','annualLeaveDefault'],['s-casual','casualCountsAnnual','t'],['s-c-unpaid','codeUnpaid'],['s-c-absent','codeAbsent'],['s-c-holiday','codeHoliday'],['s-hol-x','holidayExtraDays'],['s-perm-h','permissionMaxHours'],['s-days','daysPerMonth'],['s-otm','otMultiplier'],
+const SET_MAP = [['s-company','companyName','t'],['s-period','period','t'],['s-cycle','cycleStartDay'],['s-hours','hoursPerDay'],['s-shift','shiftStart','t'],['s-late','lateAfter','t'],['s-evening','eveningShiftAfter','t'],['s-ot-thr','otThreshold'],['s-ot-mode','otMode','t'],['s-perm-n','permissionsPerMonth'],['s-reqflow','requestFlow','t'],['s-perm-deadline','permDeadlineMin','n'],['s-acct-min','acctMinEmployees','n'],['s-annual-notice','annualNoticeDays','n'],['s-annual','annualLeaveDefault'],['s-casual','casualCountsAnnual','t'],['s-c-unpaid','codeUnpaid'],['s-c-absent','codeAbsent'],['s-c-holiday','codeHoliday'],['s-hol-x','holidayExtraDays'],['s-perm-h','permissionMaxHours'],['s-days','daysPerMonth'],['s-otm','otMultiplier'],
   ['s-si-eg','siRateEG'],['s-si-sa','siRateSA'],['s-c-ot','codeOT'],['s-c-si','codeSI'],['s-c-loan','codeLoan'],['s-c-delay','codeDelay'],['s-c-pen','codePenalty']];
 const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 function applySettingsUI(){
@@ -3100,10 +3095,10 @@ const REPORTS = [
         code:a.attempted_emp_id, name:a.attempted_name || empName(empById(a.attempted_emp_id)), owner: a.owner_emp_id ? `${a.owner_emp_id} ${a.owner_name || empName(empById(a.owner_emp_id))}` : '—',
         label:a.device_label || '', tries:a.attempts, status: a.reviewed ? `✓ ${a.reviewed_by || ''}${a.review_note ? ' — ' + a.review_note : ''}` : 'Open' })) }) },
   { id:'att-phones', g:'Attendance', t:'Registered phones',
-    d:'Which phone each active employee uses for the mobile app, when it was registered and last used, and who may check in without a project. Reset a phone from the employee record.',
-    build:() => ({ cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('state','Phone'),C('label','Device'),C('reg','Registered','date'),C('seen','Last used','mono'),C('np','Check-in without project'),C('nl','Without location')],
+    d:'Which phone each active employee uses for the mobile app, when it was registered and last used. Reset a phone from the employee record.',
+    build:() => ({ cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('state','Phone'),C('label','Device'),C('reg','Registered','date'),C('seen','Last used','mono')],
       rows:activeEmps().map(e=>{ const d=S.devices.find(x=>String(x.emp_id)===String(e.id)); return { code:e.id, name:empName(e), department:e.department, state:d?'Registered':'Not yet',
-        label:d?d.device_label:'', reg:d?String(d.registered_at).slice(0,10):'', seen:d?String(d.last_seen).slice(0,16).replace('T',' '):'', np:e.checkin_no_project?'Allowed':'', nl:e.location_exempt?'⚠ Exception':'' }; })
+        label:d?d.device_label:'', reg:d?String(d.registered_at).slice(0,10):'', seen:d?String(d.last_seen).slice(0,16).replace('T',' '):'' }; })
         .sort((a,b)=>a.state.localeCompare(b.state)||String(a.code).localeCompare(String(b.code),undefined,{numeric:true})) }) },
 
   // ── PROJECTS & COST ─────────────────────────────────────

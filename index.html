@@ -266,11 +266,16 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
         <button class="btn btn-primary" data-act="self-leave">🌴 Request vacation</button>
         <button class="btn btn-primary" data-act="self-perm">✋ Request late arrival / early leave</button>
         <button class="btn btn-ghost" data-act="self-hr">📨 Other HR request</button>
+        <button class="btn btn-ghost" id="smis-new">🚗 Outside mission</button>
       </div>
+      <div id="smis-ack"></div>
       <div class="card"><div class="toolbar"><span class="toolbar-title">My requests</span><span style="margin-left:auto;font-size:12px;color:var(--muted)">Pending requests can be cancelled</span></div>
         <div class="tbl-wrap"><table><thead><tr><th>Submitted</th><th>Request</th><th>Details</th><th>Status</th><th>HR reply</th><th></th></tr></thead><tbody id="self-list"></tbody></table></div></div>
     </div>
     <div id="self-team" style="display:none">
+      <div class="card" id="smis-card" style="display:none"><div class="toolbar"><span class="toolbar-title">🚗 Outside missions — your team</span>
+        <div class="toolbar-right"><button class="btn btn-primary btn-sm" id="smis-assign">🚗 Assign a mission</button></div></div>
+        <div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>When</th><th>Place · purpose</th><th>Project</th><th>Status</th><th></th></tr></thead><tbody id="smis-tbl"></tbody></table></div></div>
       <div class="card"><div class="toolbar"><span class="toolbar-title">Vacation and permission requests from your team</span></div>
         <div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Request</th><th>When</th><th>Reason</th><th>Status</th><th></th></tr></thead><tbody id="self-treq-tbl"></tbody></table></div></div>
       <div class="card" id="self-tproj-card" style="display:none"><div class="toolbar"><span class="toolbar-title">Your team's projects</span>
@@ -1194,13 +1199,32 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="modal-head"><div class="modal-title" id="wle-title">Employees of the office</div><button class="x" data-close="m-wlemp">×</button></div>
   <div style="font-size:12px;color:var(--muted);margin-bottom:10px">These employees check in and out at this office. Away from it the tap is accepted, marked “Away from his office”, and HR is notified. They still pick projects for the time sheet. An employee can belong to more than one office.</div>
   <div class="grid2">
-    <div class="field"><label>Add a whole department</label><div style="display:flex;gap:6px"><select class="sel" id="wle-dept" style="flex:1"></select><button class="btn btn-ghost btn-sm" id="wle-dept-add">+ Add all</button></div></div>
+    <div class="field"><label>Add a whole department or unit</label><div style="display:flex;gap:6px;flex-wrap:wrap"><select class="sel" id="wle-dept" style="flex:1;min-width:150px"></select><select class="sel" id="wle-unit" style="flex:1;min-width:150px"></select><button class="btn btn-ghost btn-sm" id="wle-dept-add">+ Add all</button></div>
+      <div id="wle-dept-n" style="font-size:12px;color:var(--muted);margin-top:4px"></div></div>
     <div class="field"><label>Add by employee codes (paste a column from Excel, or 101, 102 …)</label><div style="display:flex;gap:6px"><textarea id="wle-codes" rows="2" style="flex:1"></textarea><button class="btn btn-primary btn-sm" id="wle-codes-add">+ Add</button></div></div>
   </div>
   <div id="wle-note" style="font-size:12px;margin:6px 0"></div>
   <div style="display:flex;gap:8px;align-items:center;margin:8px 0"><b id="wle-count"></b><input class="inp" id="wle-q" placeholder="Search…" style="margin-left:auto;width:200px"></div>
   <div class="tbl-wrap" style="max-height:340px;overflow:auto"><table><thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Other offices</th><th></th></tr></thead><tbody id="wle-tbl"></tbody></table></div>
   <div class="modal-foot"><button class="btn btn-ghost" data-close="m-wlemp">Close</button></div>
+</div></div>
+
+<!-- MODAL: OUTSIDE MISSION — self-service (66) -->
+<div class="overlay" id="m-smis"><div class="modal" style="max-width:640px">
+  <div class="modal-head"><div class="modal-title" id="smis-title">🚗 Outside mission</div><button class="x" data-close="m-smis">×</button></div>
+  <div id="smis-who-box" class="field" style="display:none"><label>Employees · <span id="smis-cnt">0 chosen</span></label>
+    <div style="border:1px solid var(--border);border-radius:8px;padding:6px 10px;max-height:300px;overflow:auto">
+      <label style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-weight:600"><input type="checkbox" id="smis-all" style="width:auto"> <span id="smis-all-l">Select all</span></label>
+      <div id="smis-who"></div></div>
+    <div style="font-size:12px;color:var(--muted);margin-top:4px">Employees who use the app must tap “I undertake this mission”; those who do not use the app yet go straight to HR.</div></div>
+  <div class="btn-group" style="margin:6px 0 10px"><button class="btn btn-primary btn-sm" id="smis-k-full">Full day(s)</button><button class="btn btn-ghost btn-sm" id="smis-k-part">Part of a day</button></div>
+  <div class="grid2" id="smis-full"><div class="field"><label>From date</label><input type="date" id="smis-f"></div><div class="field"><label>To date</label><input type="date" id="smis-t"></div></div>
+  <div class="grid3" id="smis-part" style="display:none"><div class="field"><label>Date</label><input type="date" id="smis-d"></div><div class="field"><label>From time</label><input type="time" id="smis-tf" value="10:00"></div><div class="field"><label>To time</label><input type="time" id="smis-tt" value="14:00"></div></div>
+  <div class="field"><label>Place (where) *</label><input id="smis-pl" maxlength="200"></div>
+  <div class="field"><label>Purpose</label><textarea id="smis-pu" rows="2" maxlength="500"></textarea></div>
+  <div class="field"><label>Project code (optional)</label><input id="smis-pr" list="dl-proj" maxlength="40"></div>
+  <div style="font-size:12px;color:var(--muted)">On an approved mission day the employee still checks in and out on the phone; late / early are not deducted and away-from-site is not warned.</div>
+  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-smis">Cancel</button><button class="btn btn-primary" id="smis-go">Send</button></div>
 </div></div>
 
 <!-- MODAL: PAYSLIP -->
@@ -6567,6 +6591,7 @@ function openOfficeEmps(id){
   WLE = w; $('wle-title').textContent = `👥 Employees of ${w.name}`; $('wle-codes').value = ''; $('wle-q').value = ''; $('wle-note').textContent = '';
   const depts = [...new Set(S.employees.filter(e => e.status !== 'Inactive').map(e => e.department).filter(Boolean))].sort();
   $('wle-dept').innerHTML = '<option value="">Choose a department…</option>' + depts.map(d => `<option>${esc(d)}</option>`).join('');
+  wleUnits();
   renderOfficeEmps(); openM('m-wlemp');
 }
 function renderOfficeEmps(){
@@ -6600,9 +6625,22 @@ $('wle-codes-add').addEventListener('click', () => {
   if (!ids.length) return toast('Paste one or more employee codes', 'warn');
   addOfficeEmps(ids).then(() => { $('wle-codes').value = ''; });
 });
+// department → its units; the count of active employees the button would add
+const wlePick = () => { const d = $('wle-dept').value, u = $('wle-unit').value;
+  return S.employees.filter(e => e.status !== 'Inactive' && e.department === d && (!u || (u === '(no unit)' ? !e.unit : e.unit === u))); };
+function wleUnits(){
+  const d = $('wle-dept').value, act = S.employees.filter(e => e.status !== 'Inactive' && e.department === d);
+  const units = [...new Set(act.map(e => e.unit).filter(Boolean))].sort();
+  $('wle-unit').innerHTML = `<option value="">${d ? 'All units' : '— unit —'}</option>` + units.map(u => `<option>${esc(u)}</option>`).join('')
+    + (d && act.some(e => !e.unit) ? '<option value="(no unit)">(no unit)</option>' : '');
+  $('wle-unit').disabled = !d; wleCount();
+}
+function wleCount(){ $('wle-dept-n').textContent = $('wle-dept').value ? `${wlePick().length} active employee(s) will be added` : ''; }
+$('wle-dept').addEventListener('change', wleUnits);
+$('wle-unit').addEventListener('change', wleCount);
 $('wle-dept-add').addEventListener('click', () => {
-  const d = $('wle-dept').value; if (!d) return toast('Choose a department', 'warn');
-  addOfficeEmps(S.employees.filter(e => e.status !== 'Inactive' && e.department === d).map(e => String(e.id)), d);
+  const d = $('wle-dept').value, u = $('wle-unit').value; if (!d) return toast('Choose a department', 'warn');
+  addOfficeEmps(wlePick().map(e => String(e.id)), u ? `${d} · ${u}` : d);
 });
 $('wle-q').addEventListener('input', renderOfficeEmps);
 $('wle-tbl').addEventListener('click', async e => {
@@ -7637,6 +7675,120 @@ loadPeriodData = async function(){ const r = await _loadPeriodDataMs.apply(this,
 // always fresh when the page is opened (new requests arrive from phones all day)
 const _showPageMs = showPage;
 showPage = function(name){ const r = _showPageMs.apply(this, arguments); if (name === 'missions') renderMissions(); return r; };
+
+// ═════════════════════════════════════════════════════════
+//  OUTSIDE MISSIONS in desktop SELF-SERVICE (66/68, 22 Oct 2026) — same rules as the phone:
+//  employee asks → direct manager → HR · manager assigns → employee acknowledges (or straight to HR if he does not use the app) → HR
+// ═════════════════════════════════════════════════════════
+let SMIS = { mine: [], team: [], assign: false, part: false };
+const smisWhen = m => `${m.date_from}${m.date_to !== m.date_from ? ' → ' + m.date_to : ''}${m.time_from ? ` · ${String(m.time_from).slice(0,5)}–${String(m.time_to).slice(0,5)}` : ''}`;
+function smisStatus(m, asManager){
+  if (m.origin === 'manager' && m.status === 'Waiting for HR')
+    return `<span class="chip c-blue">${m.no_app ? 'Sent to HR — does not use the app' : asManager ? 'Acknowledged — waiting for HR' : 'You acknowledged — waiting for HR'}</span>`;
+  if (m.status === 'Waiting for manager') return `<span class="chip c-orange">${asManager ? 'Waiting for you' : 'Waiting for your manager'}</span>`;
+  if (m.status === 'Waiting for employee') return `<span class="chip c-orange">${asManager ? 'Waiting for the employee to acknowledge' : 'Waiting for you to acknowledge'}</span>`;
+  return chip(m.status);
+}
+async function loadSelfMissions(){
+  const id = SELF.me && SELF.me.emp_id; if (!id) return;
+  const [a, b] = await Promise.all([
+    sb.from('employee_missions').select('*').eq('emp_id', id).order('created_at', { ascending: false }).limit(100),
+    sb.from('employee_missions').select('*').eq('manager_id', id).neq('emp_id', id).order('created_at', { ascending: false }).limit(200)]);
+  SMIS.missing = !!(a.error && /does not exist|schema cache/i.test(a.error.message));
+  SMIS.mine = a.data || []; SMIS.team = b.data || [];
+}
+function renderSelfMissions(){
+  $('smis-new').style.display = SMIS.missing ? 'none' : '';
+  // assigned to me, waiting for my acknowledgement
+  const ack = SMIS.mine.filter(m => m.status === 'Waiting for employee');
+  $('smis-ack').innerHTML = ack.map(m => `<div class="alert a-warn" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div style="flex:1;min-width:240px">🚗 <b>Your manager assigned you a mission:</b> ${esc(m.place)} · ${esc(smisWhen(m))}${m.project_code ? ' · ' + esc(m.project_code) : ''}${m.purpose ? `<div style="font-size:12px">💬 ${esc(m.purpose)}</div>` : ''}</div>
+      <button class="btn btn-success btn-sm" data-smis-ack="${esc(m.id)}">✋ I undertake this mission</button></div>`).join('');
+  // my missions inside "My requests"
+  const rows = SMIS.mine.map(m => `<tr><td class="mono" style="white-space:nowrap">${esc(fmtSent(m.created_at))}</td><td class="strong">🚗 Outside mission${m.origin === 'manager' ? '<div style="font-size:11px;color:var(--muted)">assigned by your manager</div>' : ''}</td>
+      <td style="white-space:normal;min-width:200px">${esc(m.place)} · ${esc(smisWhen(m))}${m.project_code ? ' · ' + esc(m.project_code) : ''}${m.purpose ? ' · ' + esc(m.purpose) : ''}</td>
+      <td>${smisStatus(m, false)}</td><td style="white-space:normal;min-width:160px">${esc([m.manager_note, m.hr_note].filter(Boolean).join(' · '))}</td>
+      <td>${m.origin === 'employee' && ['Waiting for manager', 'Waiting for HR'].includes(m.status) ? `<button class="btn btn-ghost btn-sm" data-smis-cancel="${esc(m.id)}">Cancel</button>` : ''}</td></tr>`).join('');
+  const tb = $('self-list');
+  if (rows) { if (/class="empty"/.test(tb.innerHTML)) tb.innerHTML = ''; tb.insertAdjacentHTML('afterbegin', rows); }
+  // the manager's team
+  const myTeam = SD.myTeam || [];
+  $('smis-card').style.display = (myTeam.length || SMIS.team.length) && !SMIS.missing ? '' : 'none';
+  $('smis-assign').style.display = myTeam.length ? '' : 'none';
+  const L = SMIS.team.slice().sort((a, b) => ((a.status === 'Waiting for manager' ? 0 : 1) - (b.status === 'Waiting for manager' ? 0 : 1)) || String(b.created_at).localeCompare(String(a.created_at)));
+  $('smis-tbl').innerHTML = L.slice(0, 100).map(m => { const mine = m.status === 'Waiting for manager';
+    return `<tr><td class="strong">${esc(m.emp_name || m.emp_name_ar || m.emp_id)} <span class="mono" style="color:var(--muted)">${esc(m.emp_id)}</span>
+        <div style="font-size:11px;color:var(--muted)">${m.origin === 'manager' ? 'assigned by you' : 'requested by the employee'} · ${esc(fmtSent(m.created_at))}</div></td>
+      <td class="mono" style="white-space:nowrap">${esc(smisWhen(m))}</td>
+      <td style="white-space:normal;max-width:280px"><b>${esc(m.place)}</b>${m.purpose ? `<div style="font-size:12px;color:var(--muted)">${esc(m.purpose)}</div>` : ''}</td>
+      <td class="mono">${esc(m.project_code || '—')}</td>
+      <td>${smisStatus(m, true)}${m.hr_note ? `<div style="font-size:12px">HR: ${esc(m.hr_note)}</div>` : ''}</td>
+      <td style="white-space:nowrap">${mine ? `<button class="btn btn-success btn-sm" data-smis-ok="${esc(m.id)}">Approve</button> <button class="btn btn-ghost btn-sm" data-smis-no="${esc(m.id)}">Reject</button>` : ''}
+        ${m.origin === 'manager' && ['Waiting for employee', 'Waiting for HR'].includes(m.status) ? `<button class="btn btn-ghost btn-sm" data-smis-cancel="${esc(m.id)}">Cancel</button>` : ''}</td></tr>`; }).join('')
+    || '<tr><td colspan="6" class="empty">No missions yet — use “Assign a mission”</td></tr>';
+  const w = SMIS.team.filter(m => m.status === 'Waiting for manager').length;
+  if (w) { const b = $('self-team-badge'), n = (b.style.display === 'none' ? 0 : Number(b.textContent) || 0) + w; b.style.display = ''; b.textContent = n; $('self-team-nav').style.display = ''; }
+  if (SMIS.team.length) $('self-team-nav').style.display = '';
+}
+function openSelfMission(assign){
+  SMIS.assign = assign;
+  $('smis-title').textContent = assign ? '🚗 Assign a mission to your team' : '🚗 Request an outside mission';
+  $('smis-who-box').style.display = assign ? '' : 'none';
+  const team = SD.myTeam || [];
+  $('smis-all-l').textContent = `Select all (${team.length})`; $('smis-all').checked = false;
+  $('smis-who').innerHTML = team.map(m => `<label style="display:flex;gap:8px;align-items:center;padding:5px 0"><input type="checkbox" class="smis-w" value="${esc(m.id)}" style="width:auto">
+      <span>${esc(m.name_en || m.name_ar || m.id)} <span class="mono" style="color:var(--muted)">${esc(m.id)}</span>${m.job_name ? ` <span style="font-size:12px;color:var(--muted)">· ${esc(m.job_name)}</span>` : ''}</span></label>`).join('');
+  $('smis-cnt').textContent = '0 chosen';
+  ['smis-f', 'smis-t', 'smis-d'].forEach(i => $(i).value = todayStr());
+  ['smis-pl', 'smis-pu', 'smis-pr'].forEach(i => $(i).value = '');
+  smisKind(false); openM('m-smis');
+}
+function smisKind(p){ SMIS.part = p; $('smis-full').style.display = p ? 'none' : ''; $('smis-part').style.display = p ? '' : 'none';
+  $('smis-k-full').className = 'btn btn-sm ' + (p ? 'btn-ghost' : 'btn-primary'); $('smis-k-part').className = 'btn btn-sm ' + (p ? 'btn-primary' : 'btn-ghost'); }
+function smisCount(){ const n = document.querySelectorAll('.smis-w:checked').length, all = document.querySelectorAll('.smis-w').length;
+  $('smis-cnt').textContent = `${n} chosen`; $('smis-all').checked = n > 0 && n === all; }
+async function sendSelfMission(){
+  const p = SMIS.part, f = p ? $('smis-d').value : $('smis-f').value, to = p ? $('smis-d').value : $('smis-t').value;
+  const tf = p ? $('smis-tf').value : null, tt = p ? $('smis-tt').value : null, pl = $('smis-pl').value.trim();
+  if (!f || !to || to < f) return toast('The end date must be on or after the start date', 'warn');
+  if (p && (!tf || !tt || tt <= tf)) return toast('The end time must be after the start time', 'warn');
+  if (!pl) return toast('Write where the mission is', 'warn');
+  const who = SMIS.assign ? [...document.querySelectorAll('.smis-w:checked')].map(c => c.value) : null;
+  if (SMIS.assign && !who.length) return toast('Choose at least one employee', 'warn');
+  const args = { p_from: f, p_to: to, p_time_from: tf, p_time_to: tt, p_place: pl, p_purpose: $('smis-pu').value.trim() || null, p_project: $('smis-pr').value.trim() || null };
+  $('smis-go').disabled = true;
+  const { error } = SMIS.assign ? await sb.rpc('assign_mission', { p_emps: who, ...args }) : await sb.rpc('request_mission', args);
+  $('smis-go').disabled = false;
+  if (error) return toast(error.message.replace(/^[A-Z_]+:\s*/, ''), 'err');
+  closeM('m-smis');
+  toast(SMIS.assign ? 'Mission sent — app users acknowledge it; the others go straight to HR' : (SD.manager ? 'Mission request sent to your direct manager' : 'Mission request sent to HR'));
+  await loadSelf();
+}
+async function smisRpc(name, args, msg){
+  const { error } = await sb.rpc(name, args);
+  if (error) return toast(error.message.replace(/^[A-Z_]+:\s*/, ''), 'err');
+  toast(msg); await loadSelf();
+}
+$('smis-new').addEventListener('click', () => openSelfMission(false));
+$('smis-assign').addEventListener('click', () => openSelfMission(true));
+$('smis-k-full').addEventListener('click', () => smisKind(false));
+$('smis-k-part').addEventListener('click', () => smisKind(true));
+$('smis-all').addEventListener('change', () => { document.querySelectorAll('.smis-w').forEach(c => c.checked = $('smis-all').checked); smisCount(); });
+$('smis-who').addEventListener('change', smisCount);
+$('smis-go').addEventListener('click', sendSelfMission);
+document.addEventListener('click', e => {
+  const a = e.target.closest('[data-smis-ack]'); if (a) { a.disabled = true; return smisRpc('acknowledge_mission', { p_id: a.dataset.smisAck }, 'Thank you — your manager and HR are notified'); }
+  const ok = e.target.closest('[data-smis-ok]'); if (ok) { ok.disabled = true; return smisRpc('manager_decide_mission', { p_id: ok.dataset.smisOk, p_approve: true }, 'Approved — sent to HR'); }
+  const no = e.target.closest('[data-smis-no]'); if (no) { const note = prompt('Reason for rejecting (the employee will see it):'); if (note === null) return; if (!note.trim()) return toast('Write the reason', 'warn');
+    return smisRpc('manager_decide_mission', { p_id: no.dataset.smisNo, p_approve: false, p_note: note.trim() }, 'Rejected — the employee is notified'); }
+  const cx = e.target.closest('[data-smis-cancel]'); if (cx) { const id = cx.dataset.smisCancel;
+    confirmDel('Cancel this mission?', async () => { const { error } = await sb.rpc('cancel_mission', { p_id: id }); if (error) throw new Error(error.message.replace(/^[A-Z_]+:\s*/, '')); toast('Mission cancelled'); await loadSelf(); });
+    $('del-title').textContent = 'Please confirm'; $('del-ok').textContent = 'Cancel mission'; }
+});
+const _loadSelfMis = loadSelf;
+loadSelf = async function(){ try { await loadSelfMissions(); } catch (e) { console.warn(e); } return _loadSelfMis.apply(this, arguments); };
+const _renderSelfMis = renderSelf;
+renderSelf = function(){ const r = _renderSelfMis.apply(this, arguments); try { if (SD.emp) renderSelfMissions(); } catch (e) { console.warn(e); } return r; };
 
 // ═════════════════════════════════════════════════════════
 //  BOOT

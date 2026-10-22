@@ -7833,6 +7833,48 @@ renderVoicePage = async function(){
 };
 
 // ═════════════════════════════════════════════════════════
+//  REPORT "Returns after check-out and undone check-outs" (22 Oct 2026, with 71-undo-checkout.sql)
+//  Hours rule: a period counts from check-in to check-out. "Switch site" closes one period and opens the next at the same minute,
+//  so travel between sites is counted. A real check-out followed by a later check-in leaves a GAP that is not counted — this
+//  report lists those days so HR can ask about them, plus check-outs the employee undid within 5 minutes (table checkout_undos).
+// ═════════════════════════════════════════════════════════
+S.undos = [];
+const _loadPeriodDataUndo = loadPeriodData;
+loadPeriodData = async function(){
+  const r = await _loadPeriodDataUndo.apply(this, arguments);
+  try { const p = settings.period, q = await sb.from('checkout_undos').select('*').gte('date', periodStart(p)).lte('date', periodEnd(p));
+        S.undos = q.error ? [] : (q.data || []); } catch(e){ S.undos = []; }
+  return r;
+};
+const hmMin = s => { const m = /^(\d{1,2}):(\d{2})/.exec(String(s || '')); return m ? +m[1] * 60 + +m[2] : null; };
+function dayGaps(a){
+  const segs = (a.projects || []).filter(x => x.in && x.out && !x.forgotten).map(x => ({ x, i: hmMin(x.in), o: hmMin(x.out) }))
+    .filter(s => s.i !== null && s.o !== null).sort((p, q) => p.i - q.i);
+  const gaps = [];
+  for (let k = 1; k < segs.length; k++) { const g = segs[k].i - segs[k - 1].o; if (g > 0) gaps.push({ from: segs[k - 1].x.out, to: segs[k].x.in, min: g }); }
+  return { segs, gaps };
+}
+REPORTS.push({ id:'att-returns', g:'Attendance', t:'Returns after check-out and undone check-outs',
+  d:'Days where an employee checked out and later checked in again (the time away is NOT counted in his hours), and check-outs the employee undid within 5 minutes. Switching site is not a gap — travel between sites is counted.',
+  build:() => {
+    const und = {}; (S.undos || []).forEach(u => { const k = u.emp_id + '|' + u.date; (und[k] = und[k] || []).push(u.out_time); });
+    const R = [];
+    S.attendance.forEach(a => {
+      const { segs, gaps } = dayGaps(a), u = und[a.emp_id + '|' + a.date] || [];
+      if (!gaps.length && !u.length) return;
+      const e = empById(a.emp_id) || {}, away = gaps.reduce((s, g) => s + g.min, 0);
+      R.push({ date:a.date, code:a.emp_id, name:empName(e), department:e.department, unit:e.unit,
+        periods: segs.map(s => `${s.x.in}–${s.x.out}${s.x.code ? ' ' + s.x.code : ''}`).join(' · '), n: segs.length,
+        gapsTxt: gaps.map(g => `${g.from} → ${g.to}`).join(' · '), away: away / 60, longest: gaps.length ? Math.max(...gaps.map(g => g.min)) / 60 : 0,
+        hours: num(a.total_hours), undone: u.length ? `↩ ${u.length} (at ${u.sort().join(', ')})` : '' });
+    });
+    return { cols:[C('date','Date','date'),C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('unit','Unit'),
+        C('periods','Periods (check-in – check-out)'),C('n','Periods','int'),C('gapsTxt','Away (out → back in)'),C('away','Time away (h)','num',true),
+        C('longest','Longest absence (h)','num'),C('hours','Hours counted','num'),C('undone','Undone check-outs')],
+      rows: R.sort((p, q) => p.date.localeCompare(q.date) || String(p.code).localeCompare(String(q.code), undefined, { numeric:true })) };
+  } });
+
+// ═════════════════════════════════════════════════════════
 //  BOOT
 // ═════════════════════════════════════════════════════════
 // Built-in connection: when the key below is filled in, everyone goes straight to the sign-in screen.

@@ -624,10 +624,10 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <!-- EMPLOYEE VOICE -->
 <div class="page" id="page-voice">
   <div class="page-header"><div><div class="page-title">Employee voice</div>
-    <div class="page-sub">Complaints and suggestions (also seen by the board member) · requests from managers for new employees and for training. Click a row to answer.</div></div></div>
+    <div class="page-sub">Complaints and suggestions (also seen by the board member) · requests from managers for new employees and for training. Click a row to answer. Closed cases are kept — choose “Closed cases” or “All cases” to see them.</div></div>
+    <div class="toolbar-right"><label style="font-size:12px;color:var(--muted);margin-right:6px">Show</label><select class="sel" id="vo-st"><option value="open">Open cases</option><option value="closed">Closed cases</option><option value="">All cases</option></select></div></div>
   <div class="card"><div class="toolbar"><span class="toolbar-title">⚠️💡 Complaints & suggestions</span>
-      <div class="toolbar-right"><select class="sel" id="vo-kind"><option value="">All</option><option value="complaint">Complaints</option><option value="suggestion">Suggestions</option></select>
-        <select class="sel" id="vo-st"><option value="open">Open (New + In review)</option><option value="">All</option><option value="Closed">Closed</option></select></div></div>
+      <div class="toolbar-right"><select class="sel" id="vo-kind"><option value="">All</option><option value="complaint">Complaints</option><option value="suggestion">Suggestions</option></select></div></div>
     <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Employee</th><th>Subject</th><th>Details</th><th>Status</th><th>Reply</th></tr></thead><tbody id="vo-fb"></tbody></table></div></div>
   <div class="card"><div class="toolbar"><span class="toolbar-title">⚖️💰 Penalties & variable elements requested by managers</span><span style="font-size:12px;color:var(--muted)">Manager → board member → HR (final). On HR approval it is recorded automatically — days and hours are converted with the employee's daily / hourly pay.</span></div>
     <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Employee</th><th class="num">Quantity</th><th>Payroll month</th><th>Reason</th><th>Requested by</th><th>Board member</th><th>Status</th></tr></thead><tbody id="vo-act"></tbody></table></div></div>
@@ -5910,7 +5910,7 @@ async function loadVoice(){
 async function renderVoicePage(){
   await loadVoice();
   const k = $('vo-kind').value, st = $('vo-st').value;
-  const fb = V.fb.filter(x => (!k || x.kind === k) && (!st || (st === 'open' ? x.status !== 'Closed' : x.status === st)));
+  const fb = V.fb.filter(x => (!k || x.kind === k) && (!st || (st === 'open' ? x.status !== 'Closed' : x.status === 'Closed')));
   $('vo-fb').innerHTML = fb.map(x => `<tr data-vo="fb:${esc(x.id)}" style="cursor:pointer"><td class="mono">${esc(vDate(x.created_at))}</td><td>${x.kind==='complaint' ? '⚠️ Complaint' : '💡 Suggestion'}</td>
       <td>${x.anonymous ? '🕶 <i>Anonymous</i>' : esc(x.emp_name ? `${x.emp_name} (${x.emp_id})` : vName(x.emp_id))}</td><td class="strong" style="white-space:normal">${esc(x.subject)}</td><td style="white-space:normal;max-width:320px">${esc(x.body)}</td>
       <td>${vChip(x.status)}</td><td style="white-space:normal;max-width:240px">${esc(x.reply || '')}${x.replied_by ? `<div style="font-size:11px;color:var(--muted)">— ${esc(x.replied_by)}</div>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">Nothing here</td></tr>';
@@ -7784,6 +7784,53 @@ const _loadSelfMis = loadSelf;
 loadSelf = async function(){ try { await loadSelfMissions(); } catch (e) { console.warn(e); } return _loadSelfMis.apply(this, arguments); };
 const _renderSelfMis = renderSelf;
 renderSelf = function(){ const r = _renderSelfMis.apply(this, arguments); try { if (SD.emp) renderSelfMissions(); } catch (e) { console.warn(e); } return r; };
+
+// ═════════════════════════════════════════════════════════
+//  EMPLOYEE VOICE — one "Show: Open / Closed / All cases" filter for every section (22 Oct 2026)
+//  Nothing was ever deleted: closed complaints were only hidden by the old "Open" filter of the first table, and the other
+//  tables showed everything mixed. Now every section follows the same filter and its title shows "n open · n closed".
+//  Choice remembered in localStorage pk_voice_show.
+// ═════════════════════════════════════════════════════════
+const VO_OPEN = {
+  fb:    s => s === 'New' || s === 'In review',
+  act:   s => s === 'Waiting for board' || s === 'Waiting for HR',
+  sal:   s => s === 'Waiting for board',
+  hire:  s => s === 'New' || s === 'In progress',
+  train: s => s === 'New' || s === 'In progress'
+};
+(function(){ try { const v = localStorage.getItem('pk_voice_show'); if (v !== null && $('vo-st')) $('vo-st').value = v; } catch(e){} })();
+$('vo-st').addEventListener('change', () => { try { localStorage.setItem('pk_voice_show', $('vo-st').value); } catch(e){} });
+
+function voiceFilterSection(kind, tbodyId, list, cols){
+  const tb = $(tbodyId); if (!tb) return;
+  const show = $('vo-st').value, isOpen = VO_OPEN[kind];
+  const nOpen = list.filter(x => isOpen(x.status)).length, nClosed = list.length - nOpen;
+  const rows = [...tb.querySelectorAll('tr')].filter(r => !r.querySelector('td.empty'));
+  let shown = 0;
+  rows.forEach((r, i) => {
+    let x = null;
+    if (r.dataset.vo) { const id = r.dataset.vo.split(':').slice(1).join(':'); x = list.find(y => String(y.id) === id); }
+    else x = list[i];                                     // basic-salary rows have no data-vo: same order as the list
+    const ok = !x || !show || (show === 'open' ? isOpen(x.status) : !isOpen(x.status));
+    r.style.display = ok ? '' : 'none'; if (ok) shown++;
+  });
+  tb.querySelectorAll('tr.vo-none').forEach(r => r.remove());
+  if (rows.length && !shown) tb.insertAdjacentHTML('beforeend', `<tr class="vo-none"><td colspan="${cols}" class="empty">${show === 'open' ? 'No open cases — choose “Closed cases” or “All cases” above to see the history' : 'No closed cases yet'}</td></tr>`);
+  const card = tb.closest('.card'), title = card && card.querySelector('.toolbar-title');
+  if (title) { let c = title.querySelector('.vo-count'); if (!c) { c = document.createElement('span'); c.className = 'vo-count'; c.style.cssText = 'font-size:12px;font-weight:400;color:var(--muted);margin-left:8px'; title.appendChild(c); }
+    c.textContent = `${nOpen} open · ${nClosed} closed`; }
+}
+const _renderVoiceShow = renderVoicePage;
+renderVoicePage = async function(){
+  const r = await _renderVoiceShow.apply(this, arguments);
+  const k = $('vo-kind').value;
+  voiceFilterSection('fb', 'vo-fb', (V.fb || []).filter(x => !k || x.kind === k), 7);
+  voiceFilterSection('act', 'vo-act', V.act || [], 9);
+  voiceFilterSection('sal', 'vo-sal', V.sal || [], 10);
+  voiceFilterSection('hire', 'vo-hire', V.hire || [], 9);
+  voiceFilterSection('train', 'vo-train', V.train || [], 8);
+  return r;
+};
 
 // ═════════════════════════════════════════════════════════
 //  BOOT

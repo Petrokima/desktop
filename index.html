@@ -7601,9 +7601,9 @@ async function renderMissions(){
   });
   const wait = MS.rows.filter(m => m.status === 'Waiting for HR').length;
   $('ms-sub').textContent = `${wait} waiting for HR approval · ${MS.rows.length} in total`;
-  $('ms-tbl').innerHTML = rows.map(m => { const e = empById(m.emp_id) || {}, mg = m.manager_id ? empById(m.manager_id) : null;
+  $('ms-tbl').innerHTML = rows.map(m => { const e = empById(m.emp_id) || { id: m.emp_id, name_en: m.emp_name }, mg = m.manager_id ? empById(m.manager_id) : null;
     const step = m.origin === 'manager'
-      ? `Assigned by ${esc(mg ? empName(mg) : m.manager_id)}${m.ack_at ? ` · <span class="pos">✔ acknowledged ${esc(String(m.ack_at).slice(0,16).replace('T',' '))}</span>` : ' · not acknowledged yet'}`
+      ? `Assigned by ${esc(mg ? empName(mg) : m.manager_id)}${m.no_app ? ' · <span class="chip c-grey">employee does not use the app</span>' : m.ack_at ? ` · <span class="pos">✔ acknowledged ${esc(String(m.ack_at).slice(0,16).replace('T',' '))}</span>` : ' · not acknowledged yet'}`
       : (m.manager_id ? `Asked by the employee · manager ${m.manager_by ? (m.status === 'Rejected' && !m.hr_by ? '✕ rejected' : '✔ approved') + ' by ' + esc(m.manager_by) : esc(mg ? empName(mg) : m.manager_id) + ' — not decided'}` : 'Asked by the employee · no direct manager');
     return `<tr><td class="mono" style="white-space:nowrap">${esc(String(m.created_at).slice(0,10))}</td>
       <td class="strong">${esc(empName(e) || m.emp_id)} <span class="mono" style="color:var(--muted)">${esc(m.emp_id)}</span><div style="font-size:11px;color:var(--muted)">${esc(e.department || '')}</div></td>

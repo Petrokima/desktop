@@ -943,7 +943,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="card">
     <div class="toolbar"><span class="toolbar-title" id="lw-count">Check-ins with location warnings</span>
       <div class="toolbar-right">
-        <select class="sel" id="lw-kind"><option value="">All warnings</option><option value="outside_site">Outside the site</option><option value="fake_gps">Fake-location app</option><option value="same_point">Same exact point</option><option value="perfect_accuracy">"Perfect" accuracy</option><option value="impossible_travel">Impossible travel</option><option value="browser_android">Browser instead of app</option><option value="old_app">Old app version</option><option value="held">Kept for review (not counted)</option></select>
+        <select class="sel" id="lw-kind"><option value="">All warnings</option><option value="outside_site">Outside the site</option><option value="outside_office">Away from his office</option><option value="fake_gps">Fake-location app</option><option value="same_point">Same exact point</option><option value="perfect_accuracy">"Perfect" accuracy</option><option value="impossible_travel">Impossible travel</option><option value="browser_android">Browser instead of app</option><option value="old_app">Old app version</option><option value="held">Kept for review (not counted)</option></select>
         <input class="inp" id="lw-q" placeholder="Search code, name or site…">
       </div></div>
     <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Time</th><th>Employee</th><th>Event</th><th>Site</th><th class="num">Distance</th><th>Warnings</th><th>Counted?</th><th>Map</th><th></th></tr></thead><tbody id="lw-tbl"></tbody></table></div>
@@ -968,8 +968,8 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="card">
     <div class="toolbar"><span class="toolbar-title">Offices (check-ins without a project)</span>
       <div class="toolbar-right"><button class="btn btn-ghost" id="wl-add">+ Add office</button></div></div>
-    <div style="font-size:12px;color:var(--muted);padding:0 18px 10px">Employees allowed to check in "without project" are compared with the nearest office. No offices listed = not checked.</div>
-    <div class="tbl-wrap"><table><thead><tr><th>Office</th><th>Latitude</th><th>Longitude</th><th>Radius (m)</th><th>Active</th><th></th></tr></thead><tbody id="wl-tbl"></tbody></table></div>
+    <div style="font-size:12px;color:var(--muted);padding:0 18px 10px">Employees allowed to check in "without project" are compared with the nearest office. No offices listed = not checked.<br><b>👥 Employees</b>: employees fixed to an office are always compared with their own office(s) — whatever project they choose for the time sheet. Away from it, the check-in / check-out is accepted and HR gets a phone notification.</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Office</th><th>Latitude</th><th>Longitude</th><th>Radius (m)</th><th>Active</th><th>Employees</th><th></th></tr></thead><tbody id="wl-tbl"></tbody></table></div>
   </div>
 </div>
 
@@ -1187,6 +1187,20 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   </div>
   <div id="lpp-preview" style="font-size:12px;color:var(--muted);margin-top:10px"></div>
   <div class="modal-foot"><button class="btn btn-ghost" data-close="m-lpp">Cancel</button><button class="btn btn-primary" id="lpp-save">Postpone</button></div>
+</div></div>
+
+<!-- MODAL: EMPLOYEES FIXED TO AN OFFICE (67) -->
+<div class="overlay" id="m-wlemp"><div class="modal" style="max-width:760px">
+  <div class="modal-head"><div class="modal-title" id="wle-title">Employees of the office</div><button class="x" data-close="m-wlemp">×</button></div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:10px">These employees check in and out at this office. Away from it the tap is accepted, marked “Away from his office”, and HR is notified. They still pick projects for the time sheet. An employee can belong to more than one office.</div>
+  <div class="grid2">
+    <div class="field"><label>Add a whole department</label><div style="display:flex;gap:6px"><select class="sel" id="wle-dept" style="flex:1"></select><button class="btn btn-ghost btn-sm" id="wle-dept-add">+ Add all</button></div></div>
+    <div class="field"><label>Add by employee codes (paste a column from Excel, or 101, 102 …)</label><div style="display:flex;gap:6px"><textarea id="wle-codes" rows="2" style="flex:1"></textarea><button class="btn btn-primary btn-sm" id="wle-codes-add">+ Add</button></div></div>
+  </div>
+  <div id="wle-note" style="font-size:12px;margin:6px 0"></div>
+  <div style="display:flex;gap:8px;align-items:center;margin:8px 0"><b id="wle-count"></b><input class="inp" id="wle-q" placeholder="Search…" style="margin-left:auto;width:200px"></div>
+  <div class="tbl-wrap" style="max-height:340px;overflow:auto"><table><thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Other offices</th><th></th></tr></thead><tbody id="wle-tbl"></tbody></table></div>
+  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-wlemp">Close</button></div>
 </div></div>
 
 <!-- MODAL: PAYSLIP -->
@@ -6344,6 +6358,7 @@ $('us-refresh').addEventListener('click', () => setTimeout(loadTwoStepAdmin, 400
 // ═════════════════════════════════════════════════════════
 const LOC_FLAG = {
   outside_site:     ['Outside the site', 'c-orange'],
+  outside_office:   ['Away from his office', 'c-orange'],
   fake_gps:         ['Fake-location app', 'c-red'],
   same_point:       ['Same exact point as another day', 'c-orange'],
   perfect_accuracy: ['"Perfect" GPS accuracy', 'c-orange'],
@@ -6360,6 +6375,7 @@ async function loadLocationData(){
     sb.from('settings').select('value').eq('key','location_rules'),
     sb.from('work_locations').select('*').order('name') ]);
   if (r.data && r.data[0] && r.data[0].value) LOC_RULES = { ...LOC_RULES, ...r.data[0].value };
+  await loadOfficeEmps();
   wlMissing = !!w.error; WORK_LOCS = w.data || [];
 }
 function renderLocations(){
@@ -6484,8 +6500,9 @@ function renderOffices(){
       <td><input class="inp" style="width:120px" data-w="lng" value="${esc(w.lng)}"></td>
       <td><input class="inp" style="width:80px" type="number" min="50" max="5000" step="50" data-w="rad" value="${w.radius_m}"></td>
       <td><input type="checkbox" data-w="active" ${w.active ? 'checked' : ''}></td>
+      <td>${w.id === 'new' ? '' : `<button class="btn btn-ghost btn-sm" data-w-emps title="Employees who check in and out at this office">👥 ${(n => n + (n === 1 ? ' employee' : ' employees'))(OFFICE_EMPS.filter(x => x.location_id === w.id).length)}</button>`}</td>
       <td style="white-space:nowrap"><button class="btn btn-primary btn-sm" data-w-save>Save</button> <a class="btn btn-ghost btn-sm" href="https://www.google.com/maps?q=${w.lat},${w.lng}" target="_blank" rel="noopener">map ↗</a> <button class="btn btn-ghost btn-sm" data-w-del>Delete</button></td></tr>`).join('')
-    || '<tr><td colspan="6" class="empty">No offices yet — click + Add office</td></tr>';
+    || '<tr><td colspan="7" class="empty">No offices yet — click + Add office</td></tr>';
 }
 $('wl-tbl').addEventListener('input', e => {
   const i = e.target.closest('[data-w="lat"]'); if (!i || !/[ ,]/.test(i.value.trim())) return;
@@ -6499,6 +6516,7 @@ $('wl-tbl').addEventListener('click', async e => {
       WORK_LOCS = WORK_LOCS.filter(w => w.id !== id); renderOffices(); toast('Office deleted'); });
     return;
   }
+  if (e.target.closest('[data-w-emps]')) return openOfficeEmps(id);
   if (!e.target.closest('[data-w-save]')) return;
   const g = k => tr.querySelector(`[data-w="${k}"]`);
   const row = { name: g('name').value.trim(), lat: Number(g('lat').value), lng: Number(g('lng').value), radius_m: Math.round(Number(g('rad').value)), active: g('active').checked };
@@ -6536,6 +6554,64 @@ renderDashboard = function(){
   const el = $('loc-badge'); if (el) { el.style.display = n ? '' : 'none'; el.textContent = n; }
   if (n) $('dash-alert').insertAdjacentHTML('beforeend', `<div class="alert ${flagged.some(c => (c.location_flags||[]).includes('fake_gps') || (c.location_flags||[]).includes('impossible_travel')) ? 'a-alarm' : 'a-warn'}" style="margin-bottom:10px;cursor:pointer" data-nav="locations">📍 <b>${n}</b> check-in${n>1?'s':''} with location warnings this period${held ? ` (${held} kept for review, not counted)` : ''} — click to review</div>`);
 };
+
+// ── employees fixed to an office (67) ──
+let OFFICE_EMPS = [], OFFICE_EMPS_MISSING = false, WLE = null;
+async function loadOfficeEmps(){
+  const { data, error } = await sb.from('employee_work_locations').select('*');
+  OFFICE_EMPS_MISSING = !!error; OFFICE_EMPS = data || [];
+}
+function openOfficeEmps(id){
+  if (OFFICE_EMPS_MISSING) return toast('Run database file 67-employees-fixed-to-office.sql first', 'warn');
+  const w = WORK_LOCS.find(x => x.id === id); if (!w) return;
+  WLE = w; $('wle-title').textContent = `👥 Employees of ${w.name}`; $('wle-codes').value = ''; $('wle-q').value = ''; $('wle-note').textContent = '';
+  const depts = [...new Set(S.employees.filter(e => e.status !== 'Inactive').map(e => e.department).filter(Boolean))].sort();
+  $('wle-dept').innerHTML = '<option value="">Choose a department…</option>' + depts.map(d => `<option>${esc(d)}</option>`).join('');
+  renderOfficeEmps(); openM('m-wlemp');
+}
+function renderOfficeEmps(){
+  if (!WLE) return;
+  const q = $('wle-q').value.trim().toLowerCase();
+  const mine = OFFICE_EMPS.filter(x => x.location_id === WLE.id);
+  const rows = mine.map(x => ({ x, e: empById(x.emp_id) || { id: x.emp_id } }))
+    .filter(({ e }) => !q || [e.id, e.name_en, e.name_ar, e.department].some(v => String(v || '').toLowerCase().includes(q)))
+    .sort((a, b) => String(a.e.id).localeCompare(String(b.e.id), undefined, { numeric: true }));
+  $('wle-count').textContent = `${mine.length} employee${mine.length === 1 ? '' : 's'}`;
+  $('wle-tbl').innerHTML = rows.map(({ e }) => { const other = OFFICE_EMPS.filter(y => y.emp_id === e.id && y.location_id !== WLE.id).map(y => (WORK_LOCS.find(w => w.id === y.location_id) || {}).name).filter(Boolean);
+    return `<tr><td class="mono">${esc(e.id)}</td><td class="strong">${esc(empName(e))}</td><td>${esc(e.department || '')}</td><td>${esc(other.join(', '))}</td>
+      <td><button class="btn btn-ghost btn-sm" data-wle-rm="${esc(e.id)}">✕ Remove</button></td></tr>`; }).join('')
+    || '<tr><td colspan="5" class="empty">No employees yet — add a department or paste employee codes above</td></tr>';
+  renderOffices();
+}
+async function addOfficeEmps(ids, label){
+  const have = new Set(OFFICE_EMPS.filter(x => x.location_id === WLE.id).map(x => x.emp_id));
+  const known = new Set(S.employees.map(e => String(e.id)));
+  const unknown = ids.filter(i => !known.has(i)), add = [...new Set(ids.filter(i => known.has(i) && !have.has(i)))];
+  if (!add.length) { $('wle-note').innerHTML = `Nothing new to add${unknown.length ? ` · <span class="neg">unknown codes: ${esc(unknown.slice(0, 15).join(', '))}</span>` : ''}`; return; }
+  const by = (ME && (ME.full_name || ME.email)) || null;
+  const { data, error } = await sb.from('employee_work_locations').insert(add.map(emp_id => ({ emp_id, location_id: WLE.id, added_by: by }))).select();
+  if (error) return toast(error.message, 'err'); if (!(data && data.length)) return toast(NOPERM, 'err');
+  OFFICE_EMPS = OFFICE_EMPS.concat(data);
+  $('wle-note').innerHTML = `<span class="pos">✔ ${data.length} added${label ? ' from ' + esc(label) : ''}</span>${unknown.length ? ` · <span class="neg">not found: ${esc(unknown.slice(0, 15).join(', '))}${unknown.length > 15 ? ' …' : ''}</span>` : ''}`;
+  renderOfficeEmps();
+}
+$('wle-codes-add').addEventListener('click', () => {
+  const ids = $('wle-codes').value.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+  if (!ids.length) return toast('Paste one or more employee codes', 'warn');
+  addOfficeEmps(ids).then(() => { $('wle-codes').value = ''; });
+});
+$('wle-dept-add').addEventListener('click', () => {
+  const d = $('wle-dept').value; if (!d) return toast('Choose a department', 'warn');
+  addOfficeEmps(S.employees.filter(e => e.status !== 'Inactive' && e.department === d).map(e => String(e.id)), d);
+});
+$('wle-q').addEventListener('input', renderOfficeEmps);
+$('wle-tbl').addEventListener('click', async e => {
+  const b = e.target.closest('[data-wle-rm]'); if (!b) return;
+  const id = b.dataset.wleRm;
+  const { data, error } = await sb.from('employee_work_locations').delete().eq('emp_id', id).eq('location_id', WLE.id).select();
+  if (error) return toast(error.message, 'err'); if (!(data && data.length)) return toast(NOPERM, 'err');
+  OFFICE_EMPS = OFFICE_EMPS.filter(x => !(x.emp_id === id && x.location_id === WLE.id)); renderOfficeEmps(); toast('Removed');
+});
 
 // ═════════════════════════════════════════════════════════
 //  ATTENDANCE CALENDAR — monthly / weekly view of one employee

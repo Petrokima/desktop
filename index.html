@@ -7875,6 +7875,47 @@ REPORTS.push({ id:'att-returns', g:'Attendance', t:'Returns after check-out and 
   } });
 
 // ═════════════════════════════════════════════════════════
+//  BIRTH DATE FROM THE EGYPTIAN NATIONAL ID (23 Oct 2026, with 73-birth-date-from-national-id.sql)
+//  ID (14 digits): 1st digit 2 = 1900s, 3 = 2000s; digits 2–7 = YYMMDD. The database fills an EMPTY birth date on save;
+//  the employee window fills it as soon as the ID is typed (only when the birth date box is empty), and the report
+//  "Birth date different from national ID" lists records where the two disagree, for HR to check against the ID card.
+// ═════════════════════════════════════════════════════════
+function birthFromNid(nid){
+  const s = String(nid || '').replace(/\D/g, '');
+  if (s.length !== 14 || !/^[23]/.test(s)) return null;
+  const y = (s[0] === '2' ? 1900 : 2000) + +s.slice(1, 3), m = +s.slice(3, 5), d = +s.slice(5, 7);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (m < 1 || m > 12 || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+document.addEventListener('input', e => {
+  const f = e.target.closest && e.target.closest('#emp-form [data-f="national_id"]'); if (!f) return;
+  const b = document.querySelector('#emp-form [data-f="birth_date"]'); if (!b) return;
+  const v = birthFromNid(f.value), field = b.closest('.field');
+  let note = field.querySelector('.bd-note');
+  if (v && (!b.value || b.dataset.auto === '1')) {
+    b.value = v; b.dataset.auto = '1';
+    if (!note) { note = document.createElement('div'); note.className = 'bd-note'; note.style.cssText = 'font-size:11px;color:var(--muted);margin-top:4px'; field.appendChild(note); }
+    note.textContent = 'Filled from the national ID';
+  } else if (!v && b.dataset.auto === '1') { b.value = ''; delete b.dataset.auto; if (note) note.textContent = ''; }
+});
+document.addEventListener('input', e => {                    // HR typed the birth date himself → stop auto-filling it
+  const b = e.target.closest && e.target.closest('#emp-form [data-f="birth_date"]'); if (!b) return;
+  delete b.dataset.auto; const n = b.closest('.field').querySelector('.bd-note'); if (n) n.textContent = '';
+});
+REPORTS.push({ id:'emp-birth-id', g:'HR', t:'Birth date different from national ID',
+  d:'Employees whose recorded birth date does not match the date written in their Egyptian national ID (digits 2–7). Check the ID card: either the birth date or the ID number was typed wrong. A wrong birth date affects the leave entitlement at age 50, the first-sign-in question and the birthday greeting.',
+  build:() => {
+    const rows = (S.employees || []).map(e => ({ e, idb: birthFromNid(e.national_id) }))
+      .filter(x => x.idb && x.e.birth_date && String(x.e.birth_date).slice(0, 10) !== x.idb)
+      .map(({ e, idb }) => ({ code:e.id, name:empName(e), status:e.status, department:e.department, rec:String(e.birth_date).slice(0, 10), idb,
+        diff: String(e.birth_date).slice(0, 4) !== idb.slice(0, 4) ? 'Year differs' : String(e.birth_date).slice(5, 7) !== idb.slice(5, 7) ? 'Month differs' : 'Day differs' }));
+    return { cols:[C('code','Code','id'),C('name','Employee','strong'),C('status','Status'),C('department','Department'),
+        C('rec','Recorded birth date','date'),C('idb','Birth date in the national ID','date'),C('diff','Difference')],
+      rows: rows.sort((a, b) => String(a.code).localeCompare(String(b.code), undefined, { numeric:true })) };
+  } });
+
+// ═════════════════════════════════════════════════════════
 //  BOOT
 // ═════════════════════════════════════════════════════════
 // Built-in connection: when the key below is filled in, everyone goes straight to the sign-in screen.

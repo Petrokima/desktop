@@ -7946,6 +7946,86 @@ saveEmp = async function(){
 };
 
 // ═════════════════════════════════════════════════════════
+//  EMPLOYEE WINDOW — no field may be skipped when it applies (23 Oct 2026, with 75-employee-required-fields.sql)
+//  Same rule as the database function employee_missing(); the database refuses NEW employees with gaps, this window
+//  refuses Save for any employee (new or existing) until his gaps are filled, marks the empty boxes in red and lists them.
+//  Always-required boxes get a red *. Report "Missing employee data" lists every active employee with gaps.
+// ═════════════════════════════════════════════════════════
+const REQ_ALWAYS = [['name_ar','Arabic name'],['name_en','English name'],['department','Department'],['unit','Unit'],['entity','Entity'],
+  ['job_name','Job name'],['job_type','Job type'],['mobile','Mobile'],['address','Address'],['contract_type','Contract type'],
+  ['employment_date','Employment date'],['birth_date','Birth date'],['gender','Gender'],['marital_status','Marital status'],
+  ['religion','Religion'],['nationality','Nationality'],['national_id','National ID'],['national_id_expiry','National ID expiry'],
+  ['insurance','Insurance'],['payment_method','Payment method'],['university','University'],['college','College'],['graduation_date','Graduation date']];
+const reqBlank = v => v === null || v === undefined || String(v).trim() === '' || String(v) === PICK_OTHER;
+function employeeMissing(r, withPay){
+  const m = [];
+  REQ_ALWAYS.forEach(([k, l]) => { if (reqBlank(r[k])) m.push([k, l]); });
+  if (reqBlank(r.manager_id) && !r.top_of_org) m.push(['manager_id','Direct manager']);
+  if (r.contract_type !== 'Permanent' && reqBlank(r.contract_start_date)) m.push(['contract_start_date','Contract start']);
+  if (r.gender === 'Male' && reqBlank(r.military_status)) m.push(['military_status','Military status']);
+  if (r.insurance === 'Insured') {
+    if (reqBlank(r.insurance_number)) m.push(['insurance_number','Insurance number']);
+    if (reqBlank(r.insurance_title)) m.push(['insurance_title','Insurance title']);
+    if (reqBlank(r.insurance_date)) m.push(['insurance_date','Insurance date']);
+    if (withPay && reqBlank(r.insurance_amount)) m.push(['insurance_amount','Insurable amount']);
+  }
+  if (r.payment_method === 'Bank') {
+    if (reqBlank(r.bank_account)) m.push(['bank_account','Bank account']);
+    if (reqBlank(r.bank_branch)) m.push(['bank_branch','Bank']);
+  }
+  if (r.has_disability === true) {
+    if (reqBlank(r.disability_card_no)) m.push(['disability_card_no','Disability card number']);
+    if (reqBlank(r.disability_card_expiry)) m.push(['disability_card_expiry','Disability card expiry']);
+  }
+  return m;
+}
+function empFormRecord(){
+  const e = editingEmp ? (empById(editingEmp) || {}) : {}, r = { ...e };
+  document.querySelectorAll('#emp-form [data-f]').forEach(el => {
+    const k = el.dataset.f, def = EMP_FIELDS.flatMap(s => s[1]).find(f => f[0] === k);
+    r[k] = def && def[2] === 'bool' ? el.value === 'Yes' : el.value;
+  });
+  r.top_of_org = !!($('emp-top') && $('emp-top').checked);
+  return r;
+}
+function reqMark(){
+  REQ_ALWAYS.forEach(([k]) => { const f = document.querySelector(`#emp-form [data-f="${k}"]`), lab = f && f.closest('.field').querySelector('label');
+    if (lab && !lab.querySelector('.req')) lab.insertAdjacentHTML('beforeend', ' <span class="req" style="color:var(--danger,#d33)">*</span>'); });
+}
+const _openEmpReq = openEmp;
+openEmp = function(){
+  const r = _openEmpReq.apply(this, arguments);
+  reqMark();
+  if (editingEmp) { const miss = employeeMissing(empFormRecord(), !isOfficer());
+    if (miss.length) $('emp-form').insertAdjacentHTML('afterbegin', `<div class="alert a-warn req-banner" style="margin-bottom:6px">Missing data (${miss.length}): ${esc(miss.map(x => x[1]).join(', '))} — fill these in before saving.</div>`); }
+  return r;
+};
+document.addEventListener('input', e => { const f = e.target.closest && e.target.closest('#emp-form .field.req-miss'); if (f) f.classList.remove('req-miss'); }, true);
+document.addEventListener('change', e => { const f = e.target.closest && e.target.closest('#emp-form .field.req-miss'); if (f) f.classList.remove('req-miss'); }, true);
+const _saveEmpReq = saveEmp;
+saveEmp = async function(){
+  const miss = employeeMissing(empFormRecord(), !isOfficer());
+  document.querySelectorAll('#emp-form .field.req-miss').forEach(f => f.classList.remove('req-miss'));
+  if (miss.length) {
+    let first = null;
+    miss.forEach(([k]) => { const el = document.querySelector(`#emp-form [data-f="${k}"]`); if (el) { el.closest('.field').classList.add('req-miss'); first = first || el; } });
+    if (first) { first.focus(); first.scrollIntoView && first.scrollIntoView({ block:'center' }); }
+    return toast(`Fill in before saving (${miss.length}): ${miss.map(x => x[1]).join(', ')}`, 'warn');
+  }
+  return _saveEmpReq.apply(this, arguments);
+};
+document.head.insertAdjacentHTML('beforeend', '<style>#emp-form .field.req-miss input,#emp-form .field.req-miss select,#emp-form .field.req-miss textarea{border-color:#d33;box-shadow:0 0 0 2px rgba(221,51,51,.18)}#emp-form .field.req-miss label{color:#d33}</style>');
+REPORTS.push({ id:'emp-missing', g:'HR', t:'Missing employee data',
+  d:'Active employees with empty fields that apply to them. HR cannot save an employee until these are filled; new employees cannot be added with gaps.',
+  build:() => {
+    const pay = !isOfficer();
+    const rows = (S.employees || []).filter(e => e.status !== 'Inactive').map(e => ({ e, m: employeeMissing(e, pay) })).filter(x => x.m.length)
+      .map(({ e, m }) => ({ code:e.id, name:empName(e), department:e.department, unit:e.unit, n:m.length, fields:m.map(x => x[1]).join(', ') }));
+    return { cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('unit','Unit'),C('n','Missing','int'),C('fields','Fields to fill')],
+      rows: rows.sort((a, b) => b.n - a.n || String(a.code).localeCompare(String(b.code), undefined, { numeric:true })) };
+  } });
+
+// ═════════════════════════════════════════════════════════
 //  BOOT
 // ═════════════════════════════════════════════════════════
 // Built-in connection: when the key below is filled in, everyone goes straight to the sign-in screen.

@@ -2195,7 +2195,7 @@ const EMP_FIELDS = [
   ['Organisation', [['department','Department','pick','dept'],['unit','Unit','pick','unit'],['entity','Entity','select',['Petrokima Egypt HQ','Petrokima Saudi Branch','Affiliate — Cairo']],
                     ['job_name','Job name','text'],['job_type','Job type','text'],['status','Status','select',['Active','Inactive']],
                     ['manager_id','Direct manager','manager']]],
-  ['Contact', [['business_phone','Business phone','text'],['mobile','Mobile','text'],['email','Email','text'],['address','Address','text']]],
+  ['Contact', [['mobile','Personal mobile','text'],['personal_email','Personal e-mail','email'],['business_phone','Business phone (optional)','text'],['email','Work e-mail (optional)','text'],['address','Address','text']]],
   ['Contract', [['contract_type','Contract type','select',['Permanent','Temporary','Contract']],['contract_start_date','Contract start','date'],
                 ['employment_date','Employment date','date'],['probation_end_date','Probation end (blank = automatic: employment date + 3 months)','date'],
                 ['contract_end_date','Contract end (blank = automatic: one year after the start, the day before — 1 Sep 2026 → 31 Aug 2027; not for Permanent)','date'],['resignation_date','Resignation date','date']]],
@@ -7952,7 +7952,7 @@ saveEmp = async function(){
 //  Always-required boxes get a red *. Report "Missing employee data" lists every active employee with gaps.
 // ═════════════════════════════════════════════════════════
 const REQ_ALWAYS = [['name_ar','Arabic name'],['name_en','English name'],['department','Department'],['unit','Unit'],['entity','Entity'],
-  ['job_name','Job name'],['job_type','Job type'],['mobile','Mobile'],['address','Address'],['contract_type','Contract type'],
+  ['job_name','Job name'],['job_type','Job type'],['mobile','Personal mobile'],['personal_email','Personal e-mail'],['address','Address'],['contract_type','Contract type'],
   ['employment_date','Employment date'],['birth_date','Birth date'],['gender','Gender'],['marital_status','Marital status'],
   ['religion','Religion'],['nationality','Nationality'],['national_id','National ID'],['national_id_expiry','National ID expiry'],
   ['insurance','Insurance'],['payment_method','Payment method'],['university','University'],['college','College'],['graduation_date','Graduation date']];
@@ -8004,6 +8004,10 @@ document.addEventListener('input', e => { const f = e.target.closest && e.target
 document.addEventListener('change', e => { const f = e.target.closest && e.target.closest('#emp-form .field.req-miss'); if (f) f.classList.remove('req-miss'); }, true);
 const _saveEmpReq = saveEmp;
 saveEmp = async function(){
+  const pe = document.querySelector('#emp-form [data-f="personal_email"]');
+  if (pe) { pe.value = pe.value.replace(/\s/g, '').toLowerCase();
+    if (pe.value && !/^[^@]+@[^@]+\.[a-z]{2,}$/.test(pe.value)) { pe.closest('.field').classList.add('req-miss'); pe.focus();
+      return toast('The personal e-mail is not a valid e-mail address (example: name@gmail.com)', 'warn'); } }
   const miss = employeeMissing(empFormRecord(), !isOfficer());
   document.querySelectorAll('#emp-form .field.req-miss').forEach(f => f.classList.remove('req-miss'));
   if (miss.length) {

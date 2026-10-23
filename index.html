@@ -7915,6 +7915,36 @@ REPORTS.push({ id:'emp-birth-id', g:'HR', t:'Birth date different from national 
       rows: rows.sort((a, b) => String(a.code).localeCompare(String(b.code), undefined, { numeric:true })) };
   } });
 
+// ── National ID: exactly 14 digits (with 74-national-id-14-digits.sql) ──
+// The box keeps digits only (spaces / dashes / letters typed are dropped), stops at 14, and shows "n / 14 digits".
+// Saving is refused in the window AND in the database when it is not exactly 14 digits.
+function nidHint(f){
+  const field = f.closest('.field'); let h = field.querySelector('.nid-hint');
+  if (!h) { h = document.createElement('div'); h.className = 'nid-hint'; h.style.cssText = 'font-size:11px;margin-top:4px'; field.appendChild(h); }
+  const n = f.value.length; h.textContent = `${n} / 14 digits`; h.style.color = n === 14 ? 'var(--muted)' : 'var(--warn)';
+}
+document.addEventListener('input', e => {
+  const f = e.target.closest && e.target.closest('#emp-form [data-f="national_id"]'); if (!f) return;
+  const clean = f.value.replace(/\D/g, '').slice(0, 14); if (clean !== f.value) f.value = clean;
+  nidHint(f);
+}, true);                                                     // runs before the birth-date filler above
+const _openEmpNid = openEmp;
+openEmp = function(){
+  const r = _openEmpNid.apply(this, arguments);
+  const f = document.querySelector('#emp-form [data-f="national_id"]');
+  if (f) { f.setAttribute('maxlength', '14'); f.setAttribute('inputmode', 'numeric'); f.setAttribute('autocomplete', 'off'); nidHint(f); }
+  return r;
+};
+const _saveEmpNid = saveEmp;
+saveEmp = async function(){
+  const f = document.querySelector('#emp-form [data-f="national_id"]');
+  if (f && !/^\d{14}$/.test(f.value.replace(/[\s-]/g, ''))) {
+    f.focus(); f.scrollIntoView && f.scrollIntoView({ block:'center' });
+    return toast(`The national ID must be exactly 14 digits — it has ${f.value.replace(/\D/g, '').length}`, 'warn');
+  }
+  return _saveEmpNid.apply(this, arguments);
+};
+
 // ═════════════════════════════════════════════════════════
 //  BOOT
 // ═════════════════════════════════════════════════════════

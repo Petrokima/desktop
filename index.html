@@ -955,7 +955,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="card no-officer" style="padding:18px">
     <div class="sec" style="margin-top:0">Rules</div>
     <div class="grid3" style="align-items:end">
-      <div class="field"><label>A check-in outside the site boundary</label>
+      <div class="field"><label>A check-in or check-out outside the site boundary or away from the employee's office</label>
         <select id="lr-outside"><option value="flag">Allow it, but warn HR</option><option value="block">Refuse it (offline taps are kept for HR review)</option></select></div>
       <div class="field"><label>Default site radius (metres) — used when a site has no radius of its own</label><input id="lr-radius" type="number" min="50" max="5000" step="50"></div>
       <div class="field"><label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="lr-apponly" style="width:auto"> Android employees must use the Petrokima app, not the browser</label></div>
@@ -1231,7 +1231,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <!-- MODAL: EMPLOYEES FIXED TO AN OFFICE (67) -->
 <div class="overlay" id="m-wlemp"><div class="modal" style="max-width:760px">
   <div class="modal-head"><div class="modal-title" id="wle-title">Employees of the office</div><button class="x" data-close="m-wlemp">×</button></div>
-  <div style="font-size:12px;color:var(--muted);margin-bottom:10px">These employees check in and out at this office. Away from it the tap is accepted, marked “Away from his office”, and HR is notified. They still pick projects for the time sheet. An employee can belong to more than one office.</div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:10px">These employees check in and out at this office. Away from it the tap follows Location checks → Rules: refused when the rule is “Refuse it” (unless HR approved a mission that day), otherwise accepted, marked “Away from his office”, and HR is notified. They still pick projects for the time sheet. An employee can belong to more than one office.</div>
   <div class="grid2">
     <div class="field"><label>Add a whole department or unit</label><div style="display:flex;gap:6px;flex-wrap:wrap"><select class="sel" id="wle-dept" style="flex:1;min-width:150px"></select><select class="sel" id="wle-unit" style="flex:1;min-width:150px"></select><button class="btn btn-ghost btn-sm" id="wle-dept-add">+ Add all</button></div>
       <div id="wle-dept-n" style="font-size:12px;color:var(--muted);margin-top:4px"></div></div>

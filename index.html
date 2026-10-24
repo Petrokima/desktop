@@ -513,6 +513,14 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
     <div class="tbl-wrap"><table><thead><tr><th>Sent</th><th>Employee</th><th>Fields asked</th><th>Message</th><th>Status</th><th>Employee's answer</th><th></th></tr></thead><tbody id="dq-tbl"></tbody></table></div>
     <div class="foot" id="dq-foot"></div>
   </div>
+  <div class="card">
+    <div class="toolbar"><span class="toolbar-title">✏️ Changes made by employees <span class="chip c-orange" id="sc-count" style="display:none"></span></span>
+      <div class="toolbar-right">
+        <select class="sel" id="sc-show"><option value="unseen">Not seen yet</option><option value="">All (last 1,000)</option></select>
+        <button class="btn btn-ghost" id="sc-all">✓ Mark all shown as seen</button></div></div>
+    <div class="tbl-wrap"><table><thead><tr><th>When</th><th>Employee</th><th>Field</th><th>Old value</th><th>New value</th><th>How</th><th>Seen</th></tr></thead><tbody id="sc-tbl"></tbody></table></div>
+    <div class="foot">Personal mobile, e-mail and address changed by the employee himself on the phone. HR receives one summary notification per hour (08:00–21:00).</div>
+  </div>
 </div>
 
 <div class="page" id="page-missions">
@@ -8207,6 +8215,48 @@ document.addEventListener('click', async e => {
   const miss = fields.map(f => f.key).filter(k => dqBlank(emp[k]) && !(k === 'military_status' && emp.gender !== 'Male') && !((k === 'bank_account' || k === 'bank_branch') && emp.payment_method !== 'Bank'));
   openDataRequest(String(emp.id), miss);
 });
+
+// ── Changes made by employees themselves (78-employee-self-changes.sql) ──
+let SC = { rows: [] };
+async function loadSelfChanges(){
+  const { data, error } = await sb.from('employee_self_changes').select('*').order('changed_at', { ascending: false }).limit(1000);
+  SC.rows = error ? [] : (data || []); SC.missing = !!error && /does not exist|schema cache/i.test(error.message);
+  const unseen = SC.rows.filter(r => !r.seen_at).length, c = $('sc-count');
+  if (c) { c.style.display = unseen ? '' : 'none'; c.textContent = `${unseen} not seen`; }
+  const wait = (DQ.rows || []).filter(r => r.status === 'Answered').length, b = $('dq-badge');
+  if (b) { const n = wait + unseen; b.style.display = n ? '' : 'none'; b.textContent = n; }
+}
+function renderSelfChanges(){
+  const tb = $('sc-tbl'); if (!tb) return;
+  if (SC.missing) { tb.innerHTML = '<tr><td colspan="7" class="empty">Not set up yet — run database file 78-employee-self-changes.sql.</td></tr>'; return; }
+  const only = $('sc-show').value === 'unseen', q = $('dq-q').value.trim().toLowerCase();
+  const rows = SC.rows.filter(r => (!only || !r.seen_at) && orgMatch(empById(r.emp_id) || {}, 'dq')
+    && (!q || [r.emp_id, r.emp_name].some(v => String(v || '').toLowerCase().includes(q))));
+  tb.innerHTML = rows.map(r => { const e = empById(r.emp_id) || {};
+    return `<tr><td class="mono" style="white-space:nowrap">${esc(String(r.changed_at).slice(0, 16).replace('T', ' '))}</td>
+      <td class="strong">${esc(r.emp_name || empName(e) || r.emp_id)} <span class="mono" style="color:var(--muted)">${esc(r.emp_id)}</span><div style="font-size:11px;color:var(--muted)">${esc(e.department || '')}</div></td>
+      <td>${esc(dqLabel(r.field))}</td><td style="color:var(--muted)">${esc(r.old_value || '—')}</td><td class="strong">${esc(r.new_value || '—')}</td>
+      <td style="font-size:12px">${esc(r.source)}</td>
+      <td style="white-space:nowrap;font-size:12px">${r.seen_at ? `✓ ${esc(r.seen_by || '')}<div style="color:var(--muted)">${esc(String(r.seen_at).slice(0, 10))}</div>` : `<button class="btn btn-ghost btn-sm" data-sc-seen="${r.id}">✓ Seen</button>`}</td></tr>`; }).join('')
+    || `<tr><td colspan="7" class="empty">${only ? 'Nothing new — every change has been seen' : 'No changes yet'}</td></tr>`;
+  SC.shown = rows.filter(r => !r.seen_at).map(r => r.id);
+}
+async function scSeen(ids){
+  if (!ids.length) return toast('Nothing to mark', 'warn');
+  const { data, error } = await sb.rpc('mark_self_changes_seen', { p_ids: ids });
+  if (error) return toast(error.message, 'err');
+  toast(`${data} change${data === 1 ? '' : 's'} marked as seen`);
+  await loadSelfChanges(); renderSelfChanges();
+}
+$('sc-tbl').addEventListener('click', e => { const b = e.target.closest('[data-sc-seen]'); if (b) { b.disabled = true; scSeen([b.dataset.scSeen]); } });
+$('sc-show').addEventListener('change', renderSelfChanges);
+$('sc-all').addEventListener('click', () => scSeen(SC.shown || []));
+['dq-dept'].forEach(id => $(id).addEventListener('change', renderSelfChanges));
+$('dq-q').addEventListener('input', () => { clearTimeout(SC.t); SC.t = setTimeout(renderSelfChanges, 250); });
+const _renderDreqsSc = renderDreqs;
+renderDreqs = async function(){ const r = await _renderDreqsSc.apply(this, arguments); await loadSelfChanges(); renderSelfChanges(); return r; };
+const _loadDreqsSc = loadDreqs;
+loadDreqs = async function(){ const r = await _loadDreqsSc.apply(this, arguments); await loadSelfChanges().catch(() => {}); return r; };
 
 // ═════════════════════════════════════════════════════════
 //  BOOT

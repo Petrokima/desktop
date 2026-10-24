@@ -6,7 +6,7 @@
 <script id="theme-boot">try{document.documentElement.dataset.theme=localStorage.getItem('pk_theme')||'dark'}catch(e){}</script>
 <title>Petrokima HR — Attendance & Payroll</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="vendor/supabase.js?v=2.117.3"></script>
 <style>
 :root{--bg:#0f1117;--surface:#181c27;--card:#1e2336;--border:#2a2f45;--accent:#3b6fd4;--accent2:#22c5a0;--warn:#e07b39;--danger:#d94f4f;--text:#e8ecf4;--muted:#7a839e;--label:#aeb5cc;--r:10px;--rs:6px;--link:#6fa3f7;--info:#89aaee;--hover:rgba(255,255,255,.025);--overlay:rgba(15,17,23,.85);color-scheme:dark}
 html[data-theme="light"]{--bg:#f2f4f8;--surface:#ffffff;--card:#ffffff;--border:#dce1eb;--accent:#2f5fc4;--accent2:#0e8a6b;--warn:#b35f12;--danger:#c73535;--text:#161a26;--muted:#667089;--label:#3d4559;--link:#1f55c7;--info:#1f4fa8;--hover:rgba(0,0,0,.035);--overlay:rgba(242,244,248,.88);color-scheme:light}
@@ -985,7 +985,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="card">
     <div class="toolbar"><span class="toolbar-title" id="lw-count">Check-ins with location warnings</span>
       <div class="toolbar-right">
-        <select class="sel" id="lw-kind"><option value="">All warnings</option><option value="outside_site">Outside the site</option><option value="outside_office">Away from his office</option><option value="fake_gps">Fake-location app</option><option value="same_point">Same exact point</option><option value="perfect_accuracy">"Perfect" accuracy</option><option value="impossible_travel">Impossible travel</option><option value="browser_android">Browser instead of app</option><option value="old_app">Old app version</option><option value="held">Kept for review (not counted)</option></select>
+        <select class="sel" id="lw-kind"><option value="">All warnings</option><option value="outside_site">Outside the site</option><option value="outside_office">Away from his office</option><option value="fake_gps">Fake-location app</option><option value="same_point">Same exact point</option><option value="perfect_accuracy">"Perfect" accuracy</option><option value="impossible_travel">Impossible travel</option><option value="browser_android">Browser instead of app</option><option value="old_app">Old app version</option><option value="no_site_point">Project has no map point</option><option value="gps_unchecked">Fake-GPS check not done</option><option value="held">Kept for review (not counted)</option></select>
         <input class="inp" id="lw-q" placeholder="Search code, name or site…">
       </div></div>
     <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Time</th><th>Employee</th><th>Event</th><th>Site</th><th class="num">Distance</th><th>Warnings</th><th>Counted?</th><th>Map</th><th></th></tr></thead><tbody id="lw-tbl"></tbody></table></div>
@@ -1810,7 +1810,7 @@ async function afterLogin(user){
   document.body.classList.toggle('can-var',   ['admin','hr','finance','hr_officer'].includes(r));   // variable (monthly) entries
   document.body.classList.toggle('is-officer', r==='hr_officer');
   $('me-name').textContent = me.full_name || user.email; $('me-role').textContent = ROLE_LABEL[r];
-  if (!localStorage.getItem('approver') && me.full_name) localStorage.setItem('approver', me.full_name);
+  if (me.full_name) localStorage.setItem('approver', me.full_name);   // review fix: never the previous user's name on a shared PC
   $('btn-myprofile').style.display = me.emp_id ? '' : 'none';
   $('login').style.display='none'; $('app').style.display='block';
   await loadAll();
@@ -3312,7 +3312,8 @@ function runReport(){
 function exportReport(){
   if (!repData || !repData.rows.length) return toast('Nothing to export','warn');
   const r=REPORTS.find(x=>x.id===repCur);
-  const q=v=>{ const s=String(v??''); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
+  const q=v=>{ let s=String(v??''); if (/^[=+@\t\r]/.test(s) || /^-[^\d.]/.test(s)) s="'"+s;   // review fix: never let a cell run as an Excel formula
+    return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
   const val=(c,v)=>{ if(v===null||v===undefined) return '';
     if(c.t==='num') return (Math.round(num(v)*100)/100).toFixed(2); if(c.t==='int') return Math.round(num(v)); if(c.t==='pct') return (num(v)*100).toFixed(2);
     if((c.t==='id' && String(v).length>0) || /^\d{10,}$/.test(String(v).trim())) return `="${String(v).trim().replace(/"/g,'')}"`;   // keeps codes and long numbers (national ID, mobile…) as text in Excel
@@ -4327,7 +4328,8 @@ function exportRunCsv(run, period){
   const pick = c => run.flatMap(r=>r.lines).find(x=>String(x.code)===c) || {};
   codes.sort((a,b)=> (pick(a).type===pick(b).type?0:pick(a).type==='Addition'?-1:1) || (num(a)-num(b)));
   const hdr = ['Code','Arabic Name','English Name','Department','Unit','Entity','Payment','Bank','Account', ...codes.map(c=>`${c} ${pick(c).name||''} (${pick(c).type==='Deduction'?'-':'+'})`), 'Gross','Total Deductions','Net'];
-  const q = v => { const s=String(v??''); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
+  const q = v => { let s=String(v??''); if (/^[=+@\t\r]/.test(s) || /^-[^\d.]/.test(s)) s="'"+s;   // never an Excel formula
+    return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
   const rows = run.map(r => [r.emp.id, r.emp.name_ar, r.emp.name_en, r.emp.department, r.emp.unit, r.emp.entity, r.emp.payment_method, (r.emp.bank_branch||'').trim(),
     r.emp.bank_account ? `="${String(r.emp.bank_account).replace(/"/g,'')}"` : '',
     ...codes.map(c => r.lines.filter(l=>String(l.code)===c).reduce((s,l)=>s+l.amount,0).toFixed(2)), r.gross.toFixed(2), r.ded.toFixed(2), r.net.toFixed(2)]);
@@ -4828,7 +4830,7 @@ function parRuleUse(){         // per rule: employees and amount in this payroll
 function renderParRules(){
   $('par-missing').innerHTML = parTableMissing ? '<div class="alert a-warn">The rules table does not exist yet. Run <b>project-allowance.sql</b>, then click ⟳ Refresh.</div>' : '';
   const q = $('par-q').value.trim().toLowerCase(), use = currentRun() ? {} : parRuleUse();
-  const who = r => r.applies_to==='employee' ? `👤 ${empName(empById(r.emp_id)) || r.emp_id} <span class="mono" style="color:var(--muted)">${esc(r.emp_id)}</span>` : `🧰 All “${esc(r.job_name)}”`;
+  const who = r => r.applies_to==='employee' ? `👤 ${esc(empName(empById(r.emp_id)) || r.emp_id)} <span class="mono" style="color:var(--muted)">${esc(r.emp_id)}</span>` : `🧰 All “${esc(r.job_name)}”`;
   const list = S.parRules.filter(r => !q || [r.emp_id, empName(empById(r.emp_id)), r.job_name, r.project_code, projName(r.project_code), r.notes].some(v => String(v||'').toLowerCase().includes(q)))
     .sort((a,b) => (a.applies_to===b.applies_to ? 0 : a.applies_to==='employee' ? -1 : 1) || String(a.project_code||'~').localeCompare(String(b.project_code||'~')));
   $('par-tbl').innerHTML = list.map(r => { const u = use[r.id];
@@ -6434,7 +6436,9 @@ const LOC_FLAG = {
   perfect_accuracy: ['"Perfect" GPS accuracy', 'c-orange'],
   impossible_travel:['Impossible travel speed', 'c-red'],
   browser_android:  ['Browser instead of app', 'c-blue'],
-  old_app:          ['Old app version', 'c-blue'] };
+  old_app:          ['Old app version', 'c-blue'],
+  no_site_point:    ['Project has no map point', 'c-orange'],
+  gps_unchecked:    ['Fake-GPS check not done', 'c-blue'] };
 let LOC_RULES = { outside:'flag', default_radius:300, block_mock:true, android_app_only:false };
 let WORK_LOCS = [], wlMissing = false;
 const fmtDist = m => m == null ? '' : (m >= 1000 ? (m/1000).toFixed(1) + ' km' : Math.round(m) + ' m');

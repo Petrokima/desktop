@@ -22,7 +22,8 @@ html[data-theme="contrast"] td,html[data-theme="contrast"] .field label{color:va
 body{background:var(--bg);color:var(--text);font-family:'Inter','Segoe UI',Tahoma,sans-serif;font-size:14px;min-height:100vh}
 .topbar{background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:0 24px;height:56px;position:sticky;top:0;z-index:100}
 .logo{display:flex;align-items:center;gap:10px}
-.logo-mark{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff}
+.logo-mark{height:32px;padding:0 11px;border-radius:8px;background:#fff;box-shadow:0 0 0 1px rgba(2,16,43,.12);display:flex;align-items:center;justify-content:center;font-family:'Arial Black','Arial Bold',Arial,sans-serif;font-size:15px;font-weight:900;letter-spacing:.3px;color:#E93326;line-height:1;white-space:nowrap}
+.logo-mark.big{height:40px;font-size:19px;padding:0 14px;border-radius:10px}
 .logo-name{font-size:15px;font-weight:600}.logo-sub{font-size:11px;color:var(--muted)}
 .topbar-right{margin-left:auto;display:flex;align-items:center;gap:10px}
 .badge{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:12px;color:var(--muted)}
@@ -203,8 +204,8 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <body>
 <div id="setup">
   <div class="setup-card">
-    <div class="logo" style="margin-bottom:20px"><div class="logo-mark" style="width:40px;height:40px">PK</div>
-      <div><div class="logo-name">Petrokima HR</div><div class="logo-sub">Connect to the HR database</div></div></div>
+    <div class="logo" style="margin-bottom:20px"><div class="logo-mark big">PETROKIMA</div>
+      <div><div class="logo-name">HR</div><div class="logo-sub">Connect to the HR database</div></div></div>
     <div class="field" style="margin-bottom:14px"><label>Server address</label><input id="cfg-url" placeholder="https://xxxxxxxx.supabase.co  or  http://SERVER-IP:8000"></div>
     <div class="field" style="margin-bottom:18px"><label>Access key</label><input id="cfg-key" placeholder="eyJ... or sb_publishable_..."></div>
     <button class="btn btn-primary" id="btn-connect" style="width:100%;justify-content:center">Connect &amp; Launch</button>
@@ -215,8 +216,8 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 
 <div id="login" style="display:none;align-items:center;justify-content:center;min-height:100vh;padding:24px">
   <div class="setup-card">
-    <div class="logo" style="margin-bottom:22px"><div class="logo-mark" style="width:40px;height:40px">PK</div>
-      <div><div class="logo-name">Petrokima HR</div><div class="logo-sub">Sign in to continue</div></div></div>
+    <div class="logo" style="margin-bottom:22px"><div class="logo-mark big">PETROKIMA</div>
+      <div><div class="logo-name">HR</div><div class="logo-sub">Sign in to continue</div></div></div>
     <div id="login-form">
       <div class="field" style="margin-bottom:14px"><label>Employee code (or email)</label><input id="li-email" autocomplete="username" placeholder="e.g. 615"></div>
       <div class="field" style="margin-bottom:8px"><label>Password</label><input id="li-pass" type="password" autocomplete="current-password"></div>
@@ -240,7 +241,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 
 <div id="self" style="display:none">
   <div class="topbar">
-    <div class="logo"><div class="logo-mark">PK</div><div><div class="logo-name">Petrokima HR</div><div class="logo-sub">My profile</div></div></div>
+    <div class="logo"><div class="logo-mark">PETROKIMA</div><div><div class="logo-name">HR</div><div class="logo-sub">My profile</div></div></div>
     <div class="topbar-right"><button class="btn btn-ghost btn-sm" id="self-back" style="display:none">← Back to HR app</button>
       <div class="user-chip"><span id="self-name"></span><span class="chip c-blue" id="self-role">Employee</span>
       <button class="btn btn-ghost btn-sm" data-act="theme" title="Choose a colour theme">🎨</button>
@@ -328,7 +329,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div id="app" style="display:none">
 <div class="topbar">
   <button class="menu-btn" id="menu-btn" type="button" aria-label="Menu">☰</button>
-  <div class="logo"><div class="logo-mark">PK</div><div><div class="logo-name">Petrokima HR</div><div class="logo-sub">Attendance &amp; Payroll System</div></div></div>
+  <div class="logo"><div class="logo-mark">PETROKIMA</div><div><div class="logo-name">HR</div><div class="logo-sub">Attendance &amp; Payroll System</div></div></div>
   <div class="topbar-right">
     <span class="badge" title="Connected to the HR database"><span class="dot"></span>Online</span>
     <span class="badge" id="period-badge">—</span>

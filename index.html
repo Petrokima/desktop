@@ -1085,6 +1085,8 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
         <div class="field"><label>Casual leave counts against annual?</label><select id="s-casual"><option value="yes">Yes</option><option value="no">No</option></select></div>
         <div class="field full"><label>Working on a public holiday pays, on top of the normal monthly salary…</label><select id="s-hol-x">
           <option value="1">1 extra day's pay (total for the day = double)</option><option value="2">2 extra days' pay (total for the day = triple)</option></select></div>
+        <div class="field full"><label>Count a working day with NO attendance, leave or mission as an absent day — starting from</label><input type="date" id="s-auto-abs">
+          <div style="font-size:11.5px;color:var(--muted);margin-top:4px">Leave empty to count every day. Until all staff use the app or the fingerprint machine, put your go-live date here so earlier days are not deducted. Attendance-exception staff are never counted absent.</div></div>
         <div class="field full"><label>Permission requests (late arrival / early leave) from employees — vacations always need HR's final approval after the manager</label><select id="s-reqflow">
           <option value="hr">Direct manager approves, then HR gives the final approval</option>
           <option value="manager">Direct manager's approval is final</option></select></div>
@@ -1673,10 +1675,12 @@ function employment(e, p){
   const s=periodStart(p), en=periodEnd(p);
   const from = (e.employment_date && e.employment_date > s) ? e.employment_date : s;
   const to   = (e.resignation_date && e.resignation_date < en) ? e.resignation_date : en;
-  if (to < from) return { days:0, factor:0, partial:true, from, to };
-  if (from===s && to===en) return { days:daysBetweenIncl(s,en), factor:1, partial:false, from, to };
-  const days = daysBetweenIncl(from, to), base = num(settings.daysPerMonth) || 30;
-  return { days, factor: Math.min(1, days/base), partial:true, from, to,
+  if (to < from) return { days:0, len:daysBetweenIncl(s,en), factor:0, partial:true, from, to };
+  if (from===s && to===en) return { days:daysBetweenIncl(s,en), len:daysBetweenIncl(s,en), factor:1, partial:false, from, to };
+  // 85: a cycle has 28–31 days; pay is reduced by the days NOT employed on a 30-day basis (1 − missing ÷ 30).
+  // MUST match payroll_calc (file 85).
+  const days = daysBetweenIncl(from, to), base = num(settings.daysPerMonth) || 30, len = daysBetweenIncl(s, en);
+  return { days, len, factor: Math.max(0, Math.min(1, 1 - (len - days)/base)), partial:true, from, to,
            joiner: from!==s, leaver: to!==en };
 }
 function periodIdx(p){ const [y,m]=String(p).split('-').map(Number); return y*12+(m-1); }
@@ -2002,9 +2006,12 @@ function renderAll(){
 // ═════════════════════════════════════════════════════════
 //  PAYROLL ENGINE
 // ═════════════════════════════════════════════════════════
+// 85 (Mohammed's rule 1B): a pay change applies to WHOLE pay cycles — the package in force on the cycle's LAST day is paid
+// for the whole cycle, so a mid-cycle change can never pay two salaries. New dates are moved to cycle boundaries by the
+// database (trg_a_cycle_dates). MUST match payroll_calc (file 85).
 function fixedActive(row, p){
-  const s = periodStart(p), e = periodEnd(p);
-  return row.effective_from <= e && (!row.effective_to || row.effective_to >= s);
+  const e = periodEnd(p);
+  return row.effective_from <= e && (!row.effective_to || row.effective_to >= e);
 }
 // Is an instalment of loan l due in month number i (year*12 + month-1)?  Postponed months (62) are skipped and the loan
 // runs that many months longer. MUST stay identical to _pk_loan_due() in the database (file 62).
@@ -2023,11 +2030,22 @@ function loanEnd(l){            // 'YYYY-MM' of the last instalment
   for (let g = s + num(l.periods) + 240; g >= s; g--) if (loanDue(l, g)) return `${Math.floor(g/12)}-${pad(g%12+1)}`;
   return '';
 }
+// 85: the payroll recovers (loan − amount already settled) and never more; the last instalment absorbs the rounding
+// (10,000 ÷ 3 → 3,333.33 · 3,333.33 · 3,333.34). MUST stay identical to _pk_loan_pay() in the database (file 85).
 function loanInstalment(l, p){
   if (l.status !== 'Active') return 0;
-  if (!loanDue(l, periodIdx(p))) return 0;
-  const inst = num(l.installment) || (num(l.loan_amount) / Math.max(1,num(l.periods)));
-  return Math.round(inst * 100) / 100;
+  const i = periodIdx(p);
+  if (!loanDue(l, i)) return 0;
+  const r2 = x => Math.round(x * 100) / 100;
+  const inst = r2(num(l.installment) || (num(l.loan_amount) / Math.max(1,num(l.periods))));
+  const target = r2(Math.max(0, num(l.loan_amount) - num(l.amount_settled)));
+  if (!PER_RE.test(String(l.start_period||''))) return r2(Math.min(inst, target));
+  const s = periodIdx(l.start_period); let k = 0;
+  for (let g = s; g <= i; g++) if (loanDue(l, g)) k++;            // this is instalment number k
+  const paid = r2(Math.min((k - 1) * inst, target)), rem = r2(target - paid);
+  if (rem <= 0) return 0;
+  if (k === num(l.periods) && rem <= inst + 1) return rem;
+  return r2(Math.min(inst, rem));
 }
 
 // Daily attendance rules — each instance is calculated separately:
@@ -2037,7 +2055,16 @@ function loanInstalment(l, p){
 // An approved permission waives up to the permission's hours of late or early time on that day.
 // Employees flagged attendance_exempt get no overtime and no deductions.
 // an approved outside mission covers this day (66) — late / early are not deducted. MUST match payroll_calc (file 66).
-function missionOn(empId, date){ return (S.missions||[]).some(m => m.status==='Approved' && String(m.emp_id)===String(empId) && m.date_from<=date && m.date_to>=date); }
+function missionsOn(empId, date){ return (S.missions||[]).filter(m => m.status==='Approved' && String(m.emp_id)===String(empId) && m.date_from<=date && m.date_to>=date); }
+function missionOn(empId, date){ return missionsOn(empId, date).length > 0; }
+// 85: a mission WITHOUT times covers the whole day (no late/early, and the day is never absent); a mission WITH times
+// excuses at most its own hours — late first, then early. MUST match payroll_calc (file 85).
+function missionCover(empId, date){
+  const ms = missionsOn(empId, date); if (!ms.length) return null;
+  if (ms.some(m => !m.time_from || !m.time_to)) return { full:true, hours:0 };
+  return { full:false, hours: Math.round(ms.reduce((s,m) => s + Math.max(0, toMin(m.time_to) - toMin(m.time_from)) / 60, 0) * 100) / 100 };
+}
+const isWeekend = d => (settings.weekendDays||[]).includes(dObj(d).getDay());
 function approvedPerms(empId, date){ return S.permissions.filter(p => p.status==='Approved' && String(p.emp_id)===String(empId) && p.date===date); }
 // a day still waiting for its check-out: a forgotten phone check-out, or a line left open on an earlier day.
 // Its hours are not counted until the check-out is recorded or HR settles it on the Attendance page.
@@ -2051,7 +2078,8 @@ function dayRules(a, emp){
   const std = num(settings.hoursPerDay), tot = num(a.total_hours);
   const extra = Math.round((tot - std) * 100) / 100, thr = num(settings.otThreshold);
   if (extra > 0 && extra >= thr) r.ot = settings.otMode==='after' ? Math.max(0, extra - thr) : extra;
-  if (isHoliday(a.date)) { r.holiday = true; ['ot','late','early','lateRaw','earlyRaw','waived'].forEach(k => r[k] = Math.round(r[k]*100)/100); return r; }
+  // holidays — and (85, rule 3B) weekend days: overtime only, never late / early deductions, no extra weekend pay
+  if (isHoliday(a.date) || isWeekend(a.date)) { r.holiday = isHoliday(a.date); r.weekend = !r.holiday; ['ot','late','early','lateRaw','earlyRaw','waived'].forEach(k => r[k] = Math.round(r[k]*100)/100); return r; }
   if (a.status==='Present'){
     const evening = a.check_in && toMin(a.check_in) >= toMin(settings.eveningShiftAfter || '14:00');   // evening / night shift
     r.evening = !!evening;
@@ -2065,7 +2093,10 @@ function dayRules(a, emp){
       if (p.type==='Late arrival') wl = Math.max(wl, Math.min(r.lateRaw, h));
       if (p.type==='Early leave')  we = Math.max(we, Math.min(r.earlyRaw, h));
     });
-    if (missionOn(emp ? emp.id : a.emp_id, a.date)) { wl = r.lateRaw; we = r.earlyRaw; r.mission = true; }
+    const mc = missionCover(emp ? emp.id : a.emp_id, a.date);
+    if (mc && mc.full) { wl = r.lateRaw; we = r.earlyRaw; r.mission = true; }
+    else if (mc) { const wlM = Math.min(r.lateRaw, mc.hours), weM = Math.min(r.earlyRaw, Math.max(0, mc.hours - wlM));
+                   wl = Math.max(wl, wlM); we = Math.max(we, weM); r.mission = true; }
     r.late = r.lateRaw - wl; r.early = r.earlyRaw - we; r.waived = wl + we;
   }
   ['ot','late','early','lateRaw','earlyRaw','waived'].forEach(k => r[k] = Math.round(r[k]*100)/100);
@@ -2124,7 +2155,7 @@ function computeEmployee(emp){
   const basicRows = fx.filter(r => { const el=elByCode(r.element_code); return el && el.is_basic; });
   let basic = basicRows.reduce((s,r)=>s+num(r.amount),0);
   if (!basic) basic = num(emp.salary);
-  const proNote = emp_.partial ? `${emp_.days} of ${num(settings.daysPerMonth)||30} days (${emp_.from} → ${emp_.to})` : '';
+  const proNote = emp_.partial ? `${emp_.days} of ${emp_.len} days (${emp_.from} → ${emp_.to})` : '';
   fx.forEach(r => {
     const el = elByCode(r.element_code); if (!el || el.active===false) return;
     let amt = el.calc_method==='PercentOfBasic' ? basic*num(r.amount)/100 : num(r.amount);
@@ -2160,13 +2191,30 @@ function computeEmployee(emp){
   add(settings.codeDelay, elDelay ? elDelay.name_en : 'Delay hours', 'Deduction', (lateH + earlyH) * delayRate,
       delayNote ? `${delayNote} × ${fmt(delayRate)}${waivedH?` (${fmt(waivedH)} h waived by permission)`:''}` : '');
 
-  // unpaid leave (calculated) — daily pay × unpaid working days falling in the period
-  const unpaidDays = S.leaves.filter(l => String(l.emp_id)===String(emp.id) && l.status==='Approved' && l.leave_type==='Unpaid')
-                             .reduce((s,l)=>s+leaveDaysIn(l, periodStart(p), periodEnd(p)),0);
+  // unpaid leave (85) — daily pay × CALENDAR days of approved unpaid leave inside the employed part of the cycle (max 30)
+  const ud = new Set();
+  S.leaves.filter(l => String(l.emp_id)===String(emp.id) && l.status==='Approved' && l.leave_type==='Unpaid').forEach(l => {
+    const a0 = l.date_from > emp_.from ? l.date_from : emp_.from, b0 = l.date_to < emp_.to ? l.date_to : emp_.to;
+    for (let d = dObj(a0), g = 0; dStr(d) <= b0 && g < 400; d.setDate(d.getDate()+1), g++) ud.add(dStr(d));
+  });
+  const unpaidDays = Math.min(ud.size, num(settings.daysPerMonth)||30);
   const dailyRate = num(emp.daily_pay) || basic/(num(settings.daysPerMonth)||30);
 
-  // absence (calculated) — one day's pay per unexcused absent working day
-  const absentDates = [...new Set(att.filter(a => a.status==='Absent' && isWorkday(a.date) && !leaveOn(emp.id, a.date)).map(a => a.date))];
+  // absence — one day's pay per unexcused absent working day (an "Absent" record, or 85 / rule 2A: a past working day
+  // with NO attendance record, leave or full-day mission; not for attendance-exempt staff; from settings.autoAbsentFrom)
+  const fullMission = d => { const mc = missionCover(emp.id, d); return !!(mc && mc.full); };
+  const absSet = new Set(att.filter(a => a.status==='Absent' && isWorkday(a.date) && !leaveOn(emp.id, a.date) && !fullMission(a.date)).map(a => a.date));
+  let autoAbs = 0;
+  if (!emp.attendance_exempt && emp_.to >= emp_.from) {
+    const af = String(settings.autoAbsentFrom || ''), autoFrom = /^\d{4}-\d{2}-\d{2}$/.test(af) ? af : '';
+    const today = todayStr(), had = new Set(att.map(a => a.date));
+    for (let d = dObj(emp_.from), g = 0; dStr(d) <= emp_.to && g < 400; d.setDate(d.getDate()+1), g++) {
+      const ds = dStr(d);
+      if (ds >= today || (autoFrom && ds < autoFrom) || !isWorkday(ds) || had.has(ds) || leaveOn(emp.id, ds) || fullMission(ds)) continue;
+      if (!absSet.has(ds)) { absSet.add(ds); autoAbs++; }
+    }
+  }
+  const absentDates = [...absSet].sort();
   const elAbs = elByCode(settings.codeAbsent);
   add(settings.codeAbsent, elAbs ? elAbs.name_en : 'Absence', 'Deduction', absentDates.length * dailyRate,
       absentDates.length ? `${absentDates.length} day${absentDates.length>1?'s':''} × ${fmt(dailyRate)} (${absentDates.map(d=>d.slice(5)).join(', ')})` : '');
@@ -2192,7 +2240,11 @@ function computeEmployee(emp){
   const insured = String(emp.insurance||'').toLowerCase() === 'insured';
   const siRate = saudi ? num(settings.siRateSA) : num(settings.siRateEG);
   const elSI = elByCode(settings.codeSI);
-  if (insured) add(settings.codeSI, elSI ? elSI.name_en : 'Social insurance', 'Deduction', num(emp.insurance_amount) * siRate / 100, `${fmt(emp.insurance_amount)} × ${siRate}%`);
+  // 85: in Egypt the insurance wage is kept within the legal minimum and maximum (Net ↔ Gross calculator rates, 2026: 2,700–16,700)
+  const siRaw = num(emp.insurance_amount), CR = calcRates(), siLo = num(CR.siMin) || 2700, siHi = num(CR.siMax) || 16700;
+  const siBase = (!saudi && siRaw > 0) ? Math.min(Math.max(siRaw, siLo), siHi) : siRaw;
+  if (insured) add(settings.codeSI, elSI ? elSI.name_en : 'Social insurance', 'Deduction', siBase * siRate / 100,
+                   `${fmt(siBase)} × ${siRate}%` + (siBase !== siRaw ? ` (insurance wage ${fmt(siRaw)} kept within ${fmt(siLo)}–${fmt(siHi)})` : ''));
 
   // loans
   const elLoan = elByCode(settings.codeLoan);
@@ -2206,7 +2258,7 @@ function computeEmployee(emp){
   const basicLine = lines.filter(l => l.code===0 || (elByCode(l.code)||{}).is_basic).reduce((s,l)=>s+l.amount,0);
   const ot = pick(settings.codeOT), si = pick(settings.codeSI), loans = pick(settings.codeLoan), delay = pick(settings.codeDelay);
   const absence = pick(settings.codeAbsent), penalty = pick(settings.codePenalty), holiday = pick(settings.codeHoliday);
-  return { emp, lines, basic: basicLine, absence, absentDays: absentDates.length, penalty, holiday, holDays, days: emp_.days, factor: emp_.factor, partial: emp_.partial, joiner: !!emp_.joiner, leaver: !!emp_.leaver,
+  return { emp, lines, basic: basicLine, absence, absentDays: absentDates.length, autoAbsentDays: autoAbs, unpaidDays, penalty, holiday, holDays, days: emp_.days, factor: emp_.factor, partial: emp_.partial, joiner: !!emp_.joiner, leaver: !!emp_.leaver,
            ot, otH, lateH, earlyH, waivedH, delay, gross, si, loans, ded,
            otherAdd: gross - basicLine - ot, otherDed: ded - si - loans, net: gross - ded,
            hasPackage: fx.length > 0 };
@@ -2381,7 +2433,10 @@ async function addPackageRow(){
   const rec = { emp_id: editingEmp, element_code: code, amount: num(amt), effective_from: from, effective_to: to || null };
   const { data, error } = await sb.from('employee_salary_elements').insert(rec).select();
   if (error) return toast(error.message.includes('duplicate') ? 'This element already starts on that date for this employee' : error.message, 'err');
-  if (!(data && data.length)) return toast(NOPERM,'err'); S.fixed.push(data[0]); renderPackage(); renderPayroll(); renderDashboard(); toast('Element added');
+  if (!(data && data.length)) return toast(NOPERM,'err'); S.fixed.push(data[0]); renderPackage(); renderPayroll(); renderDashboard();
+  const sv = data[0];   // 85: the database moves dates to whole pay cycles
+  toast(sv.effective_from !== from || (to && sv.effective_to !== to)
+    ? `Element added — salary changes apply to whole pay cycles, so it runs from ${sv.effective_from}${sv.effective_to ? ' to ' + sv.effective_to : ''}` : 'Element added');
 }
 
 async function saveEmp(){
@@ -2443,6 +2498,7 @@ function renderAttendance(){
     <td class="mono">${esc(a.date)}${a.source==='Mobile'?' <span title="Recorded from the mobile app">📱</span>':a.source==='Machine'?' <span title="Imported from the HQ fingerprint machine">🖐</span>':a.source==='Combined'?' <span title="Phone and fingerprint machine combined: first punch to last punch">📱🖐</span>':''}${isHoliday(a.date)?' <span class="chip c-blue" title="Public holiday">Holiday</span>':''}</td><td class="mono">${esc(a.check_in||'—')}</td><td class="mono">${attNoOut(a) ? '<span class="neg" title="No check-out recorded — open the record and enter the time the employee left">⚠ missing</span>' : esc(a.check_out||'—')}</td>
     <td class="num">${attNoOut(a) ? '<span style="color:var(--muted)" title="Not calculated until the check-out is recorded or settled by HR">—</span>' : fmt(a.total_hours)}</td>
     <td style="white-space:normal">${(a.projects||[]).map(x=>x.missing ? `<span class="tag" style="border-color:rgba(217,79,79,.5);color:var(--danger)" title="Only one punch on the machine — add the missing time">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)} · missing punch</span>`
+      : x.review && x.why === 'offline' ? `<span class="tag" style="border-color:rgba(224,123,57,.5);color:var(--warn)" title="Tapped with no internet and sent late — the time comes from the phone. Check it, correct if needed, and save: until then this day has no deductions and no overtime">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)}–${esc(x.out || '?')} · offline time to confirm</span>`
       : x.review ? `<span class="tag" style="border-color:rgba(224,123,57,.5);color:var(--warn)" title="More than 16 hours between first and last punch — check and correct">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)}–${esc(x.out)} · ${fmt(x.hours)}h to check</span>`
       : x.forgotten ? `<span class="tag" style="border-color:rgba(217,79,79,.5);color:var(--danger)" title="Checked in from the phone but never checked out — open the record and enter the check-out time">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)}–? missing check-out</span>`
       : !x.out && x.in && a.date < todayStr() ? `<span class="tag" style="border-color:rgba(217,79,79,.5);color:var(--danger)" title="No check-out recorded — open the record and enter the check-out time">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)}–? missing check-out</span>`
@@ -2794,7 +2850,7 @@ function renderPayroll(){
   $('pay-approve').style.display = run ? 'none' : '';
   $('pay-note').style.display = run ? 'none' : '';
   $('pay-note').innerHTML = (noPkg ? `<b>${noPkg} of ${lastRun.length}</b> active employees have no fixed salary elements yet — their pay shows as zero until you import or add their package. ` : '')
-    + `Joiners and leavers are paid fixed additions for the days employed in the cycle ÷ ${num(settings.daysPerMonth)||30}. Overtime: hours beyond ${settings.hoursPerDay} a day, only when at least ${settings.otThreshold} h, paid at ${settings.otMultiplier}× hour pay. Late (after ${settings.lateAfter}) and early/short hours are each deducted at delay hour pay, less up to ${settings.permissionMaxHours} h per approved permission (${settings.permissionsPerMonth} a month). Exception employees get no overtime and no deductions. Penalties are not yet captured and show as zero. Payroll taxes are not calculated.`;
+    + `Salary changes apply to whole pay cycles (the package in force on the cycle's last day). Joiners and leavers: fixed additions are reduced by the days not employed ÷ ${num(settings.daysPerMonth)||30}. A past working day with no attendance, leave or mission is an absent day${/^\d{4}-\d{2}-\d{2}$/.test(String(settings.autoAbsentFrom||'')) ? ' (counted from ' + esc(settings.autoAbsentFrom) + ')' : ''}; weekends are never deducted. Unpaid leave is deducted per calendar day. Overtime: hours beyond ${settings.hoursPerDay} a day, only when at least ${settings.otThreshold} h, paid at ${settings.otMultiplier}× hour pay. Late (after ${settings.lateAfter}) and early/short hours are each deducted at delay hour pay, less up to ${settings.permissionMaxHours} h per approved permission (${settings.permissionsPerMonth} a month). Exception employees get no overtime and no deductions. Penalties are not yet captured and show as zero. Payroll taxes are not calculated.`;
   $('pay-stats').innerHTML = [['Gross',T('gross')],['Social insurance',T('si')],['Loans',T('loans')],['Other deductions',T('otherDed')],['Net payroll',T('net')]]
     .map(([l,v])=>`<div class="stat"><div class="stat-label">${l}</div><div class="stat-value" style="font-size:19px">${fmt(v)}</div></div>`).join('');
   renderPayTable(list);     // part32.js: compact / expanded view + per-column search
@@ -2894,7 +2950,7 @@ $('mp-fill-go').addEventListener('click', () => {
 //  SETTINGS
 // ═════════════════════════════════════════════════════════
 const SET_MAP = [['s-company','companyName','t'],['s-period','period','t'],['s-cycle','cycleStartDay'],['s-hours','hoursPerDay'],['s-shift','shiftStart','t'],['s-late','lateAfter','t'],['s-evening','eveningShiftAfter','t'],['s-ot-thr','otThreshold'],['s-ot-mode','otMode','t'],['s-perm-n','permissionsPerMonth'],['s-reqflow','requestFlow','t'],['s-perm-deadline','permDeadlineMin','n'],['s-acct-min','acctMinEmployees','n'],['s-annual-notice','annualNoticeDays','n'],['s-annual','annualLeaveDefault'],['s-casual','casualCountsAnnual','t'],['s-c-unpaid','codeUnpaid'],['s-c-absent','codeAbsent'],['s-c-holiday','codeHoliday'],['s-hol-x','holidayExtraDays'],['s-perm-h','permissionMaxHours'],['s-days','daysPerMonth'],['s-otm','otMultiplier'],
-  ['s-si-eg','siRateEG'],['s-si-sa','siRateSA'],['s-c-ot','codeOT'],['s-c-si','codeSI'],['s-c-loan','codeLoan'],['s-c-delay','codeDelay'],['s-c-pen','codePenalty']];
+  ['s-auto-abs','autoAbsentFrom','t'],['s-si-eg','siRateEG'],['s-si-sa','siRateSA'],['s-c-ot','codeOT'],['s-c-si','codeSI'],['s-c-loan','codeLoan'],['s-c-delay','codeDelay'],['s-c-pen','codePenalty']];
 const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 function applySettingsUI(){
   SET_MAP.forEach(([id,k]) => $(id).value = settings[k] ?? '');
@@ -3147,19 +3203,19 @@ const REPORTS = [
         warn: (c.location_flags||[]).map(f => (typeof LOC_FLAG !== 'undefined' && LOC_FLAG[f] ? LOC_FLAG[f][0] : f)).join(', ') + (c.applied === false ? (c.location_flags && c.location_flags.length ? ' · ' : '') + 'kept for review: ' + (c.review_note||'') : '') }; })
         .sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)) }) },
   { id:'att-review', g:'Attendance', t:'Offline check-ins to review',
-    d:'Check-ins made with no internet and sent later. Their time comes from the phone clock: the server compares the phone clock with its own when the phone reconnects and corrects any difference. Check the ones marked ⚠ first. Taps more than 72 hours old, or earlier than one already recorded, are refused and stay on the phone — HR records those manually.',
+    d:'Check-ins made with no internet and sent later. Their time comes from the phone clock: the server compares the phone clock with its own when the phone reconnects and corrects any difference. A tap that reached the server more than 5 minutes after its time is marked ⏳ HR to confirm: that day has no deductions or overtime until HR checks the time on the Attendance page and saves it, and the month cannot be approved before. Taps more than 72 hours old, or earlier than one already recorded, are refused and stay on the phone — HR records those manually.',
     build:() => ({ cols:[C('state','Status','strong'),C('date','Date','date'),C('time','Time recorded','mono'),C('claimed','Phone showed','mono'),C('recv','Sent (UTC)','mono'),C('delay','Hours until sent','num'),C('code','Code','id'),C('name','Employee'),C('ev','Event'),C('site','Site','id'),C('map','Location','link')],
       rows:S.clocks.filter(c=>c.offline).map(c=>{ const e=empById(c.emp_id)||{}, corr=/corrected/.test(c.time_method||''), delay = c.received_at ? (new Date(c.received_at)-new Date(c.at))/3600000 : null;
-        return { state: corr ? '⚠ Phone clock was wrong' : 'OK', date:c.local_date, time:c.local_time,
+        return { state: /^Offline — sent/.test(c.review_note || '') ? '⏳ HR to confirm the time' : corr ? '⚠ Phone clock was wrong' : 'OK', date:c.local_date, time:c.local_time,
           claimed: c.client_at ? new Date(c.client_at).toLocaleString('en-GB',{ timeZone: String(e.entity||'').toLowerCase().includes('saudi') ? 'Asia/Riyadh' : 'Africa/Cairo', hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short' }) : '',
           recv:String(c.received_at||'').slice(0,16).replace('T',' '), delay: delay==null ? '' : Math.round(delay*100)/100,
           code:c.emp_id, name:empName(e), ev:c.event_type==='in'?'Check in':'Check out', site:c.project_code||'(no project)', map:mapUrl(c)||'' }; })
         .sort((a,b)=>(a.state==='OK')-(b.state==='OK') || (a.date+a.time).localeCompare(b.date+b.time)) }) },
 
   { id:'att-fix', g:'Attendance', t:'Missing punches to correct',
-    d:'Days with only one fingerprint-machine punch, days over 16 hours, and phone check-ins with no check-out on a past day. They carry no deductions or overtime until HR opens the record on the Attendance page and completes the times.',
+    d:'Days with only one fingerprint-machine punch, days over 16 hours, offline phone taps sent late (time to confirm), and phone check-ins with no check-out on a past day. They carry no deductions or overtime until HR opens the record on the Attendance page, checks the times and saves. The month cannot be approved while any remain.',
     build:() => { const R=[]; S.attendance.forEach(a => (a.projects||[]).forEach(x => { if (x.missing || x.review || x.forgotten || (x.in && !x.out && a.date < todayStr())) { const e=empById(a.emp_id)||{};
-        R.push({ issue: x.missing ? 'Missing punch' : x.review ? 'Over 16 hours' : 'Missing phone check-out', source: a.source==='Machine' ? 'Fingerprint machine' : a.source==='Mobile' ? 'Phone' : (a.source||''),
+        R.push({ issue: x.missing ? 'Missing punch' : x.review ? (x.why === 'offline' ? 'Offline time to confirm' : 'Over 16 hours') : 'Missing phone check-out', source: a.source==='Machine' ? 'Fingerprint machine' : a.source==='Mobile' ? 'Phone' : (a.source||''),
                  date:a.date, code:a.emp_id, name:empName(e), department:e.department, in:x.in||'', out:x.out||'', hours:x.hours }); } }));
       return { cols:[C('issue','Issue','strong'),C('source','Source'),C('date','Date','date'),C('code','Code','id'),C('name','Employee'),C('department','Department'),C('in','In','mono'),C('out','Out','mono'),C('hours','Hours','num')],
         rows:R.sort((a,b)=>a.date.localeCompare(b.date)||String(a.code).localeCompare(String(b.code),undefined,{numeric:true})) }; } },
@@ -4232,7 +4288,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 // ═════════════════════════════════════════════════════════
 function nextPeriod(p){ const [y,m]=p.split('-').map(Number); return m===12 ? `${y+1}-01` : `${y}-${pad(m+1)}`; }
 function payrollLines(run){
-  const keys = ['basic','otherAdd','ot','otH','si','loans','otherDed','days','factor','partial','joiner','leaver','hasPackage','delay','absence','absentDays','penalty','holiday','holDays','lateH','earlyH','waivedH'];
+  const keys = ['basic','otherAdd','ot','otH','si','loans','otherDed','days','factor','partial','joiner','leaver','hasPackage','delay','absence','absentDays','autoAbsentDays','unpaidDays','penalty','holiday','holDays','lateH','earlyH','waivedH'];
   return run.map(r => ({ emp_id:String(r.emp.id), name_en:r.emp.name_en||null, name_ar:r.emp.name_ar||null, department:r.emp.department||null, unit:r.emp.unit||null,
     entity:r.emp.entity||null, payment_method:r.emp.payment_method||null, bank_branch:(r.emp.bank_branch||'').trim()||null, bank_account:r.emp.bank_account||null,
     gross:Math.round(r.gross*100)/100, deductions:Math.round(r.ded*100)/100, net:Math.round(r.net*100)/100,
@@ -4291,7 +4347,18 @@ function openApprove(){
   $('ap-type-l').textContent = `Type ${settings.period} to confirm`; $('ap-type').value=''; $('ap-next').checked=true;
   if (!$('ap-check')) $('ap-body').insertAdjacentHTML('afterend', '<div id="ap-check"></div>');
   openM('m-approve'); setTimeout(()=>$('ap-type').focus(),50);
+  checkBlockers();
   checkWithDatabase();
+}
+// 85 (rule 5A): the database refuses approval while the cycle is open or attendance is unsettled — show what is left
+async function checkBlockers(){
+  if (!$('ap-block')) $('ap-body').insertAdjacentHTML('afterend', '<div id="ap-block"></div>');
+  const box = $('ap-block'), go = $('ap-go'); box.innerHTML = ''; go.disabled = false; go.title = '';
+  const { data, error } = await sb.rpc('payroll_blockers', { p_period: settings.period });
+  if (error) { box.innerHTML = /function|schema/i.test(error.message) ? '<div class="alert a-warn" style="margin:12px 0 0">Run <b>85-payroll-rules.sql</b> first — approval needs it.</div>' : ''; return; }
+  if (!(data && data.length)) return;
+  go.disabled = true; go.title = 'Settle the items listed first';
+  box.innerHTML = `<div class="alert a-danger" style="margin:12px 0 0;border-color:rgba(217,79,79,.5);background:rgba(217,79,79,.08);color:var(--danger)">⛔ <b>This month cannot be approved yet:</b><br>• ${data.map(x => esc(x.text)).join('<br>• ')}</div>`;
 }
 async function doApprove(){
   const p = settings.period;
@@ -6095,7 +6162,9 @@ $('sr-go').addEventListener('click', async () => {
   if (!(amt > 0) || !from || !reason) return toast('Enter the new basic salary, the date and the reason','warn');
   const { data, error } = await sb.from('salary_change_requests').insert({ emp_id: SR_CUR.empId, element_code: SR_CUR.code, new_amount: amt, effective_from: from, reason }).select();
   if (error || !(data && data.length)) return toast(error ? error.message : NOPERM, 'err');
-  closeM('m-salreq'); toast('Sent to the board member for approval — the new basic salary applies once approved');
+  closeM('m-salreq');
+  const sf = data[0].effective_from;   // 85: whole pay cycles
+  toast(sf !== from ? `Sent to the board member — salary changes apply to whole pay cycles, so it starts ${sf} once approved` : 'Sent to the board member for approval — the new basic salary applies once approved');
   renderSalaryPending(SR_CUR.empId);
 });
 async function renderSalaryPending(empId){

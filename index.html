@@ -254,6 +254,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
     <div class="nav-label">Self-service</div>
     <div class="nav-item active" data-spage="req">📋 My requests</div>
     <div class="nav-item" data-spage="team" id="self-team-nav" style="display:none">✅ Team approvals <span class="chip c-orange" id="self-team-badge" style="margin-left:auto;display:none"></span></div>
+    <div class="nav-item" data-spage="tatt" id="self-tatt-nav" style="display:none">👥 Team attendance</div>
     <div class="nav-item" data-spage="pcost" id="self-pcost-nav" style="display:none">📊 Project costs</div>
     <div class="nav-item" data-spage="att">🗓 My attendance</div>
     <div class="nav-item" data-spage="pay">💰 My payslips</div>
@@ -287,6 +288,18 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
       <div class="alert a-info">Project Allowance calculated for your team from their attendance at projects. Nothing is paid until you approve it and HR then approves it.</div>
       <div class="card"><div class="toolbar"><span class="toolbar-title">Waiting for your approval</span></div>
         <div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Payroll</th><th>Working</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead><tbody id="self-team-tbl"></tbody></table></div></div>
+    </div>
+    <div id="self-tatt" style="display:none">
+      <div class="card"><div class="toolbar" style="flex-wrap:wrap;gap:8px"><span class="toolbar-title">👥 My team's attendance</span>
+        <div class="toolbar-right" style="flex-wrap:wrap;gap:6px">
+          <span class="calv-seg"><button class="btn btn-sm on" id="ta-v-today">Today</button><button class="btn btn-sm" id="ta-v-period">Period</button></span>
+          <span id="ta-range" style="display:none;gap:6px;align-items:center;flex-wrap:wrap"><input type="date" class="sel" id="ta-from"> → <input type="date" class="sel" id="ta-to">
+            <button class="btn btn-ghost btn-sm" id="ta-this">This pay cycle</button><button class="btn btn-ghost btn-sm" id="ta-last">Last pay cycle</button></span>
+          <input class="sel" id="ta-q" placeholder="Search name, code, job" style="min-width:180px">
+          <button class="btn btn-ghost btn-sm" id="ta-refresh">⟳ Refresh</button></div></div>
+        <div class="foot" id="ta-sum" style="border-top:none;border-bottom:1px solid var(--border)"></div>
+        <div id="ta-body"></div>
+        <div class="foot">Your direct reports only. Late = first check-in after the latest allowed arrival; short = hours below the standard day (weekends and full-day missions excluded). "To settle" = missing check-outs, missing punches and offline times that HR still has to correct. Pay is never shown here.</div></div>
     </div>
     <div id="self-pcost" style="display:none">
       <div class="alert a-info">Total labour cost charged to each project for an approved payroll month. No employee names or individual pay are shown. Small projects may be combined so nobody's pay can be worked out.</div>
@@ -4085,6 +4098,7 @@ function renderSelf(){
     .sort((a,b) => (waitingManager(a.r)?0:1) - (waitingManager(b.r)?0:1) || String(b.when).localeCompare(String(a.when))).slice(0, 60);
   const waiting = team.filter(a => a.status==='Pending manager').length + tReq.filter(x => waitingManager(x.r)).length;
   $('self-team-nav').style.display = (team.length || tReq.length || (SD.myTeam||[]).length) ? '' : 'none';
+  $('self-tatt-nav').style.display = (SD.myTeam||[]).length ? '' : 'none';   // 87: direct managers see their team's attendance
   $('self-tproj-card').style.display = (SD.myTeam||[]).length ? '' : 'none';
   $('self-tproj-tbl').innerHTML = (SD.myTeam||[]).map(m => `<tr><td class="strong">${esc(m.name_en || m.name_ar || m.id)} <span class="mono" style="color:var(--muted)">${esc(m.id)}</span></td><td>${esc(m.job_name||'')}</td>
       <td class="num">${m.projects || '<span style="color:var(--muted)">none — any project</span>'}</td><td><button class="btn btn-ghost btn-sm" data-tproj="${esc(m.id)}">Manage</button></td></tr>`).join('');
@@ -4194,9 +4208,10 @@ async function selfCancel(key){
 $('self-list').addEventListener('click', e => { const b=e.target.closest('[data-self-cancel]'); if(b) selfCancel(b.dataset.selfCancel); });
 document.querySelectorAll('[data-spage]').forEach(t => t.addEventListener('click', () => {
   document.querySelectorAll('[data-spage]').forEach(x=>x.classList.toggle('active', x===t));
-  ['req','team','pcost','att','pay','prof'].forEach(k => $('self-'+k).style.display = t.dataset.spage===k ? '' : 'none');
+  ['req','team','tatt','pcost','att','pay','prof'].forEach(k => $('self-'+k).style.display = t.dataset.spage===k ? '' : 'none');
   lockSelfPay();                                                     // payslips need the password every time
   if (t.dataset.spage === 'pcost') loadProjectCosts();
+  if (t.dataset.spage === 'tatt') { if (!$('ta-from').value) { $('ta-from').value = periodStart(cycleOf(todayStr())); $('ta-to').value = todayStr(); } loadTeamAtt(); }   // part42
 }));
 $('self-back').addEventListener('click', () => { $('self').style.display='none'; $('app').style.display='block'; });
 ['sl-from','sl-to'].forEach(id=>$(id).addEventListener('change', slRecalc));
@@ -8479,6 +8494,133 @@ const _showPageCo = showPage;
 showPage = function(name){ const r = _showPageCo.apply(this, arguments); if (name === 'coreq') renderCoReqs(); return r; };
 const _loadPeriodDataCo = loadPeriodData;
 loadPeriodData = async function(){ const r = await _loadPeriodDataCo.apply(this, arguments); loadCoReqs().catch(() => {}); return r; };
+
+// ═════════════════════════════════════════════════════════
+//  TEAM ATTENDANCE — direct managers see their direct reports (database file 87: team_attendance)
+//  Today: who is in (since when, where), who left, on leave / mission, no record yet.
+//  Period: per person — present days, late arrivals, short days, working days with no record, leave, mission, hours;
+//  click a person for the day-by-day list. No pay and no GPS points are ever loaded.
+// ═════════════════════════════════════════════════════════
+let TA = { view:'today', data:null, open:null, q:'' };
+const taMin = t => { if (!t) return null; const [h, m] = String(t).split(':').map(Number); return h * 60 + (m || 0); };
+const taDays = (a, b) => { const out = []; for (let d = dObj(a), g = 0; dStr(d) <= b && g < 400; d.setDate(d.getDate() + 1), g++) out.push(dStr(d)); return out; };
+const taName = m => m ? (m.name_en || m.name_ar || m.id) : '';
+const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+async function loadTeamAtt(){
+  const box = $('ta-body'); if (!box) return;
+  const today = todayStr();
+  let from = today, to = today;
+  if (TA.view === 'period') {
+    from = $('ta-from').value || periodStart(cycleOf(today)); to = $('ta-to').value || today;
+    if (to < from) return toast('The end date is before the start date', 'warn');
+  }
+  box.innerHTML = '<div class="empty">Loading your team\'s attendance…</div>';
+  const { data, error } = await sb.rpc('team_attendance', { p_from: from, p_to: to });
+  if (error) { box.innerHTML = `<div class="alert a-warn">${/function|schema/i.test(error.message) ? 'This page needs <b>87-team-attendance.sql</b> — ask the administrator.' : esc(error.message)}</div>`; return; }
+  TA.data = data; TA.open = null; renderTeamAtt();
+}
+
+// what happened for one person on one day
+function taDay(d, m, D){
+  const R = D.rules, wk = (R.weekendDays || []).map(Number), today = D.today;
+  const rec = D.days.filter(x => x.emp_id === m.id && x.date === d);
+  const leave = D.leaves.find(l => l.emp_id === m.id && l.from <= d && l.to >= d);
+  const ms = D.missions.filter(x => x.emp_id === m.id && x.from <= d && x.to >= d);
+  const hol = D.holidays.find(h => h.date === d), weekend = wk.includes(dObj(d).getDay());
+  const lines = rec.flatMap(r => r.lines || []), flags = [...new Set(lines.map(l => l.flag).filter(Boolean))];
+  const working = rec.some(r => r.status === 'Present' || r.status === 'Half Day');
+  const ins = lines.map(l => l.in).filter(Boolean).sort(), outs = lines.map(l => l.out).filter(Boolean).sort();
+  const open = lines.some(l => l.in && !l.out);
+  const hours = rec.reduce((s, r) => s + num(r.total_hours), 0);
+  const firstIn = ins[0] || (rec[0] && rec[0].check_in) || '', lastOut = open ? '' : (outs[outs.length - 1] || (rec[0] && rec[0].check_out) || '');
+  const employed = (!m.employment_date || d >= m.employment_date) && (!m.resignation_date || d <= m.resignation_date);
+  let state = '', late = 0, short = 0;
+  if (!employed) state = 'not employed';
+  else if (working) {
+    state = open && d === today ? 'in' : open ? 'no check-out' : 'present';
+    if (!weekend && !hol && !m.exempt && rec.some(r => r.status === 'Present')) {
+      const lim = taMin(R.lateAfter), eve = taMin(R.eveningShiftAfter), fi = taMin(firstIn);
+      if (fi != null && fi < eve) late = Math.max(0, fi - lim);
+      if (!open && !flags.length) short = Math.max(0, Math.round((num(R.hoursPerDay) - hours) * 60) - late);
+    }
+    if (ms.some(x => !x.time_from)) { late = 0; short = 0; }        // a full-day mission excuses the day
+  }
+  else if (rec.some(r => r.status === 'Absent')) state = 'absent';
+  else if (leave) state = 'leave';
+  else if (ms.length) state = 'mission';
+  else if (hol) state = 'holiday';
+  else if (weekend) state = 'weekend';
+  else if (d < today && !m.exempt) state = 'no record';
+  else if (d === today) state = 'not yet';
+  return { d, rec, leave, ms, hol, weekend, lines, flags, state, firstIn, lastOut, hours, late, short,
+           sites: [...new Set(lines.map(l => l.code ? (l.code + (l.site ? ' — ' + l.site : '')) : 'No project'))] };
+}
+function taChip(x){
+  const c = { in:'c-green', present:'c-green', 'no check-out':'c-orange', absent:'c-red', 'no record':'c-red', leave:'c-blue', mission:'c-blue', holiday:'c-grey', weekend:'c-grey', 'not yet':'c-grey', 'not employed':'c-grey' }[x.state] || 'c-grey';
+  const label = x.state === 'in' ? `In since ${x.firstIn}` : x.state === 'present' ? (x.lastOut ? `Left ${x.lastOut}` : 'Present')
+    : x.state === 'leave' ? `On ${x.leave.type} leave` : x.state === 'mission' ? `Mission · ${x.ms[0].place || ''}`
+    : x.state === 'holiday' ? (x.hol.name || 'Holiday') : x.state === 'not yet' ? 'No check-in yet' : x.state[0].toUpperCase() + x.state.slice(1);
+  return `<span class="chip ${c}">${esc(label)}</span>`;
+}
+const taNote = x => [x.late ? `late ${fmtHM(x.late / 60)}` : '', x.short ? `short ${fmtHM(x.short / 60)}` : '',
+  ...x.flags, ...x.ms.filter(m => m.time_from).map(m => `mission ${String(m.time_from).slice(0,5)}–${String(m.time_to).slice(0,5)}`)].filter(Boolean).join(' · ');
+
+function renderTeamAtt(){
+  const D = TA.data, box = $('ta-body'); if (!D) return;
+  const q = TA.q.trim().toLowerCase();
+  const members = (D.members || []).filter(m => !q || [m.id, m.name_en, m.name_ar, m.job_name].some(v => String(v || '').toLowerCase().includes(q)));
+  if (!(D.members || []).length) { box.innerHTML = '<div class="empty">Nobody reports directly to you in the HR system. If this is wrong, ask HR to set you as their direct manager.</div>'; return; }
+  if (TA.view === 'today') {
+    const rows = members.map(m => ({ m, x: taDay(D.today, m, D) }));
+    const n = s => rows.filter(r => r.x.state === s).length;
+    $('ta-sum').innerHTML = `<b>${rows.length}</b> in your team · <b>${n('in')}</b> in now · <b>${n('present')}</b> left · <b>${n('leave') + n('mission')}</b> on leave or mission · <b>${n('not yet')}</b> no check-in yet`;
+    box.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Today</th><th>In</th><th>Out</th><th class="num">Hours</th><th>Where</th><th>Notes</th></tr></thead><tbody>${
+      rows.map(({ m, x }) => `<tr><td class="strong">${esc(taName(m))} <span class="mono" style="color:var(--muted)">${esc(m.id)}</span><div style="font-size:11.5px;color:var(--muted)">${esc(m.job_name || '')}</div></td>
+        <td>${taChip(x)}</td><td class="mono">${esc(x.firstIn)}</td><td class="mono">${esc(x.lastOut)}</td><td class="num">${x.hours ? fmtHM(x.hours) : ''}</td>
+        <td>${esc(x.sites.join(', '))}</td><td style="font-size:12px;color:var(--warn)">${esc(taNote(x))}</td></tr>`).join('')
+      || '<tr><td colspan="7" class="empty">Nobody matches the search</td></tr>'}</tbody></table></div>`;
+    return;
+  }
+  const days = taDays(D.from, D.to);
+  const rows = members.map(m => {
+    const xs = days.map(d => taDay(d, m, D));
+    const c = s => xs.filter(x => x.state === s).length;
+    return { m, xs, present: c('present') + c('in') + c('no check-out'), norec: c('no record') + c('absent'), leave: c('leave'), mission: c('mission'),
+             lateN: xs.filter(x => x.late).length, lateM: xs.reduce((s, x) => s + x.late, 0), shortN: xs.filter(x => x.short).length, shortM: xs.reduce((s, x) => s + x.short, 0),
+             issues: xs.filter(x => x.flags.length || x.state === 'no check-out').length, hours: xs.reduce((s, x) => s + x.hours, 0) };
+  });
+  const T = k => rows.reduce((s, r) => s + r[k], 0);
+  $('ta-sum').innerHTML = `${esc(D.from)} → ${esc(D.to)} · <b>${rows.length}</b> people · <b>${T('norec')}</b> working day${T('norec') === 1 ? '' : 's'} with no record · <b>${T('lateN')}</b> late arrival${T('lateN') === 1 ? '' : 's'} · <b>${T('issues')}</b> day${T('issues') === 1 ? '' : 's'} for HR to settle. Click a name for the day-by-day list.`;
+  box.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>Employee</th><th class="num">Present</th><th class="num">No record</th><th class="num">Late</th><th class="num">Short days</th><th class="num">Leave</th><th class="num">Mission</th><th class="num">Hours</th><th class="num">To settle</th></tr></thead><tbody>${
+    rows.map(r => `<tr class="click" data-ta-emp="${esc(r.m.id)}"><td class="strong">${TA.open === r.m.id ? '▾' : '▸'} ${esc(taName(r.m))} <span class="mono" style="color:var(--muted)">${esc(r.m.id)}</span><div style="font-size:11.5px;color:var(--muted)">${esc(r.m.job_name || '')}</div></td>
+      <td class="num">${r.present}</td><td class="num" style="${r.norec ? 'color:var(--danger);font-weight:600' : ''}">${r.norec}</td>
+      <td class="num">${r.lateN ? `${r.lateN} · ${fmtHM(r.lateM / 60)}` : '0'}</td><td class="num">${r.shortN ? `${r.shortN} · ${fmtHM(r.shortM / 60)}` : '0'}</td>
+      <td class="num">${r.leave}</td><td class="num">${r.mission}</td><td class="num">${fmtHM(r.hours)}</td><td class="num" style="${r.issues ? 'color:var(--warn);font-weight:600' : ''}">${r.issues}</td></tr>`
+      + (TA.open === r.m.id ? `<tr><td colspan="9" style="background:var(--bg2,rgba(127,127,127,.06))"><table style="width:100%"><thead><tr><th>Date</th><th>Day</th><th>Status</th><th>In</th><th>Out</th><th class="num">Hours</th><th>Where</th><th>Notes</th></tr></thead><tbody>${
+          r.xs.filter(x => x.state !== 'not employed').map(x => `<tr><td class="mono">${esc(x.d)}</td><td>${DOW[dObj(x.d).getDay()]}</td><td>${taChip(x)}</td><td class="mono">${esc(x.firstIn)}</td><td class="mono">${esc(x.lastOut)}</td>
+            <td class="num">${x.hours ? fmtHM(x.hours) : ''}</td><td>${esc(x.sites.join(', '))}</td><td style="font-size:12px;color:var(--warn)">${esc(taNote(x))}</td></tr>`).join('')}</tbody></table></td></tr>` : '')).join('')
+    || '<tr><td colspan="9" class="empty">Nobody matches the search</td></tr>'}</tbody></table></div>`;
+}
+
+function taSetView(v){
+  TA.view = v;
+  $('ta-v-today').classList.toggle('on', v === 'today'); $('ta-v-period').classList.toggle('on', v === 'period');
+  $('ta-range').style.display = v === 'period' ? 'flex' : 'none';
+  loadTeamAtt();
+}
+function taCycle(back){
+  const c = cycleOf(todayStr()), [y, mo] = c.split('-').map(Number), p = back ? (mo === 1 ? `${y - 1}-12` : `${y}-${pad(mo - 1)}`) : c;
+  $('ta-from').value = periodStart(p); $('ta-to').value = back ? periodEnd(p) : todayStr(); loadTeamAtt();
+}
+$('ta-v-today').addEventListener('click', () => taSetView('today'));
+$('ta-v-period').addEventListener('click', () => taSetView('period'));
+$('ta-this').addEventListener('click', () => taCycle(false));
+$('ta-last').addEventListener('click', () => taCycle(true));
+['ta-from', 'ta-to'].forEach(id => $(id).addEventListener('change', loadTeamAtt));
+$('ta-refresh').addEventListener('click', loadTeamAtt);
+$('ta-q').addEventListener('input', e => { TA.q = e.target.value; renderTeamAtt(); });
+$('ta-body').addEventListener('click', e => { const r = e.target.closest('[data-ta-emp]'); if (!r) return; TA.open = TA.open === r.dataset.taEmp ? null : r.dataset.taEmp; renderTeamAtt(); });
 
 // ═════════════════════════════════════════════════════════
 //  BOOT

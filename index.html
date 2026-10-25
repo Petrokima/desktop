@@ -7842,7 +7842,8 @@ async function msDecide(id, ok){
   if (error) return toast(error.message, 'err');
   toast(ok ? 'Mission approved — the employee and his manager are notified' : 'Mission rejected — the employee and his manager are notified');
   await renderMissions();
-  if (ok) { await loadPeriodData(); DIRTY.add('payroll'); DIRTY.add('reports'); }
+  // fix 25 Oct: loadPeriodData() shows the "Loading period…" cover — always hide it again (it stayed on screen for ever)
+  if (ok) { try { await loadPeriodData(); } catch(e){ toast('Reload error — ' + e.message, 'err'); } finally { loader(false); } DIRTY.add('payroll'); DIRTY.add('reports'); }
 }
 PAGE_RENDER.missions = () => renderMissions();
 $('ms-tbl').addEventListener('click', e => {
@@ -8457,7 +8458,7 @@ async function coRecord(id, btn){
   btn.disabled = false;
   if (error) return toast(error.message.replace(/^[A-Z_]+: ?/, ''), 'err');
   toast(`Check-out recorded at ${t} — the employee is notified`);
-  try { await loadPeriodData(); } catch(e){}
+  try { await loadPeriodData(); } catch(e){} finally { loader(false); }   // fix 25 Oct: hide the "Loading period…" cover
   renderCoReqs();
 }
 async function coReject(id){

@@ -222,6 +222,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
       <div class="field" style="margin-bottom:14px"><label>Employee code (or email)</label><input id="li-email" autocomplete="username" placeholder="e.g. 615"></div>
       <div class="field" style="margin-bottom:8px"><label>Password</label><input id="li-pass" type="password" autocomplete="current-password"></div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.5">First time? Your password is <b>Petro@</b> followed by the last 4 digits of your national ID (e.g. Petro@5191).</div>
+      <div id="li-cap" style="display:none;margin-bottom:10px"></div>
       <button class="btn btn-primary" id="btn-login" style="width:100%;justify-content:center">Sign in</button>
     </div>
     <div id="login-first" style="display:none">
@@ -312,7 +313,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
       <div class="card" id="self-pay-lock" style="max-width:420px;padding:22px;text-align:center"><div style="font-size:40px">🔒</div>
         <div class="strong" style="font-size:16px;margin:6px 0">Your payslips are protected</div><div style="color:var(--muted);font-size:13px;margin-bottom:12px">Enter your password to view them.</div>
         <input class="inp" id="self-pay-pass" type="password" autocomplete="current-password" placeholder="Password" style="width:100%;margin-bottom:10px">
-        <button class="btn btn-primary" id="self-pay-go" style="width:100%;justify-content:center">Show my payslips</button><div id="self-pay-err" style="color:var(--danger);font-size:13px;margin-top:8px"></div></div>
+        <div id="sp-cap" style="display:none;margin-bottom:10px"></div><button class="btn btn-primary" id="self-pay-go" style="width:100%;justify-content:center">Show my payslips</button><div id="self-pay-err" style="color:var(--danger);font-size:13px;margin-top:8px"></div></div>
       <div class="card" id="self-pay-card" style="display:none"><div class="toolbar"><span class="toolbar-title">My approved payslips</span><div class="toolbar-right"><button class="btn btn-ghost btn-sm" id="self-pay-relock">🔒 Lock</button></div></div>
         <div class="tbl-wrap"><table><thead><tr><th>Payroll</th><th class="num">Gross</th><th class="num">Deductions</th><th class="num">Net pay</th><th></th></tr></thead><tbody id="self-slips"></tbody></table></div></div>
     </div>
@@ -1776,6 +1777,41 @@ function showLogin(msg){
   const e=$('login-err'); if(msg){ e.innerHTML=msg; e.style.display='block'; } else e.style.display='none';
   setTimeout(()=>$('li-email').focus(),50);
 }
+// ── CAPTCHA on every password sign-in (Cloudflare Turnstile, 25 Oct 2026) ──
+//  TURNSTILE_SITE_KEY = the PUBLIC site key of the widget "Petrokima HR sign-in". Empty = no CAPTCHA (nothing is shown, nothing sent).
+//  Supabase checks the token only once "CAPTCHA protection" is switched on (Authentication → Attack Protection); before that it is ignored.
+//  Each token is good for one sign-in: a fresh one is taken for every attempt. Usually nothing is shown; Cloudflare shows a small box
+//  to tick only when it is not sure the person is human.
+const TURNSTILE_SITE_KEY = '0x4AAAAAAFkp9jltaXJo9weC';   // widget "Petrokima HR sign-in" (public key)
+let tsLoad = null;
+function loadTurnstile(){
+  if (window.turnstile) return Promise.resolve(window.turnstile);
+  if (tsLoad) return tsLoad;
+  tsLoad = new Promise((res, rej) => {
+    const s = document.createElement('script'); s.async = true;
+    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    s.onload = () => window.turnstile ? res(window.turnstile) : rej(new Error('captcha-load'));
+    s.onerror = () => { tsLoad = null; rej(new Error('captcha-load')); };
+    document.head.appendChild(s);
+    setTimeout(() => { if (!window.turnstile) { tsLoad = null; rej(new Error('captcha-load-timeout')); } }, 15000);   // never wait for ever
+  });
+  return tsLoad;
+}
+async function captchaToken(boxId, lang){
+  if (!TURNSTILE_SITE_KEY) return undefined;
+  const box = document.getElementById(boxId); if (!box) return undefined;
+  const ts = await loadTurnstile();
+  return new Promise((resolve, reject) => {
+    let id = null, done = false;
+    const finish = (fn, v) => { if (done) return; done = true; clearTimeout(timer); setTimeout(() => { try { ts.remove(id); } catch(e){} box.style.display = 'none'; }, 0); fn(v); };
+    const timer = setTimeout(() => finish(reject, new Error('captcha-timeout')), 90000);
+    box.innerHTML = ''; box.style.display = 'block';
+    id = ts.render(box, { sitekey: TURNSTILE_SITE_KEY, action: 'signin', appearance: 'interaction-only', language: lang || 'auto',
+      callback: tok => finish(resolve, tok),
+      'error-callback': code => { finish(reject, new Error('captcha-failed ' + code)); return true; },
+      'timeout-callback': () => finish(reject, new Error('captcha-timeout')) });
+  });
+}
 const LOGIN_DOMAIN = 'petrokima.local';
 function loginName(v){ v=String(v||'').trim(); return v.includes('@') ? v.toLowerCase() : v.toLowerCase().replace(/[^a-z0-9._-]/g,'') + '@' + LOGIN_DOMAIN; }
 let lastTempPass = '';
@@ -1783,9 +1819,10 @@ async function doLogin(){
   const email=loginName($('li-email').value), pass=$('li-pass').value;
   if(!email||!pass) return showLogin('Enter your email and password.');
   const b=$('btn-login'); b.disabled=true; b.textContent='Signing in…';
-  const { data, error } = await sb.auth.signInWithPassword({ email, password:pass });
+  let cap; try { cap = await captchaToken('li-cap', 'en'); } catch(e){ cap = undefined; }   // check unavailable: Supabase decides
+  const { data, error } = await sb.auth.signInWithPassword({ email, password:pass, options: cap ? { captchaToken: cap } : undefined });
   b.disabled=false; b.textContent='Sign in';
-  if (error) return showLogin(/invalid/i.test(error.message) ? 'Wrong employee code / email or password.' : esc(error.message));
+  if (error) return showLogin(/invalid/i.test(error.message) ? 'Wrong employee code / email or password.' : /captcha/i.test(error.message) ? 'The security check did not complete. Check the internet connection and try again.' : esc(error.message));
   lastTempPass = pass; $('li-pass').value=''; await afterLogin(data.user);
 }
 async function afterLogin(user){
@@ -4178,7 +4215,8 @@ async function unlockSelfPay(){
   $('self-pay-go').disabled = true;
   // the account that is signed in right now — never a value left over from an earlier sign-in
   const email = ((((await sb.auth.getSession()).data || {}).session || {}).user || {}).email || (SELF.me && SELF.me.email);
-  const { error } = await sb.auth.signInWithPassword({ email, password: pw });
+  let cap; try { cap = await captchaToken('sp-cap', 'en'); } catch(e){ cap = undefined; }
+  const { error } = await sb.auth.signInWithPassword({ email, password: pw, options: cap ? { captchaToken: cap } : undefined });
   $('self-pay-go').disabled = false;
   if (error){ $('self-pay-err').textContent = /invalid|credentials/i.test(error.message) ? 'Wrong password' : error.message; return; }
   if (!(await mfaAfterReauth())) { $('self-pay-err').textContent = 'The 6-digit code is needed to open payslips'; return; }

@@ -994,7 +994,8 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
       <div class="field"><label>A check-in or check-out outside the site boundary or away from the employee's office</label>
         <select id="lr-outside"><option value="flag">Allow it, but warn HR</option><option value="block">Refuse it (offline taps are kept for HR review)</option></select></div>
       <div class="field"><label>Default site radius (metres) — used when a site has no radius of its own</label><input id="lr-radius" type="number" min="50" max="5000" step="50"></div>
-      <div class="field"><label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="lr-apponly" style="width:auto"> Android employees must use the Petrokima app, not the browser</label></div>
+      <div class="field"><label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="lr-apponly" style="width:auto"> Android employees must use the Petrokima app, not the browser</label>
+        <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;margin-top:8px"><input type="checkbox" id="lr-anywhere" style="width:auto;margin-top:3px"> <span>Employees <b>not assigned to an office</b> may check in anywhere (with or without a project). Employees assigned to an office must be at their office. A project with a map point still shows a warning when they are away from it.</span></label></div>
     </div>
     <div class="grid3" style="align-items:end;margin-top:10px">
       <div class="field"><label>Oldest Android app allowed (build number — the last part of "Version 1.0.<b>N</b>" on download.petrokima-hr.com). 0 = no limit</label><input id="lr-minbuild" type="number" min="0" step="1"></div>
@@ -1006,15 +1007,24 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 
   <div class="card" id="lf-card">
     <div class="toolbar"><span class="toolbar-title" id="lf-title">🧭 May check in away from office / site</span></div>
-    <div style="font-size:12px;color:var(--muted);padding:0 18px 10px;line-height:1.6">Check-ins and check-outs of these employees are <b>always accepted</b>, even when “Refuse it” is chosen above — for people who move between sites, clients and offices all day (e.g. directors). Their GPS point is still recorded and they appear in the warnings list below as <b>“Away — allowed for this employee”</b>. A fake-location app is still refused. Only HR or an administrator can change this list, and nobody for his own record.</div>
+    <div style="font-size:12px;color:var(--muted);padding:0 18px 10px;line-height:1.6">Check-ins and check-outs of these employees are <b>always accepted</b>, even when they are assigned to an office and “Refuse it” is chosen above — for people who move between sites, clients and offices all day (e.g. directors). Their GPS point is still recorded and they appear in the warnings list below as <b>“Away — allowed”</b>. A fake-location app is still refused. Only HR or an administrator can change this list, and nobody for his own record.</div>
     <div class="no-officer" style="display:flex;gap:8px;padding:0 18px 12px;flex-wrap:wrap;align-items:center"><input class="inp" id="lf-emp" list="dl-emp" placeholder="Type code or name…" style="width:300px"><input class="inp" id="lf-note" placeholder="Reason, e.g. Director" style="width:240px"><button class="btn btn-primary btn-sm" id="lf-add">+ Add</button></div>
     <div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Job</th><th>Reason</th><th>Added by</th><th>Since</th><th></th></tr></thead><tbody id="lf-tbl"></tbody></table></div>
+  </div>
+
+  <div class="card" id="spw-card">
+    <div class="toolbar"><span class="toolbar-title" id="spw-title">📍 May set site locations from the phone</span></div>
+    <div style="font-size:12px;color:var(--muted);padding:0 18px 10px;line-height:1.6">Trusted employees (e.g. site engineers) see <b>“📍 Set a site's location”</b> on their phone: standing at a project, they choose it and the place where they stand becomes its map point (GPS must be accurate to 50 m or better; fake-location apps are refused). Replacing a point is allowed; every change is listed below and HR gets a phone notification. Only HR or an administrator can change this list, and nobody for his own record.</div>
+    <div class="no-officer" style="display:flex;gap:8px;padding:0 18px 12px;flex-wrap:wrap;align-items:center"><input class="inp" id="spw-emp" list="dl-emp" placeholder="Type code or name…" style="width:300px"><input class="inp" id="spw-note" placeholder="Reason, e.g. Site engineer" style="width:240px"><button class="btn btn-primary btn-sm" id="spw-add">+ Add</button></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Job</th><th>Reason</th><th>Added by</th><th>Since</th><th></th></tr></thead><tbody id="spw-tbl"></tbody></table></div>
+    <div class="toolbar" style="border-top:1px solid var(--border);padding-top:10px"><span class="toolbar-title" style="font-size:14px">Latest changes to site locations</span></div>
+    <div class="tbl-wrap"><table><thead><tr><th>When</th><th>Project</th><th>Change</th><th>By</th><th>How</th><th class="num">GPS accuracy</th><th>Note</th><th>Map</th></tr></thead><tbody id="spl-tbl"></tbody></table></div>
   </div>
 
   <div class="card">
     <div class="toolbar"><span class="toolbar-title" id="lw-count">Check-ins with location warnings</span>
       <div class="toolbar-right">
-        <select class="sel" id="lw-kind"><option value="">All warnings</option><option value="outside_site">Outside the site</option><option value="outside_office">Away from his office</option><option value="away_allowed">Away — allowed for this employee</option><option value="fake_gps">Fake-location app</option><option value="same_point">Same exact point</option><option value="perfect_accuracy">"Perfect" accuracy</option><option value="impossible_travel">Impossible travel</option><option value="browser_android">Browser instead of app</option><option value="old_app">Old app version</option><option value="no_site_point">Project has no map point</option><option value="gps_unchecked">Fake-GPS check not done</option><option value="held">Kept for review (not counted)</option></select>
+        <select class="sel" id="lw-kind"><option value="">All warnings</option><option value="outside_site">Outside the site</option><option value="outside_office">Away from his office</option><option value="away_allowed">Away — allowed</option><option value="fake_gps">Fake-location app</option><option value="same_point">Same exact point</option><option value="perfect_accuracy">"Perfect" accuracy</option><option value="impossible_travel">Impossible travel</option><option value="browser_android">Browser instead of app</option><option value="old_app">Old app version</option><option value="no_site_point">Project has no map point</option><option value="gps_unchecked">Fake-GPS check not done</option><option value="held">Kept for review (not counted)</option></select>
         <input class="inp" id="lw-q" placeholder="Search code, name or site…">
       </div></div>
     <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Time</th><th>Employee</th><th>Event</th><th>Site</th><th class="num">Distance</th><th>Warnings</th><th>Counted?</th><th>Map</th><th></th></tr></thead><tbody id="lw-tbl"></tbody></table></div>
@@ -1039,7 +1049,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="card">
     <div class="toolbar"><span class="toolbar-title">Offices (check-ins without a project)</span>
       <div class="toolbar-right"><button class="btn btn-ghost" id="wl-add">+ Add office</button></div></div>
-    <div style="font-size:12px;color:var(--muted);padding:0 18px 10px">Employees allowed to check in "without project" are compared with the nearest office. No offices listed = not checked.<br><b>👥 Employees</b>: employees fixed to an office are always compared with their own office(s) — whatever project they choose for the time sheet. Away from it, the check-in / check-out is accepted and HR gets a phone notification.</div>
+    <div style="font-size:12px;color:var(--muted);padding:0 18px 10px"><b>👥 Employees</b>: employees assigned to an office are always compared with their own office(s) — whatever project they choose for the time sheet. Away from it, the rule above applies (“Refuse it” = refused) and HR gets a phone notification; only the 🧭 list and approved missions are exempt.<br>Employees <b>not</b> assigned to an office are not compared with any office while the tick box “may check in anywhere” in Rules is on; when it is off, their check-ins without a project are compared with the nearest office.</div>
     <div class="tbl-wrap"><table><thead><tr><th>Office</th><th>Latitude</th><th>Longitude</th><th>Radius (m)</th><th>Active</th><th>Employees</th><th></th></tr></thead><tbody id="wl-tbl"></tbody></table></div>
   </div>
 </div>
@@ -6636,7 +6646,7 @@ const LOC_FLAG = {
   old_app:          ['Old app version', 'c-blue'],
   no_site_point:    ['Project has no map point', 'c-orange'],
   gps_unchecked:    ['Fake-GPS check not done', 'c-blue'],
-  away_allowed:     ['Away — allowed for this employee', 'c-blue'] };
+  away_allowed:     ['Away — allowed', 'c-blue'] };
 let LOC_RULES = { outside:'flag', default_radius:300, block_mock:true, android_app_only:false };
 let WORK_LOCS = [], wlMissing = false;
 const fmtDist = m => m == null ? '' : (m >= 1000 ? (m/1000).toFixed(1) + ' km' : Math.round(m) + ' m');
@@ -6654,6 +6664,7 @@ function renderLocations(){
   $('lr-outside').value = LOC_RULES.outside || 'flag';
   $('lr-radius').value = num(LOC_RULES.default_radius) || 300;
   $('lr-apponly').checked = !!LOC_RULES.android_app_only;
+  $('lr-anywhere').checked = LOC_RULES.unassigned_anywhere !== false;   // 91: default on
   $('lr-minbuild').value = num(LOC_RULES.min_android_build) || 0;
   $('lr-note').textContent = wlMissing ? 'Database update 41-location-integrity.sql has not been run yet — these checks are not active.' : '';
   renderLocWarnings(); renderSites(); renderOffices();
@@ -6714,7 +6725,7 @@ function renderSites(){
   const mapped = S.projects.filter(p => p.site_lat != null).length;
   $('ls-count').textContent = `Site locations — ${mapped} site${mapped===1?'':'s'} mapped · showing ${Math.min(list.length,300)}${list.length>300?' of '+list.length:''}`;
   $('ls-tbl').innerHTML = list.slice(0,300).map(p => `<tr data-site="${esc(p.id)}">
-      <td class="mono">${esc(p.id)}</td><td>${esc(p.name||'')}</td>
+      <td class="mono">${esc(p.id)}</td><td>${esc(p.name||'')}${p.site_set_by && p.site_lat != null ? `<div style="font-size:11px;color:var(--muted)">${p.site_set_how === 'phone' ? '📱' : '🖥'} set by ${esc(p.site_set_by)} · ${esc(dmyShow(String(p.site_set_at || '').slice(0, 10)))}</div>` : ''}</td>
       <td><input class="inp" style="width:150px" data-s="lat" value="${p.site_lat != null ? esc(p.site_lat) : ''}" placeholder="paste lat, lng"></td>
       <td><input class="inp" style="width:120px" data-s="lng" value="${p.site_lng != null ? esc(p.site_lng) : ''}"></td>
       <td><input class="inp" style="width:80px" type="number" min="50" max="5000" step="50" data-s="rad" value="${p.site_radius_m != null ? p.site_radius_m : ''}" placeholder="${num(LOC_RULES.default_radius)||300}"></td>
@@ -6812,7 +6823,7 @@ $('lr-save').addEventListener('click', async () => {
   if (!(rad >= 50 && rad <= 5000)) return toast('Default radius must be between 50 and 5,000 metres', 'warn');
   const minb = Math.round(Number($('lr-minbuild').value || 0));
   if (!(minb >= 0)) return toast('The oldest app build must be 0 or a positive number', 'warn');
-  const value = { ...LOC_RULES, outside: $('lr-outside').value, default_radius: rad, block_mock: true, android_app_only: $('lr-apponly').checked, min_android_build: minb };
+  const value = { ...LOC_RULES, outside: $('lr-outside').value, default_radius: rad, block_mock: true, android_app_only: $('lr-apponly').checked, min_android_build: minb, unassigned_anywhere: $('lr-anywhere').checked };
   const { data, error } = await sb.from('settings').upsert({ key:'location_rules', value }).select('key');
   if (error) return toast(error.message, 'err'); if (!(data && data.length)) return toast('Only an administrator can change these rules', 'err');
   LOC_RULES = value; toast('Location rules saved');
@@ -9005,6 +9016,66 @@ const _loadLocationData46 = loadLocationData;
 loadLocationData = async function(){ await Promise.all([_loadLocationData46.apply(this, arguments), loadLocFree().catch(() => { lfMissing = true; })]); };
 const _renderLocations46 = renderLocations;
 renderLocations = function(){ _renderLocations46.apply(this, arguments); renderLocFree(); };
+PAGE_RENDER.locations = () => { loadLocationData().then(renderLocations, renderLocations); };
+
+// ═════════════════════════════════════════════════════════
+//  WHO MAY SET SITE LOCATIONS FROM THE PHONE + latest changes (26 Oct 2026, database 91-site-points-office-rule.sql)
+//  Location checks → card 📍: HR chooses trusted employees; they save a project's map point on the phone where they stand.
+// ═════════════════════════════════════════════════════════
+let SP_SETTERS = [], SP_LOG = [], spwMissing = false;
+async function loadSitePointData(){
+  const [a, b] = await Promise.all([
+    sb.from('site_point_setters').select('*').order('added_at'),
+    sb.from('site_point_log').select('*').order('at', { ascending:false }).limit(30) ]);
+  spwMissing = !!a.error; SP_SETTERS = a.data || []; SP_LOG = b.data || [];
+}
+function renderSitePointCard(){
+  if (!$('spw-tbl')) return;
+  $('spw-title').textContent = `📍 May set site locations from the phone (${SP_SETTERS.length})`;
+  $('spw-tbl').innerHTML = spwMissing ? '<tr><td colspan="6" class="empty">Database update 91-site-points-office-rule.sql has not been run yet.</td></tr>'
+    : SP_SETTERS.slice().sort((a, b) => String(a.emp_id).localeCompare(String(b.emp_id), undefined, { numeric:true })).map(x => { const e = empById(x.emp_id) || {};
+      return `<tr><td class="strong">${esc(empName(e) || x.emp_id)} <span class="mono" style="color:var(--muted)">${esc(x.emp_id)}</span></td><td>${esc(e.job_name || '')}</td>
+        <td style="white-space:normal">${esc(x.note || '')}</td><td>${esc(x.added_by || '')}</td><td class="mono">${esc(dmyShow(String(x.added_at || '').slice(0, 10)))}</td>
+        <td><button class="btn btn-ghost btn-sm no-officer" data-spw-del="${esc(x.emp_id)}">Remove</button></td></tr>`; }).join('')
+    || '<tr><td colspan="6" class="empty">Nobody yet — add a trusted employee (e.g. a site engineer).</td></tr>';
+  const ll = (a, b) => a == null ? '—' : `${Number(a).toFixed(5)}, ${Number(b).toFixed(5)}`;
+  $('spl-tbl').innerHTML = SP_LOG.map(l => { const p = S.projects.find(x => String(x.id) === String(l.project_code)) || {};
+      const what = l.new_lat == null ? 'Point removed' : l.old_lat == null ? `New point ${ll(l.new_lat, l.new_lng)}` : `Moved ${ll(l.old_lat, l.old_lng)} → ${ll(l.new_lat, l.new_lng)}`;
+      return `<tr><td class="mono" style="white-space:nowrap">${esc(dmyShow(String(l.at).slice(0, 10)))} ${esc(String(l.at).slice(11, 16))}</td>
+        <td><span class="mono">${esc(l.project_code)}</span> ${esc(p.name || '')}</td><td style="white-space:normal">${esc(what)}${l.new_radius ? ` · ${l.new_radius} m` : ''}</td>
+        <td>${esc(l.set_by_name || '')}${l.set_by_emp ? ` <span class="mono" style="color:var(--muted)">${esc(l.set_by_emp)}</span>` : ''}</td>
+        <td>${l.how === 'phone' ? '📱 Phone' : l.how === 'removed' ? '✕ Removed' : '🖥 Desktop'}</td><td class="num">${l.accuracy != null ? '±' + l.accuracy + ' m' : ''}</td>
+        <td style="white-space:normal">${esc(l.note || '')}</td>
+        <td>${l.new_lat != null ? `<a class="maplink" href="https://www.google.com/maps?q=${l.new_lat},${l.new_lng}" target="_blank" rel="noopener">📍 Open map</a>` : ''}</td></tr>`; }).join('')
+    || '<tr><td colspan="8" class="empty">No site location has been set or changed yet.</td></tr>';
+}
+async function setSitePointSetter(emp, on, note){
+  const { error } = await sb.rpc('set_site_point_setter', { p_emp: emp, p_on: on, p_note: note || null });
+  if (error) return toast(error.message, 'err');
+  toast(on ? `${empName(empById(emp)) || emp} can now set site locations from the phone` : `${empName(empById(emp)) || emp} can no longer set site locations`);
+  await loadSitePointData(); renderSitePointCard();
+}
+$('spw-add').addEventListener('click', async () => {
+  const emp = parseEmpInput($('spw-emp').value);
+  if (!emp) return toast('Pick the employee from the suggestions', 'warn');
+  if (SP_SETTERS.some(x => String(x.emp_id) === emp)) return toast('Already on the list', 'warn');
+  await setSitePointSetter(emp, true, $('spw-note').value.trim());
+  $('spw-emp').value = ''; $('spw-note').value = '';
+});
+$('spw-tbl').addEventListener('click', e => {
+  const b = e.target.closest('[data-spw-del]'); if (!b) return;
+  if (b.dataset.sure !== '1'){ b.dataset.sure = '1'; b.textContent = 'Click again to remove'; setTimeout(() => { if (b.isConnected){ b.dataset.sure = ''; b.textContent = 'Remove'; } }, 4000); return; }
+  setSitePointSetter(b.dataset.spwDel, false);
+});
+// loaded with the Location checks page; the projects are re-read so points set on phones show who set them
+const _loadLocationData47 = loadLocationData;
+loadLocationData = async function(){
+  await Promise.all([_loadLocationData47.apply(this, arguments), loadSitePointData().catch(() => { spwMissing = true; }),
+    sb.from('projects').select('id,site_lat,site_lng,site_radius_m,site_set_by,site_set_at,site_set_how').not('site_lat', 'is', null)
+      .then(r => { (r.data || []).forEach(x => { const p = S.projects.find(y => String(y.id) === String(x.id)); if (p) Object.assign(p, x); }); }, () => {}) ]);
+};
+const _renderLocations47 = renderLocations;
+renderLocations = function(){ _renderLocations47.apply(this, arguments); renderSitePointCard(); };
 PAGE_RENDER.locations = () => { loadLocationData().then(renderLocations, renderLocations); };
 
 // ═════════════════════════════════════════════════════════

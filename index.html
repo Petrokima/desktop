@@ -1004,10 +1004,17 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
     <button class="btn btn-primary" id="lr-save">Save rules</button> <span id="lr-note" style="font-size:12px;color:var(--muted);margin-left:8px"></span>
   </div>
 
+  <div class="card" id="lf-card">
+    <div class="toolbar"><span class="toolbar-title" id="lf-title">🧭 May check in away from office / site</span></div>
+    <div style="font-size:12px;color:var(--muted);padding:0 18px 10px;line-height:1.6">Check-ins and check-outs of these employees are <b>always accepted</b>, even when “Refuse it” is chosen above — for people who move between sites, clients and offices all day (e.g. directors). Their GPS point is still recorded and they appear in the warnings list below as <b>“Away — allowed for this employee”</b>. A fake-location app is still refused. Only HR or an administrator can change this list, and nobody for his own record.</div>
+    <div class="no-officer" style="display:flex;gap:8px;padding:0 18px 12px;flex-wrap:wrap;align-items:center"><input class="inp" id="lf-emp" list="dl-emp" placeholder="Type code or name…" style="width:300px"><input class="inp" id="lf-note" placeholder="Reason, e.g. Director" style="width:240px"><button class="btn btn-primary btn-sm" id="lf-add">+ Add</button></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Job</th><th>Reason</th><th>Added by</th><th>Since</th><th></th></tr></thead><tbody id="lf-tbl"></tbody></table></div>
+  </div>
+
   <div class="card">
     <div class="toolbar"><span class="toolbar-title" id="lw-count">Check-ins with location warnings</span>
       <div class="toolbar-right">
-        <select class="sel" id="lw-kind"><option value="">All warnings</option><option value="outside_site">Outside the site</option><option value="outside_office">Away from his office</option><option value="fake_gps">Fake-location app</option><option value="same_point">Same exact point</option><option value="perfect_accuracy">"Perfect" accuracy</option><option value="impossible_travel">Impossible travel</option><option value="browser_android">Browser instead of app</option><option value="old_app">Old app version</option><option value="no_site_point">Project has no map point</option><option value="gps_unchecked">Fake-GPS check not done</option><option value="held">Kept for review (not counted)</option></select>
+        <select class="sel" id="lw-kind"><option value="">All warnings</option><option value="outside_site">Outside the site</option><option value="outside_office">Away from his office</option><option value="away_allowed">Away — allowed for this employee</option><option value="fake_gps">Fake-location app</option><option value="same_point">Same exact point</option><option value="perfect_accuracy">"Perfect" accuracy</option><option value="impossible_travel">Impossible travel</option><option value="browser_android">Browser instead of app</option><option value="old_app">Old app version</option><option value="no_site_point">Project has no map point</option><option value="gps_unchecked">Fake-GPS check not done</option><option value="held">Kept for review (not counted)</option></select>
         <input class="inp" id="lw-q" placeholder="Search code, name or site…">
       </div></div>
     <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Time</th><th>Employee</th><th>Event</th><th>Site</th><th class="num">Distance</th><th>Warnings</th><th>Counted?</th><th>Map</th><th></th></tr></thead><tbody id="lw-tbl"></tbody></table></div>
@@ -6628,7 +6635,8 @@ const LOC_FLAG = {
   browser_android:  ['Browser instead of app', 'c-blue'],
   old_app:          ['Old app version', 'c-blue'],
   no_site_point:    ['Project has no map point', 'c-orange'],
-  gps_unchecked:    ['Fake-GPS check not done', 'c-blue'] };
+  gps_unchecked:    ['Fake-GPS check not done', 'c-blue'],
+  away_allowed:     ['Away — allowed for this employee', 'c-blue'] };
 let LOC_RULES = { outside:'flag', default_radius:300, block_mock:true, android_app_only:false };
 let WORK_LOCS = [], wlMissing = false;
 const fmtDist = m => m == null ? '' : (m >= 1000 ? (m/1000).toFixed(1) + ' km' : Math.round(m) + ' m');
@@ -8951,6 +8959,53 @@ function repWithData(D, fn){
   keys.forEach(k => { old[k] = S[k]; S[k] = D[k]; });
   try { return fn(); } finally { keys.forEach(k => { S[k] = old[k]; }); }
 }
+
+// ═════════════════════════════════════════════════════════
+//  MAY CHECK IN AWAY FROM OFFICE / SITE (26 Oct 2026, database 89-location-free-employees.sql)
+//  Location checks page → card 🧭: the employees whose away check-ins are accepted even when the rule is "Refuse it".
+// ═════════════════════════════════════════════════════════
+let LOC_FREE = [], lfMissing = false;
+async function loadLocFree(){
+  const r = await sb.from('location_free_employees').select('*').order('added_at');
+  lfMissing = !!r.error; LOC_FREE = r.data || [];
+}
+function renderLocFree(){
+  if (!$('lf-tbl')) return;
+  $('lf-title').textContent = `🧭 May check in away from office / site (${LOC_FREE.length})`;
+  const rows = LOC_FREE.slice().sort((a, b) => String(a.emp_id).localeCompare(String(b.emp_id), undefined, { numeric:true }));
+  $('lf-tbl').innerHTML = lfMissing ? '<tr><td colspan="6" class="empty">Database update 89-location-free-employees.sql has not been run yet.</td></tr>'
+    : rows.map(x => { const e = empById(x.emp_id) || {};
+      return `<tr><td class="strong">${esc(empName(e) || x.emp_id)} <span class="mono" style="color:var(--muted)">${esc(x.emp_id)}</span></td><td>${esc(e.job_name || '')}</td>
+        <td style="white-space:normal">${esc(x.note || '')}</td><td>${esc(x.added_by || '')}</td><td class="mono">${esc(dmyShow(String(x.added_at || '').slice(0, 10)))}</td>
+        <td><button class="btn btn-ghost btn-sm no-officer" data-lf-del="${esc(x.emp_id)}">Remove</button></td></tr>`; }).join('')
+    || '<tr><td colspan="6" class="empty">Nobody — everyone follows the rule above.</td></tr>';
+}
+async function setLocFree(emp, on, note){
+  const { data, error } = await sb.rpc('set_location_free', { p_emp: emp, p_on: on, p_note: note || null });
+  if (error) return toast(error.message, 'err');
+  toast(on ? `${empName(empById(emp)) || emp} may now check in away from office / site` : `${empName(empById(emp)) || emp} follows the location rule again`);
+  await loadLocFree(); renderLocFree();
+  return data;
+}
+$('lf-add').addEventListener('click', async () => {
+  const emp = parseEmpInput($('lf-emp').value);
+  if (!emp) return toast('Pick the employee from the suggestions', 'warn');
+  if (LOC_FREE.some(x => String(x.emp_id) === emp)) return toast('Already on the list', 'warn');
+  await setLocFree(emp, true, $('lf-note').value.trim());
+  $('lf-emp').value = ''; $('lf-note').value = '';
+});
+$('lf-tbl').addEventListener('click', e => {
+  const b = e.target.closest('[data-lf-del]'); if (!b) return;
+  const emp = b.dataset.lfDel;
+  if (b.dataset.sure !== '1'){ b.dataset.sure = '1'; b.textContent = 'Click again to remove'; b.classList.add('btn-danger'); setTimeout(() => { if (b.isConnected){ b.dataset.sure = ''; b.textContent = 'Remove'; b.classList.remove('btn-danger'); } }, 4000); return; }
+  setLocFree(emp, false);
+});
+// loaded and drawn with the rest of the Location checks page
+const _loadLocationData46 = loadLocationData;
+loadLocationData = async function(){ await Promise.all([_loadLocationData46.apply(this, arguments), loadLocFree().catch(() => { lfMissing = true; })]); };
+const _renderLocations46 = renderLocations;
+renderLocations = function(){ _renderLocations46.apply(this, arguments); renderLocFree(); };
+PAGE_RENDER.locations = () => { loadLocationData().then(renderLocations, renderLocations); };
 
 // ═════════════════════════════════════════════════════════
 //  BOOT

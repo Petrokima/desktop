@@ -1024,7 +1024,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="card">
     <div class="toolbar"><span class="toolbar-title" id="lw-count">Check-ins with location warnings</span>
       <div class="toolbar-right">
-        <select class="sel" id="lw-kind"><option value="">All warnings</option><option value="outside_site">Outside the site</option><option value="outside_office">Away from his office</option><option value="away_allowed">Away — allowed</option><option value="fake_gps">Fake-location app</option><option value="same_point">Same exact point</option><option value="perfect_accuracy">"Perfect" accuracy</option><option value="impossible_travel">Impossible travel</option><option value="browser_android">Browser instead of app</option><option value="old_app">Old app version</option><option value="no_site_point">Project has no map point</option><option value="gps_unchecked">Fake-GPS check not done</option><option value="held">Kept for review (not counted)</option></select>
+        <select class="sel" id="lw-kind"><option value="">All warnings</option><option value="outside_site">Outside the site</option><option value="outside_office">Away from his office</option><option value="away_allowed">Away — allowed</option><option value="clock_changed">Phone clock was changed</option><option value="phone_restarted">Phone restarted offline</option><option value="fake_gps">Fake-location app</option><option value="same_point">Same exact point</option><option value="perfect_accuracy">"Perfect" accuracy</option><option value="impossible_travel">Impossible travel</option><option value="browser_android">Browser instead of app</option><option value="old_app">Old app version</option><option value="no_site_point">Project has no map point</option><option value="gps_unchecked">Fake-GPS check not done</option><option value="held">Kept for review (not counted)</option></select>
         <input class="inp" id="lw-q" placeholder="Search code, name or site…">
       </div></div>
     <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Time</th><th>Employee</th><th>Event</th><th>Site</th><th class="num">Distance</th><th>Warnings</th><th>Counted?</th><th>Map</th><th></th></tr></thead><tbody id="lw-tbl"></tbody></table></div>
@@ -2549,6 +2549,12 @@ async function saveEmp(){
 // ═════════════════════════════════════════════════════════
 //  ATTENDANCE
 // ═════════════════════════════════════════════════════════
+// 92: when did the offline tap(s) of this line really reach the server (shown to HR before confirming the time)
+function offlineSentNote(a, x){
+  const hm = v => new Date(v).toLocaleTimeString('en-GB', { timeZone:'Africa/Cairo', hour:'2-digit', minute:'2-digit' });
+  const hits = (S.clocks || []).filter(c => String(c.emp_id) === String(a.emp_id) && c.offline && c.local_date === a.date && (c.local_time === x.in || c.local_time === x.out) && c.received_at);
+  return hits.map(c => ` ${c.event_type === 'out' ? 'Check-out' : 'Check-in'} ${c.local_time} reached the server at ${hm(c.received_at)}.`).join('');
+}
 function renderAttendance(){
   const q = $('att-q').value.trim().toLowerCase();
   const base = attRows().filter(a => (!attDayFilter || a.date===attDayFilter) && orgMatch(empById(a.emp_id),'att') &&
@@ -2562,7 +2568,7 @@ function renderAttendance(){
     <td class="mono">${esc(a.date)}${a.source==='Mobile'?' <span title="Recorded from the mobile app">📱</span>':a.source==='Machine'?' <span title="Imported from the HQ fingerprint machine">🖐</span>':a.source==='Combined'?' <span title="Phone and fingerprint machine combined: first punch to last punch">📱🖐</span>':''}${isHoliday(a.date)?' <span class="chip c-blue" title="Public holiday">Holiday</span>':''}</td><td class="mono">${esc(a.check_in||'—')}</td><td class="mono">${attNoOut(a) ? '<span class="neg" title="No check-out recorded — open the record and enter the time the employee left">⚠ missing</span>' : esc(a.check_out||'—')}</td>
     <td class="num">${attNoOut(a) ? '<span style="color:var(--muted)" title="Not calculated until the check-out is recorded or settled by HR">—</span>' : fmt(a.total_hours)}</td>
     <td style="white-space:normal">${(a.projects||[]).map(x=>x.missing ? `<span class="tag" style="border-color:rgba(217,79,79,.5);color:var(--danger)" title="Only one punch on the machine — add the missing time">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)} · missing punch</span>`
-      : x.review && x.why === 'offline' ? `<span class="tag" style="border-color:rgba(224,123,57,.5);color:var(--warn)" title="Tapped with no internet and sent late — the time comes from the phone. Check it, correct if needed, and save: until then this day has no deductions and no overtime">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)}–${esc(x.out || '?')} · offline time to confirm</span>`
+      : x.review && x.why === 'offline' ? `<span class="tag" style="border-color:rgba(224,123,57,.5);color:var(--warn)" title="Tapped with no internet and sent late — the time comes from the phone.${offlineSentNote(a, x)} Check it, correct if needed, and save: until then this day has no deductions and no overtime">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)}–${esc(x.out || '?')} · offline time to confirm</span>`
       : x.review ? `<span class="tag" style="border-color:rgba(224,123,57,.5);color:var(--warn)" title="More than 16 hours between first and last punch — check and correct">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)}–${esc(x.out)} · ${fmt(x.hours)}h to check</span>`
       : x.forgotten ? `<span class="tag" style="border-color:rgba(217,79,79,.5);color:var(--danger)" title="Checked in from the phone but never checked out — open the record and enter the check-out time">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)}–? missing check-out</span>`
       : !x.out && x.in && a.date < todayStr() ? `<span class="tag" style="border-color:rgba(217,79,79,.5);color:var(--danger)" title="No check-out recorded — open the record and enter the check-out time">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)}–? missing check-out</span>`
@@ -3287,14 +3293,15 @@ const REPORTS = [
         warn: (c.location_flags||[]).map(f => (typeof LOC_FLAG !== 'undefined' && LOC_FLAG[f] ? LOC_FLAG[f][0] : f)).join(', ') + (c.applied === false ? (c.location_flags && c.location_flags.length ? ' · ' : '') + 'kept for review: ' + (c.review_note||'') : '') }; })
         .sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)) }) },
   { id:'att-review', g:'Attendance', t:'Offline check-ins to review',
-    d:'Check-ins made with no internet and sent later. Their time comes from the phone clock: the server compares the phone clock with its own when the phone reconnects and corrects any difference. A tap that reached the server more than 5 minutes after its time is marked ⏳ HR to confirm: that day has no deductions or overtime until HR checks the time on the Attendance page and saves it, and the month cannot be approved before. Taps more than 72 hours old, or earlier than one already recorded, are refused and stay on the phone — HR records those manually.',
-    build:() => ({ cols:[C('state','Status','strong'),C('date','Date','date'),C('time','Time recorded','mono'),C('claimed','Phone showed','mono'),C('recv','Sent (UTC)','mono'),C('delay','Hours until sent','num'),C('code','Code','id'),C('name','Employee'),C('ev','Event'),C('site','Site','id'),C('map','Location','link')],
+    d:'Check-ins made with no internet and sent later. The Petrokima Android app (new version) also sends the phone\'s “time since switched on” counter, which the user cannot change: the server then records the REAL time (✓ verified), and if the phone clock had been changed it shows ⚠ Phone clock was changed and tells HR. Without the counter (iPhone, older apps, or the phone restarted) the time comes from the phone clock: the server compares it with its own when the phone reconnects and corrects any difference. A tap that reached the server more than 5 minutes after its time is marked ⏳ HR to confirm: that day has no deductions or overtime until HR checks the time on the Attendance page and saves it, and the month cannot be approved before. Taps more than 72 hours old, or earlier than one already recorded, are refused and stay on the phone — HR records those manually.',
+    build:() => ({ cols:[C('state','Status','strong'),C('date','Date','date'),C('time','Time recorded','mono'),C('claimed','Phone showed','mono'),C('recv','Sent (Cairo time)','mono'),C('delay','Hours until sent','num'),C('code','Code','id'),C('name','Employee'),C('ev','Event'),C('site','Site','id'),C('map','Location','link')],
       rows:S.clocks.filter(c=>c.offline).map(c=>{ const e=empById(c.emp_id)||{}, corr=/corrected/.test(c.time_method||''), delay = c.received_at ? (new Date(c.received_at)-new Date(c.at))/3600000 : null;
-        return { state: /^Offline — sent/.test(c.review_note || '') ? '⏳ HR to confirm the time' : corr ? '⚠ Phone clock was wrong' : 'OK', date:c.local_date, time:c.local_time,
-          claimed: c.client_at ? new Date(c.client_at).toLocaleString('en-GB',{ timeZone: String(e.entity||'').toLowerCase().includes('saudi') ? 'Asia/Riyadh' : 'Africa/Cairo', hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short' }) : '',
-          recv:String(c.received_at||'').slice(0,16).replace('T',' '), delay: delay==null ? '' : Math.round(delay*100)/100,
+        const tz = String(e.entity||'').toLowerCase().includes('saudi') ? 'Asia/Riyadh' : 'Africa/Cairo', changed = /clock was changed/.test(c.time_method || ''), verified = /counter \(verified\)/.test(c.time_method || '');
+        return { state: changed ? '⚠ Phone clock was changed — real time recorded' : /^Offline — sent/.test(c.review_note || '') ? ((c.location_flags||[]).includes('phone_restarted') ? '⏳ HR to confirm (phone restarted)' : '⏳ HR to confirm the time') : verified ? '✓ Real time verified' : corr ? '⚠ Phone clock was wrong' : 'OK', date:c.local_date, time:c.local_time,
+          claimed: (c.phone_said_at || c.client_at) ? new Date(c.phone_said_at || c.client_at).toLocaleString('en-GB',{ timeZone: tz, hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short' }) : '',
+          recv: c.received_at ? new Date(c.received_at).toLocaleString('en-GB',{ timeZone: tz, hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short' }) : '', delay: delay==null ? '' : Math.round(delay*100)/100,
           code:c.emp_id, name:empName(e), ev:c.event_type==='in'?'Check in':'Check out', site:c.project_code||'(no project)', map:mapUrl(c)||'' }; })
-        .sort((a,b)=>(a.state==='OK')-(b.state==='OK') || (a.date+a.time).localeCompare(b.date+b.time)) }) },
+        .sort((a,b)=>(/^(OK|✓)/.test(a.state))-(/^(OK|✓)/.test(b.state)) || (a.date+a.time).localeCompare(b.date+b.time)) }) },
 
   { id:'att-fix', g:'Attendance', t:'Missing punches to correct',
     d:'Days with only one fingerprint-machine punch, days over 16 hours, offline phone taps sent late (time to confirm), and phone check-ins with no check-out on a past day. They carry no deductions or overtime until HR opens the record on the Attendance page, checks the times and saves. The month cannot be approved while any remain.',
@@ -6646,7 +6653,9 @@ const LOC_FLAG = {
   old_app:          ['Old app version', 'c-blue'],
   no_site_point:    ['Project has no map point', 'c-orange'],
   gps_unchecked:    ['Fake-GPS check not done', 'c-blue'],
-  away_allowed:     ['Away — allowed', 'c-blue'] };
+  away_allowed:     ['Away — allowed', 'c-blue'],
+  clock_changed:    ['Phone clock was changed', 'c-red'],
+  phone_restarted:  ['Phone restarted offline — time not verified', 'c-orange'] };
 let LOC_RULES = { outside:'flag', default_radius:300, block_mock:true, android_app_only:false };
 let WORK_LOCS = [], wlMissing = false;
 const fmtDist = m => m == null ? '' : (m >= 1000 ? (m/1000).toFixed(1) + ' km' : Math.round(m) + ' m');

@@ -68,6 +68,7 @@ body.nav-mini .sidebar .nav-item .chip{position:absolute;top:5px;right:7px;width
 .toolbar{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);flex-wrap:wrap}
 .toolbar-title{font-size:14px;font-weight:600}.toolbar-right{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .inp,.sel{background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:7px 11px;color:var(--text);font-size:13px;font-family:inherit;outline:none}
+.sel.st-on{border-color:var(--accent);box-shadow:0 0 0 2px rgba(238,38,36,.15);font-weight:600}
 .inp:focus,.sel:focus{border-color:var(--accent)}
 .inp{width:210px}
 .tbl-wrap{overflow-x:auto}
@@ -454,7 +455,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   </div>
   <div class="card" id="att-list-card">
     <div class="toolbar"><span class="toolbar-title">Records</span>
-      <div class="toolbar-right"><input type="date" class="sel" id="att-day" title="Show one day"><button class="btn btn-ghost btn-sm" id="att-all">Whole range</button><input class="inp" id="att-q" placeholder="Search employee…"></div></div>
+      <div class="toolbar-right"><select class="sel" id="att-status" title="Filter by status"><option value="">All statuses</option></select><input type="date" class="sel" id="att-day" title="Show one day"><button class="btn btn-ghost btn-sm" id="att-all">Whole range</button><input class="inp" id="att-q" placeholder="Search employee…"></div></div>
     <div class="toolbar" style="border-top:1px solid var(--border);padding-top:10px;gap:8px;flex-wrap:wrap">
       <span style="font-size:13px;color:var(--label)">Show attendance from</span><input type="date" class="sel" id="att-from"><span style="font-size:13px;color:var(--label)">to</span><input type="date" class="sel" id="att-to">
       <button class="btn btn-primary btn-sm" id="att-load">Show</button><button class="btn btn-ghost btn-sm" id="att-cur">Current payroll cycle</button>
@@ -469,7 +470,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="page-header"><div><div class="page-title">Projects &amp; Cost Centres</div><div class="page-sub" id="proj-sub"></div></div>
     <button class="btn btn-primary" data-act="new-proj">+ New Project</button></div>
   <div class="card">
-    <div class="toolbar"><span class="toolbar-title">Register</span><div class="toolbar-right"><input class="inp" id="proj-q" placeholder="Search code or name…" style="width:260px"></div></div>
+    <div class="toolbar"><span class="toolbar-title">Register</span><div class="toolbar-right"><select class="sel" id="proj-status" title="Filter by status"><option value="">All statuses</option></select><input class="inp" id="proj-q" placeholder="Search code or name…" style="width:260px"></div></div>
     <div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Name</th><th>Client</th><th>Country</th><th>Location</th><th>Status</th><th></th></tr></thead><tbody id="proj-tbl"></tbody></table></div>
     <div class="foot" id="proj-foot"></div>
   </div>
@@ -509,6 +510,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
       <div class="toolbar-right">
         <select class="sel" id="lv-scope"><option value="period">Overlapping this period</option><option value="year">Whole year</option></select>
         <select class="sel" id="lv-type"><option value="">All types</option><option>Annual</option><option>Casual</option><option>Sick</option><option>Unpaid</option><option>Other paid</option></select>
+        <select class="sel" id="lv-stf" title="Filter by status"><option value="">All statuses</option></select>
         <select class="sel" id="lv-dept"><option value="">All departments</option></select>
         <input class="inp" id="lv-q" placeholder="Search employee…"></div></div>
     <div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Department</th><th>Type</th><th>From</th><th>To</th><th class="num">Days</th><th class="num">In period</th><th>Reason</th><th>Status</th><th>Entered by</th><th></th></tr></thead><tbody id="lv-tbl"></tbody></table></div>
@@ -778,7 +780,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="alert a-info" style="line-height:1.7">Which rule applies: <b>1.</b> this employee at this project · <b>2.</b> this employee at any project · <b>3.</b> this job title at this project · <b>4.</b> this job title at any project.
     One allowance per day — if someone works at two projects on the same day, the project where they spent most hours counts. Days with “No project” earn nothing.
     Amounts appear on the payslip as <b>Project Allowance — automatic</b> and are charged to the project in labour costing. Manual amounts on Monthly Entries are added on top.</div>
-  <div class="card"><div class="toolbar"><span class="toolbar-title">Rules</span><div class="toolbar-right"><input class="inp" id="par-q" placeholder="Search…"></div></div>
+  <div class="card"><div class="toolbar"><span class="toolbar-title">Rules</span><div class="toolbar-right"><select class="sel" id="par-status" title="Filter by status"><option value="">All statuses</option></select><input class="inp" id="par-q" placeholder="Search…"></div></div>
     <div class="tbl-wrap"><table><thead><tr><th>Applies to</th><th>Project</th><th class="num">Amount per day</th><th>This payroll cycle</th><th>Status</th><th>Notes</th><th></th></tr></thead><tbody id="par-tbl"></tbody></table></div>
     <div class="foot" id="par-foot"></div></div>
 </div>
@@ -857,7 +859,8 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div class="page" id="page-loans">
   <div class="page-header"><div><div class="page-title">Staff Loans</div><div class="page-sub" id="loan-sub"></div></div>
     <button class="btn btn-primary" data-act="new-loan">+ New Loan</button></div>
-  <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Reference</th><th class="num">Loan</th><th class="num">Months</th><th class="num">Instalment</th><th>First deduction</th><th class="num">Settled</th><th class="num">Outstanding</th><th>This period</th><th>Status</th><th></th></tr></thead><tbody id="loan-tbl"></tbody></table></div></div>
+  <div class="card"><div class="toolbar"><span class="toolbar-title">Loans</span><div class="toolbar-right"><select class="sel" id="loan-status" title="Filter by status"><option value="">All statuses</option></select><select class="sel" id="loan-dept"><option value="">All departments</option></select><input class="inp" id="loan-q" placeholder="Search employee or reference…"></div></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Reference</th><th class="num">Loan</th><th class="num">Months</th><th class="num">Instalment</th><th>First deduction</th><th class="num">Settled</th><th class="num">Outstanding</th><th>This period</th><th>Status</th><th></th></tr></thead><tbody id="loan-tbl"></tbody></table></div><div class="foot" id="loan-foot"></div></div>
 </div>
 
 <!-- PAYROLL -->
@@ -1992,7 +1995,7 @@ function buildLists(){
   const depts = [...new Set(S.employees.map(e=>e.department).filter(Boolean))].sort();
   const units = [...new Set(S.employees.map(e=>e.unit).filter(Boolean))].sort();
   const dOpts = '<option value="">All departments</option>' + depts.map(d=>`<option>${esc(d)}</option>`).join('');
-  ['emp-dept','mon-dept','pay-dept','rep-dept','lv-dept','ex-dept','rl-dept','ms-dept','dq-dept','co-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
+  ['emp-dept','mon-dept','pay-dept','rep-dept','lv-dept','ex-dept','rl-dept','ms-dept','dq-dept','co-dept','loan-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
   const uv=$('emp-unit').value; $('emp-unit').innerHTML='<option value="">All units</option>'+units.map(u=>`<option>${esc(u)}</option>`).join(''); $('emp-unit').value=uv;
   const mEls = S.elements.filter(e => e.input_method==='Monthly' && e.active!==false);
   const mv=$('mon-el').value;
@@ -2526,8 +2529,10 @@ async function saveEmp(){
 // ═════════════════════════════════════════════════════════
 function renderAttendance(){
   const q = $('att-q').value.trim().toLowerCase();
-  const list = attRows().filter(a => (!attDayFilter || a.date===attDayFilter) && orgMatch(empById(a.emp_id),'att') &&
-      (!q || [a.emp_id,a.emp_name].some(v=>String(v||'').toLowerCase().includes(q))))
+  const base = attRows().filter(a => (!attDayFilter || a.date===attDayFilter) && orgMatch(empById(a.emp_id),'att') &&
+      (!q || [a.emp_id,a.emp_name].some(v=>String(v||'').toLowerCase().includes(q))));
+  const st = stFill('att-status', base.map(a => a.status));
+  const list = base.filter(a => !st || a.status===st)
     .sort((a,b)=> (b.date||'').localeCompare(a.date||''));
   const shown = list.slice(0,500);
   $('att-tbl').innerHTML = shown.map(a => `<tr class="click" data-att-edit="${a.id}">
@@ -2667,7 +2672,9 @@ $('a-date').addEventListener('change', checkSplits);
 // ═════════════════════════════════════════════════════════
 function renderProjects(){
   const q=$('proj-q').value.trim().toLowerCase();
-  const list = q ? S.projects.filter(p=>[p.id,p.name,p.client,p.location].some(v=>String(v||'').toLowerCase().includes(q))) : S.projects;
+  const base = q ? S.projects.filter(p=>[p.id,p.name,p.client,p.location].some(v=>String(v||'').toLowerCase().includes(q))) : S.projects;
+  const st = stFill('proj-status', base.map(p => p.status));
+  const list = st ? base.filter(p => p.status===st) : base;
   const shown = list.slice(0,300);
   $('proj-sub').textContent = `${S.projects.length.toLocaleString()} records loaded`;
   $('proj-tbl').innerHTML = shown.map(p=>`<tr><td class="mono">${esc(p.id)}</td><td class="strong" ${/[\u0600-\u06FF]/.test(p.name||'')?'dir="rtl"':''}>${esc(p.name)}</td>
@@ -2791,14 +2798,20 @@ function renderLoans(){
   const out = S.loans.reduce((s,l)=>s+Math.max(0,num(l.loan_amount)-num(l.amount_settled)),0);
   const thisP = S.loans.reduce((s,l)=>s+loanInstalment(l,p),0);
   $('loan-sub').textContent = `${S.loans.length} loans · outstanding ${fmt(out)} EGP · deducting ${fmt(thisP)} EGP in ${p}`;
-  $('loan-tbl').innerHTML = S.loans.map(l => { const e=empById(l.emp_id); const inst=loanInstalment(l,p);
+  const q = ($('loan-q').value||'').trim().toLowerCase();
+  const base = S.loans.filter(l => { const e=empById(l.emp_id)||{};
+    return orgMatch(e,'loan') && (!q || [l.emp_id, e.name_en, e.name_ar, l.reference].some(v=>String(v||'').toLowerCase().includes(q))); });
+  const st = stFill('loan-status', base.map(l => l.status));
+  const list = base.filter(l => !st || l.status===st);
+  $('loan-foot').textContent = `${list.length} of ${S.loans.length} loan${S.loans.length===1?'':'s'} shown` + (list.length ? ` · outstanding ${fmt(list.reduce((s,l)=>s+Math.max(0,num(l.loan_amount)-num(l.amount_settled)),0))} EGP · this period ${fmt(list.reduce((s,l)=>s+loanInstalment(l,p),0))} EGP` : '');
+  $('loan-tbl').innerHTML = list.map(l => { const e=empById(l.emp_id); const inst=loanInstalment(l,p);
     return `<tr><td class="strong">${esc(empName(e)||l.emp_id)} <span class="mono" style="color:var(--muted)">${esc(l.emp_id)}</span></td>
       <td class="mono">${esc(l.reference||'—')}</td><td class="num">${fmt(l.loan_amount)}</td><td class="num">${esc(l.periods)}</td>
       <td class="num">${fmt(l.installment)}</td><td class="mono">${esc(l.start_period)}${loanEndCell(l)}</td><td class="num">${fmt(l.amount_settled)}</td>
       <td class="num">${fmt(num(l.loan_amount)-num(l.amount_settled))}</td>
       <td>${inst?`<span class="chip c-orange">−${fmt(inst)}</span>`:'<span class="chip c-grey">none</span>'}</td>
       <td>${chip(l.status)}</td><td style="white-space:nowrap">${l.status==='Active'?`<button class="icon-btn" data-lpp="${l.id}" title="Postpone an instalment">⏸️</button>`:''}<button class="icon-btn" data-del-loan="${l.id}">🗑</button></td></tr>`; }).join('')
-    || '<tr><td colspan="11" class="empty">No loans recorded</td></tr>';
+    || `<tr><td colspan="11" class="empty">${S.loans.length ? 'No loans for this selection' : 'No loans recorded'}</td></tr>`;
 }
 // "ends 2027-03" under the first deduction month, plus one chip per postponed month (✕ = undo)
 function loanEndCell(l){
@@ -3608,9 +3621,11 @@ function renderLeaves(){
   $('lv-missing').innerHTML = leaveTableMissing ? '<div class="alert a-warn">The vacations table does not exist yet. Run <b>vacations-and-exceptions.sql</b> in the database SQL Editor, then click ⟳ Refresh.</div>' : '';
   const scope=$('lv-scope').value, t=$('lv-type').value, d=$('lv-dept').value, q=$('lv-q').value.trim().toLowerCase();
   const ps=periodStart(settings.period), pe=periodEnd(settings.period);
-  const list = S.leaves.filter(l => { const e=empById(l.emp_id)||{};
+  const base = S.leaves.filter(l => { const e=empById(l.emp_id)||{};
       return (scope==='year' || (l.date_from<=pe && l.date_to>=ps)) && (!t || l.leave_type===t) && orgMatch(e,'lv') &&
-             (!q || [l.emp_id, e.name_en, e.name_ar].some(v=>String(v||'').toLowerCase().includes(q))); })
+             (!q || [l.emp_id, e.name_en, e.name_ar].some(v=>String(v||'').toLowerCase().includes(q))); });
+  const st = stFill('lv-stf', base.map(l => l.status));
+  const list = base.filter(l => !st || l.status===st)
     .sort((a,b)=>String(b.date_from).localeCompare(String(a.date_from)));
   const inP = S.leaves.filter(l=>l.status==='Approved').reduce((s,l)=>s+leaveDaysIn(l,ps,pe),0);
   $('lv-sub').textContent = `${S.leaves.filter(l=>l.status==='Approved').length} approved vacations in ${settings.period.slice(0,4)} · ${fmt(inP)} leave days in ${settings.period} · weekends: ${(settings.weekendDays||[]).map(i=>DAYS[i]).join(', ')||'none'}`;
@@ -4975,15 +4990,18 @@ function renderParRules(){
   $('par-missing').innerHTML = parTableMissing ? '<div class="alert a-warn">The rules table does not exist yet. Run <b>project-allowance.sql</b>, then click ⟳ Refresh.</div>' : '';
   const q = $('par-q').value.trim().toLowerCase(), use = currentRun() ? {} : parRuleUse();
   const who = r => r.applies_to==='employee' ? `👤 ${esc(empName(empById(r.emp_id)) || r.emp_id)} <span class="mono" style="color:var(--muted)">${esc(r.emp_id)}</span>` : `🧰 All “${esc(r.job_name)}”`;
-  const list = S.parRules.filter(r => !q || [r.emp_id, empName(empById(r.emp_id)), r.job_name, r.project_code, projName(r.project_code), r.notes].some(v => String(v||'').toLowerCase().includes(q)))
+  const parSt = r => r.active===false ? 'Paused' : 'Active';
+  const base = S.parRules.filter(r => !q || [r.emp_id, empName(empById(r.emp_id)), r.job_name, r.project_code, projName(r.project_code), r.notes].some(v => String(v||'').toLowerCase().includes(q)))
     .sort((a,b) => (a.applies_to===b.applies_to ? 0 : a.applies_to==='employee' ? -1 : 1) || String(a.project_code||'~').localeCompare(String(b.project_code||'~')));
+  const st = stFill('par-status', base.map(parSt));
+  const list = base.filter(r => !st || parSt(r)===st);
   $('par-tbl').innerHTML = list.map(r => { const u = use[r.id];
     return `<tr${r.active===false?' style="opacity:.55"':''}><td>${who(r)}</td><td>${r.project_code ? esc(projLabel(r.project_code)) : '<span class="chip c-blue">Any project</span>'}</td>
       <td class="num strong">${fmt(r.amount_per_day)}</td>
       <td>${currentRun() ? '<span style="color:var(--muted)">approved month</span>' : u ? `${u.emps.size} employee${u.emps.size>1?'s':''} · ${u.days} day${u.days>1?'s':''} · <b>${fmt(u.amount)}</b>` : '<span style="color:var(--muted)">—</span>'}</td>
       <td>${r.active===false ? '<span class="chip c-grey">Paused</span>' : '<span class="chip c-green">Active</span>'}</td><td style="white-space:normal">${esc(r.notes||'')}</td>
       <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" data-par-edit="${r.id}">Edit</button> <button class="icon-btn" data-par-del="${r.id}" title="Delete">🗑</button></td></tr>`; }).join('')
-    || '<tr><td colspan="7" class="empty">No rules yet — click “+ New rule”.</td></tr>';
+    || `<tr><td colspan="7" class="empty">${S.parRules.length ? 'No rules for this selection' : 'No rules yet — click “+ New rule”.'}</td></tr>`;
   const tot = Object.values(use).reduce((s,u) => s + u.amount, 0);
   const paid = S.allowAppr.filter(a => a.status==='Approved').reduce((s,a) => s + num(a.amount), 0);
   $('par-foot').innerHTML = `${S.parRules.length} rule${S.parRules.length===1?'':'s'}${currentRun() ? '' : ` · calculated this cycle: <b>${fmt(tot)}</b> EGP · approved by manager and HR (paid): <b>${fmt(paid)}</b> EGP — <a href="#" data-nav="approvals" style="color:var(--link)">go to approvals</a>`}`;
@@ -5333,6 +5351,7 @@ function tableToRows(tbl){
   const heads = [...tbl.querySelectorAll('thead th')], keep = heads.map(th => th.textContent.trim() !== '');
   const out = [heads.filter((_,i) => keep[i]).map(th => th.textContent.trim())];
   tbl.querySelectorAll('tbody tr').forEach(tr => {
+    if (tr.style.display === 'none') return;   // hidden by a status filter (part43)
     const tds = [...tr.children]; if (tds.length === 1 && tds[0].classList.contains('empty')) return;
     out.push(tds.filter((_,i) => keep[i] !== false).map(td => { const c = td.cloneNode(true); c.querySelectorAll('button,input,select').forEach(x => x.remove());
       return xlNum(c.textContent.replace(/\s+/g,' ').trim()); }));
@@ -8621,6 +8640,78 @@ $('ta-last').addEventListener('click', () => taCycle(true));
 $('ta-refresh').addEventListener('click', loadTeamAtt);
 $('ta-q').addEventListener('input', e => { TA.q = e.target.value; renderTeamAtt(); });
 $('ta-body').addEventListener('click', e => { const r = e.target.closest('[data-ta-emp]'); if (!r) return; TA.open = TA.open === r.dataset.taEmp ? null : r.dataset.taEmp; renderTeamAtt(); });
+
+// ═════════════════════════════════════════════════════════
+//  STATUS FILTERS (26 Oct 2026) — "All statuses" box on every table with a Status column
+//  · pages with their own data filter call stFill() from their render function
+//    (Vacations, Attendance, Projects, Loans, Project allowance rules)
+//  · smaller tables (self-service, Employee voice) are filtered on screen by domStatusFilter()
+//  Each option shows how many rows have that status with the page's other filters applied.
+// ═════════════════════════════════════════════════════════
+const ST_ORDER = ['Waiting for you','Waiting for manager','Waiting for employee','Waiting for board','Waiting for HR','Waiting','Pending',
+  'Pending manager','Pending HR','Requested','Answered','New','In review','In progress','Approved','Active','Present','Recorded','Completed',
+  'Accepted','Closed','Rejected','Returned','Cancelled'];
+function stSort(a, b){
+  const ia = ST_ORDER.indexOf(a), ib = ST_ORDER.indexOf(b);
+  if (ia !== ib) return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
+  return String(a).localeCompare(String(b));
+}
+// fills the status box with the statuses found in vals (with counts); keeps the current choice; returns it
+function stFill(id, vals){
+  const sel = $(id); if (!sel) return '';
+  const keep = sel.value, cnt = {};
+  vals.forEach(v => { if (v != null && v !== '') cnt[v] = (cnt[v] || 0) + 1; });
+  if (keep && !(keep in cnt)) cnt[keep] = 0;   // a chosen status with no rows stays chosen (shows 0)
+  const keys = Object.keys(cnt).sort(stSort);
+  sel.innerHTML = `<option value="">All statuses (${vals.length})</option>` + keys.map(k => `<option value="${esc(k)}">${esc(k)} (${cnt[k]})</option>`).join('');
+  sel.value = keep;
+  sel.classList.toggle('st-on', !!keep);
+  return keep;
+}
+[['lv-stf', () => renderLeaves()], ['att-status', () => renderAttendance()], ['proj-status', () => renderProjects()],
+ ['par-status', () => renderParRules()], ['loan-status', () => renderLoans()], ['loan-dept', () => renderLoans()]]
+  .forEach(([id, fn]) => { const el = $(id); if (el) el.addEventListener('change', fn); });
+if ($('loan-q')) $('loan-q').addEventListener('input', () => renderLoans());
+
+// on-screen filter for a table body: adds the box to the card's toolbar and re-applies whenever the rows are redrawn
+function stCellText(td){
+  if (!td) return '';
+  const c = td.querySelector('.chip');
+  return (c ? c.textContent : (td.firstChild ? td.firstChild.textContent || '' : '')).replace(/\s+/g, ' ').trim();
+}
+function domStatusFilter(tbodyId){
+  const tb = $(tbodyId); if (!tb || tb.dataset.stf) return;
+  const table = tb.closest('table'), card = tb.closest('.card');
+  const col = [...table.querySelectorAll('thead th')].findIndex(th => th.textContent.trim() === 'Status');
+  if (col < 0 || !card) return;
+  tb.dataset.stf = '1';
+  let bar = card.querySelector('.toolbar');
+  if (!bar){ bar = document.createElement('div'); bar.className = 'toolbar'; card.insertBefore(bar, card.firstChild); }
+  let right = bar.querySelector('.toolbar-right');
+  if (!right){ right = document.createElement('div'); right.className = 'toolbar-right'; right.style.marginLeft = 'auto'; bar.appendChild(right); }
+  const sel = document.createElement('select');
+  sel.className = 'sel'; sel.id = tbodyId + '-st'; sel.title = 'Filter by status';
+  right.insertBefore(sel, right.firstChild);
+  let obs;
+  const apply = () => {
+    tb.querySelectorAll('tr.st-none').forEach(r => r.remove());
+    const rows = [...tb.children].filter(r => r.tagName === 'TR' && r.children.length > col && !r.querySelector(':scope > td.empty'));
+    const st = stFill(sel.id, rows.map(r => stCellText(r.children[col])));
+    let shown = 0;
+    rows.forEach(r => { const ok = !st || stCellText(r.children[col]) === st; r.style.display = ok ? '' : 'none'; if (ok) shown++; });
+    if (rows.length && !shown){
+      const tr = document.createElement('tr'); tr.className = 'st-none';
+      tr.innerHTML = `<td colspan="${table.querySelectorAll('thead th').length}" class="empty">Nothing with the status “${esc(st)}” — choose “All statuses”</td>`;
+      tb.appendChild(tr);
+    }
+    if (obs) obs.takeRecords();   // our own changes must not trigger another round
+  };
+  sel.addEventListener('change', apply);
+  obs = new MutationObserver(apply);
+  obs.observe(tb, { childList: true });
+  apply();
+}
+['self-list', 'smis-tbl', 'self-treq-tbl', 'self-team-tbl', 'vo-fb', 'vo-act', 'vo-sal', 'vo-hire', 'vo-train'].forEach(domStatusFilter);
 
 // ═════════════════════════════════════════════════════════
 //  BOOT

@@ -941,7 +941,7 @@ async function addPackageRow(){
 
 async function saveEmp(){
   const rec = {};
-  document.querySelectorAll('#emp-form [data-f]').forEach(/** @param {HTMLInputElement} el */ el => {
+  document.querySelectorAll('#emp-form [data-f]').forEach(el => {
     const k = el.dataset.f; let v = /** @type {string | number | boolean | null} */ (el.value.trim());
     const def = EMP_FIELDS.flatMap(s=>s[1]).find(f=>f[0]===k);
     if (def && def[2]==='manager') v = v ? String(v).split(' — ')[0].trim() : null;
@@ -3055,7 +3055,7 @@ async function assignManager(){
   b.disabled=false; renderReporting();
 }
 $('rl-none').addEventListener('change', e => { const c=/** @type {PageEl} */ (e.target).closest('[data-rl]'); if(!c) return; c.checked?rlSel.add(c.dataset.rl):rlSel.delete(c.dataset.rl); renderReporting(); });
-$('rl-all').addEventListener('change', e => { document.querySelectorAll('[data-rl]').forEach(/** @param {HTMLInputElement} c */ c=>{ /** @type {HTMLInputElement} */ (e.target).checked?rlSel.add(c.dataset.rl):rlSel.delete(c.dataset.rl); }); renderReporting(); });
+$('rl-all').addEventListener('change', e => { document.querySelectorAll('[data-rl]').forEach(c=>{ /** @type {HTMLInputElement} */ (e.target).checked?rlSel.add(c.dataset.rl):rlSel.delete(c.dataset.rl); }); renderReporting(); });
 ['rl-q','rl-mq'].forEach(id=>$(id).addEventListener('input', renderReporting));
 $('rl-dept').addEventListener('change', renderReporting);
 $('rl-assign').addEventListener('click', assignManager);

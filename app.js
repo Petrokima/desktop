@@ -1140,28 +1140,12 @@ $('a-date').addEventListener('change', checkSplits);
 // ═════════════════════════════════════════════════════════
 //  PROJECTS
 // ═════════════════════════════════════════════════════════
-function renderProjects(){
-  const q=$('proj-q').value.trim().toLowerCase();
-  const base = q ? S.projects.filter(p=>[p.id,p.name,p.client,p.location].some(v=>String(v||'').toLowerCase().includes(q))) : S.projects;
-  const st = stFill('proj-status', base.map(p => p.status));
-  const list = st ? base.filter(p => p.status===st) : base;
-  const shown = list.slice(0,300);
-  $('proj-sub').textContent = `${S.projects.length.toLocaleString()} records loaded`;
-  $('proj-tbl').innerHTML = shown.map(p=>`<tr><td class="mono">${esc(p.id)}</td><td class="strong" ${/[\u0600-\u06FF]/.test(p.name||'')?'dir="rtl"':''}>${esc(p.name)}</td>
-    <td>${esc(p.client)}</td><td>${esc(p.country)}</td><td>${esc(p.location||'—')}</td><td>${chip(p.status)}</td>
-    <td><button class="icon-btn" data-del-proj="${esc(p.id)}">🗑</button></td></tr>`).join('') || '<tr><td colspan="7" class="empty">No match</td></tr>';
-  $('proj-foot').textContent = `${list.length.toLocaleString()} match${list.length===1?'':'es'}${list.length>300?' — showing first 300, refine your search to narrow':''}.`;
-}
-async function saveProj(){
-  const id=$('p-id').value.trim(), name=$('p-name').value.trim();
-  if(!id||!name) return toast('Code and name are required','warn');
-  if(S.projects.find(p=>String(p.id)===id)) return toast('That code already exists','warn');
-  const rec={ id, name, client:$('p-client').value.trim(), country:$('p-country').value, location:$('p-loc').value.trim(), start_date:$('p-start').value||null, status:'Active' };
-  const { data, error } = await sb.from('projects').insert(rec).select();
-  if(error) return toast(error.message,'err');
-  if (!(data && data.length)) return toast(NOPERM,'err'); S.projects.push(data[0]); buildLists(); renderProjects(); closeM('m-proj'); toast('Project created');
-  ['p-id','p-name','p-client','p-loc','p-start'].forEach(i=>$(i).value='');
-}
+// The page is React now (react/src/projects, 30 Oct 2026). The old code keeps the loaded data; React hands changes here.
+function renderProjects(){ if (typeof PKR !== 'undefined') PKR.render(); }
+/** @param {Project} row  a project created by the React page */
+function projectAdded(row){ S.projects.push(row); buildLists(); renderProjects(); }
+/** @param {string} id  a project deleted by the React page */
+function projectDeleted(id){ S.projects = S.projects.filter(p=>String(p.id)!==id); buildLists(); renderProjects(); }
 
 // ═════════════════════════════════════════════════════════
 //  MONTHLY ENTRIES  (one or more project lines per employee)
@@ -1523,7 +1507,6 @@ document.addEventListener('click', async ev => {
   if (act){ const a = act.dataset.act;
     if (a==='new-emp') return openEmp(null);
     if (a==='new-att') return openAtt(null);
-    if (a==='new-proj') return openM('m-proj');
     if (a==='new-perm') return openPerm();
     if (a==='new-leave') return openLeave(null);
     if (a==='new-pen') return openPen(null);
@@ -1547,8 +1530,6 @@ document.addEventListener('click', async ev => {
   if (df){ const id=df.dataset.delFixed; return confirmDel('Remove this salary element from the employee?', async()=>{ await del('employee_salary_elements',id); S.fixed=S.fixed.filter(r=>r.id!==id); renderPackage(); renderPayroll(); renderDashboard(); toast('Element removed'); }); }
   const da = t.closest('[data-del-att]');
   if (da){ const id=da.dataset.delAtt; return confirmDel('Delete this attendance record?', async()=>{ await del('attendance',id); S.attendance=S.attendance.filter(r=>r.id!==id); if (ATT_RANGE) ATT_RANGE.rows=ATT_RANGE.rows.filter(r=>r.id!==id); renderAttendance(); renderDashboard(); renderPayroll(); renderReports(); toast('Deleted'); }); }
-  const dp = t.closest('[data-del-proj]');
-  if (dp){ const id=dp.dataset.delProj; return confirmDel(`Delete project ${id}? Attendance already logged against it keeps the code.`, async()=>{ await del('projects',id); S.projects=S.projects.filter(p=>String(p.id)!==id); buildLists(); renderProjects(); toast('Deleted'); }); }
   const ae = t.closest('[data-att-edit]'); if (ae && !t.closest('[data-del-att]')) { const r=attRows().find(x=>String(x.id)===ae.dataset.attEdit); if(r) return openAtt(r); }
   const lp = t.closest('[data-lpp]'); if (lp) return openLoanPostpone(lp.dataset.lpp);
   const lu = t.closest('[data-lpp-undo]'); if (lu) return undoLoanPostpone(lu.dataset.lppUndo);
@@ -1558,7 +1539,6 @@ document.addEventListener('click', async ev => {
 
 // inputs
 ['emp-q','emp-dept','emp-unit','emp-status'].forEach(id => $(id).addEventListener('input', renderEmployees));
-['proj-q'].forEach(id => $(id).addEventListener('input', renderProjects));
 ['pay-q','pay-dept'].forEach(id => $(id).addEventListener('input', renderPayroll));
 ['mon-q','mon-dept'].forEach(id => $(id).addEventListener('input', renderMonthly));
 $('mon-el').addEventListener('change', onMonElementChange);
@@ -1578,7 +1558,6 @@ $('a-add-split').addEventListener('click', () => addSplit());
 $('a-save').addEventListener('click', saveAtt);
 $('emp-save').addEventListener('click', saveEmp);
 $('emp-pkg').addEventListener('click', e => { if (/** @type {PageEl} */ (e.target).id==='pk-add') addPackageRow(); });
-$('p-save').addEventListener('click', saveProj);
 $('l-save').addEventListener('click', saveLoan);
 $('lpp-save').addEventListener('click', saveLoanPostpone);
 $('lpp-month').addEventListener('change', lppPreview);
@@ -7162,7 +7141,7 @@ function stFill(id, vals){
   sel.classList.toggle('st-on', !!keep);
   return keep;
 }
-/** @type {[string, () => void][]} */ ([['lv-stf', () => renderLeaves()], ['att-status', () => renderAttendance()], ['proj-status', () => renderProjects()],
+/** @type {[string, () => void][]} */ ([['lv-stf', () => renderLeaves()], ['att-status', () => renderAttendance()],
  ['par-status', () => renderParRules()], ['loan-status', () => renderLoans()], ['loan-dept', () => renderLoans()]])
   .forEach(([id, fn]) => { const el = $(id); if (el) el.addEventListener('change', fn); });
 if ($('loan-q')) $('loan-q').addEventListener('input', () => renderLoans());

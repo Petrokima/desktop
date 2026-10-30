@@ -468,15 +468,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </div>
 
 <!-- PROJECTS -->
-<div class="page" id="page-projects">
-  <div class="page-header"><div><div class="page-title">Projects &amp; Cost Centres</div><div class="page-sub" id="proj-sub"></div></div>
-    <button class="btn btn-primary" data-act="new-proj">+ New Project</button></div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title">Register</span><div class="toolbar-right"><select class="sel" id="proj-status" title="Filter by status"><option value="">All statuses</option></select><input class="inp" id="proj-q" placeholder="Search code or name…" style="width:260px"></div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Name</th><th>Client</th><th>Country</th><th>Location</th><th>Status</th><th></th></tr></thead><tbody id="proj-tbl"></tbody></table></div>
-    <div class="foot" id="proj-foot"></div>
-  </div>
-</div>
+<div class="page" id="page-projects"><div id="react-projects"></div></div>   <!-- drawn by React: react/src/projects -->
 
 <!-- MONTHLY ENTRIES -->
 <div class="page" id="page-monthly">
@@ -1205,19 +1197,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </div></div>
 
 <!-- MODAL: PROJECT -->
-<div class="overlay" id="m-proj"><div class="modal">
-  <div class="modal-head"><div class="modal-title">New project</div><button class="x" data-close="m-proj">×</button></div>
-  <div class="grid2">
-    <div class="field"><label>Code</label><input id="p-id"></div>
-    <div class="field"><label>Name</label><input id="p-name"></div>
-    <div class="field"><label>Client</label><input id="p-client"></div>
-    <div class="field"><label>Country</label><select id="p-country"><option>Egypt</option><option>Saudi Arabia</option></select></div>
-    <div class="field"><label>Location</label><input id="p-loc"></div>
-    <div class="field"><label>Start date</label><input type="date" id="p-start"></div>
-  </div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-proj">Cancel</button><button class="btn btn-primary" id="p-save">Create</button></div>
-</div></div>
-
 <!-- MODAL: LOAN -->
 <div class="overlay" id="m-loan"><div class="modal">
   <div class="modal-head"><div class="modal-title">New staff loan</div><button class="x" data-close="m-loan">×</button></div>
@@ -1598,6 +1577,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=841dd73cd4f1"></script>
-<script src="react.js?v=6900f3cb51bd"></script>
+<script src="app.js?v=0488067082d1"></script>
+<script src="react.js?v=98122615a658"></script>
 </body></html>

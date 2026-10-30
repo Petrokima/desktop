@@ -168,8 +168,6 @@ a.maplink{color:var(--link);text-decoration:none;white-space:nowrap} a.maplink:h
 body:not(.can-pay) :is(#pk-add,[data-del-fixed]){display:none!important}
 .lpp-chip{display:inline-flex;align-items:center;gap:4px;margin:3px 4px 0 0;font-size:11px}
 .lpp-chip button{border:0;background:none;cursor:pointer;color:inherit;padding:0 2px;font-size:12px}
-body:not(.can-var) :is(#mon-save,#mon-add-btn,#mon-pick,#mon-bulk,#mp-attended,#mp-fill,#mp-fill-go,[data-act="new-var"],[data-mon-add],[data-mon-rm]){display:none!important}
-body:not(.can-pay) #pay-publish{display:none!important}
 body:not(.can-hr) .nav-item:is([data-page="news"],[data-page="voice"]){display:none!important}
 body:not(.can-hr):not(.can-pay):not(.can-master) .nav-item[data-page="bulk"]{display:none!important}
 body:not(.can-hr):not(.can-master) :is([data-act="new-emp"],#emp-save){display:none!important}   /* HR officers edit master data too (49) */
@@ -475,28 +473,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div class="page" id="page-projects"><div id="react-projects"></div></div>   <!-- drawn by React: react/src/projects -->
 
 <!-- MONTHLY ENTRIES -->
-<div class="page" id="page-monthly">
-  <div class="page-header"><div><div class="page-title">Monthly Entries</div><div class="page-sub">Variable amounts for this payroll period — pick only the employees who receive one</div><div class="ro-note ro-var">View only — HR, Finance and Admin can change monthly entries</div></div>
-    <div class="btn-group"><button class="btn btn-ghost" id="mon-bulk">⬆ Bulk upload</button><button class="btn btn-ghost" data-act="new-var">+ New variable element</button><button class="btn btn-success" id="mon-save">Save changes</button></div></div>
-  <div class="lock-note"></div>
-  <div class="card">
-    <div class="toolbar">
-      <select class="sel" id="mon-el"></select>
-      <input class="inp" id="mon-pick" list="dl-emp" placeholder="Type employee code or name to add…" style="width:300px">
-      <button class="btn btn-primary btn-sm" id="mon-add-btn">+ Add employee</button>
-      <div class="toolbar-right"><input class="inp" id="mon-q" placeholder="Filter the list…" style="width:160px"><select class="sel" id="mon-dept"><option value="">All departments</option></select></div></div>
-    <div class="toolbar" style="border-top:1px solid var(--border);padding-top:10px;gap:8px;flex-wrap:wrap">
-      <span style="font-size:13px;color:var(--label)">Enter</span>
-      <div class="btn-group" style="gap:0"><button class="btn btn-sm btn-primary" id="mm-emp">By employee</button><button class="btn btn-sm btn-ghost" id="mm-proj">By project</button></div>
-      <span id="mp-box" style="display:none;align-items:center;gap:8px;flex-wrap:wrap">
-        <input class="inp" id="mp-proj" list="dl-proj" placeholder="Choose the project…" style="width:260px">
-        <button class="btn btn-ghost btn-sm" id="mp-attended" title="Add every employee with attendance at this project in this payroll cycle">+ Everyone who worked here</button>
-        <input class="inp" id="mp-fill" type="number" step="0.01" placeholder="Same amount" style="width:110px;text-align:right"><button class="btn btn-ghost btn-sm" id="mp-fill-go">Apply to all shown</button>
-      </span></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Arabic Name</th><th>English Name</th><th>Department</th><th>Project (optional)</th><th class="num">Amount (EGP)</th><th></th></tr></thead><tbody id="mon-tbl"></tbody></table></div>
-    <div class="foot" id="mon-foot"></div>
-  </div>
-</div>
+<div class="page" id="page-monthly"><div id="react-monthly"></div></div>
 
 <!-- VACATIONS -->
 <div class="page" id="page-leaves"><div id="react-leaves"></div></div>
@@ -573,19 +550,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div class="page" id="page-loans"><div id="react-loans"></div></div>
 
 <!-- PAYROLL -->
-<div class="page" id="page-payroll">
-  <div class="page-header"><div><div class="page-title">Payroll Run</div><div class="page-sub" id="pay-sub"></div></div>
-    <div class="btn-group"><button class="btn btn-ghost" id="pay-export">Export CSV</button><button class="btn btn-ghost" id="pay-publish" style="display:none" title="Send this approved month's project totals (no names) to the users who have Project cost reports">📤 Publish project costs</button><button class="btn btn-success" id="pay-approve">✔ Approve &amp; lock payroll</button></div></div>
-  <div id="pay-status"></div>
-  <div class="alert a-info" id="pay-note"></div>
-  <div class="stats" id="pay-stats"></div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title">Employee payroll — click a row for the full payslip</span>
-      <div class="toolbar-right"><button class="btn btn-ghost btn-sm" id="pay-exp" title="Show every addition and deduction as its own column">⊞ Expanded view</button><button class="btn btn-ghost btn-sm" id="pay-fclear" style="display:none">✕ Clear column filters</button><input class="inp" id="pay-q" placeholder="Search employee…"><select class="sel" id="pay-dept"><option value="">All departments</option></select></div></div>
-    <div class="tbl-wrap"><table id="pay-table"><thead id="pay-thead"></thead><tbody id="pay-tbl"></tbody><tfoot id="pay-tfoot"></tfoot></table></div>
-    <div class="foot" id="pay-foot"></div>
-  </div>
-</div>
+<div class="page" id="page-payroll"><div id="react-payroll"></div></div>
 
 <!-- REPORTS -->
 <div class="page" id="page-reports">
@@ -795,31 +760,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <!-- MODAL: HOLIDAY -->
 
 
-<!-- MODAL: APPROVE PAYROLL -->
-<div class="overlay" id="m-approve"><div class="modal" style="max-width:560px">
-  <div class="modal-head"><div class="modal-title">Approve &amp; lock payroll</div><button class="x" data-close="m-approve">×</button></div>
-  <div id="ap-body" style="font-size:13px;color:var(--label);line-height:1.7"></div>
-  <label style="display:flex;gap:8px;align-items:center;margin:14px 0 6px;font-size:13px;cursor:pointer"><input type="checkbox" id="ap-next" checked> After approval, move the app to the next payroll period</label>
-  <div class="field" style="margin-top:10px"><label id="ap-type-l">Type the period to confirm</label><input id="ap-type" autocomplete="off"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-approve">Cancel</button><button class="btn btn-success" id="ap-go">Approve and lock</button></div>
-</div></div>
-
-<!-- MODAL: NEW VARIABLE ELEMENT -->
-<div class="overlay" id="m-var"><div class="modal" style="max-width:520px">
-  <div class="modal-head"><div class="modal-title">New variable element</div><button class="x" data-close="m-var">×</button></div>
-  <div class="grid2">
-    <div class="field"><label>Code (next free number — change it to match SAP if needed)</label><input type="number" id="vr-code"></div>
-    <div class="field"><label>Type</label><select id="vr-type"><option value="Addition">Addition (+)</option><option value="Deduction">Deduction (−)</option></select></div>
-    <div class="field"><label>Name (English)</label><input id="vr-en" placeholder="e.g. Site Hardship Allowance"></div>
-    <div class="field"><label>Name (Arabic)</label><input id="vr-ar" dir="rtl" placeholder="مثال: بدل موقع"></div>
-    <div class="field"><label>Included in the income-tax base?</label><select id="vr-tax"><option value="true">Yes</option><option value="false">No</option></select></div>
-    <div class="field"><label>Included in the social-insurance base?</label><select id="vr-ins"><option value="false">No</option><option value="true">Yes</option></select></div>
-    <div class="field full"><label>Notes (optional)</label><input id="vr-notes"></div>
-  </div>
-  <div style="font-size:12px;color:var(--muted);margin-top:10px">A variable element gets a new amount every payroll period, entered on this page. Fixed allowances and deductions are set up by Finance.</div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-var">Cancel</button><button class="btn btn-primary" id="vr-save">Create element</button></div>
-</div></div>
-
 <!-- MODAL: SELF VACATION -->
 <div class="overlay" id="m-sl"><div class="modal">
   <div class="modal-head"><div class="modal-title">Request vacation</div><button class="x" data-close="m-sl">×</button></div>
@@ -856,26 +796,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </div></div>
 
 <!-- MODAL: HANDLE HR REQUEST -->
-
-<!-- MODAL: BULK UPLOAD -->
-<div class="overlay" id="m-bulk"><div class="modal wide">
-  <div class="modal-head"><div class="modal-title" id="bk-title">Bulk upload — variable additions and deductions</div><button class="x" data-close="m-bulk">×</button></div>
-  <div class="alert a-info" style="line-height:1.7">
-    <b>1.</b> Download the template, or use your own sheet with these columns: <b>employee_code</b>, <b>element_code</b>, <b>amount</b>, and optionally <b>project_code</b> (an <b>employee_name</b> column is fine too — it is ignored).<br>
-    <b>2.</b> Fill in one row per employee per element. To split one employee's amount across sites, use one row per project.<br>
-    <b>3.</b> Upload it as <b>Excel (.xlsx)</b> or <b>CSV</b>. You will see a preview before anything is saved.<br>
-    For each employee and element in your file, the amounts <b>replace</b> what is already entered for this period. Everyone not in the file is left untouched, so uploading the same file twice is safe.
-  </div>
-  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
-    <button class="btn btn-ghost btn-sm" id="bk-template">⬇ Download template</button>
-    <label class="btn btn-primary btn-sm" style="cursor:pointer">📂 Choose file…<input type="file" id="bk-file" accept=".xlsx,.xls,.csv" style="display:none"></label>
-    <span id="bk-fname" style="font-size:13px;color:var(--muted)"></span>
-  </div>
-  <details style="margin-bottom:12px"><summary style="cursor:pointer;font-size:13px;color:var(--label)">Variable element codes you can use</summary><div id="bk-elements" style="margin-top:8px"></div></details>
-  <div id="bk-summary"></div>
-  <div class="tbl-wrap" style="max-height:380px;overflow-y:auto"><table><thead><tr><th>Row</th><th>Code</th><th>Employee</th><th>Element</th><th>Project</th><th class="num">Amount</th><th>Check</th></tr></thead><tbody id="bk-rows"></tbody></table></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-bulk">Cancel</button><button class="btn btn-success" id="bk-import" disabled>Import</button></div>
-</div></div>
 
 <!-- MODAL: FINGERPRINT MACHINE IMPORT -->
 <div class="overlay" id="m-mi"><div class="modal wide">
@@ -991,6 +911,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=4ce561eab841"></script>
-<script src="react.js?v=f58a2292aa26"></script>
+<script src="app.js?v=5358307f7ec2"></script>
+<script src="react.js?v=435fdc93b359"></script>
 </body></html>

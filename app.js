@@ -95,9 +95,6 @@ function mgrStage(r){
   if (r.manager_status==='Approved') return `<div style="font-size:11px;color:var(--accent2)">✓ manager ${esc(r.manager_by||m)} approved${r.manager_note?` — “${esc(r.manager_note)}”`:''}</div>`;
   return `<div style="font-size:11px;color:var(--danger)">✕ manager ${esc(r.manager_by||m)} rejected${r.manager_note?` — “${esc(r.manager_note)}”`:''}</div>`;
 }
-let monLines = {};          // emp_id -> [{project:'code — name', amount:'…'}] for the selected element
-let monDirty = new Set();   // emp_ids with unsaved changes
-let monEl = null;           // element code monLines was built for
 
 // ═════════════════════════════════════════════════════════
 //  HELPERS
@@ -108,8 +105,12 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const num = v => { const n = Number(v); return isFinite(n) ? n : 0; };
 const fmt = v => num(v).toLocaleString('en-US', { minimumFractionDigits:0, maximumFractionDigits:2 });
 const pad = n => String(n).padStart(2,'0');
-function todayStr(){ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
-function thisMonth(){ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}`; }
+// Today in CAIRO (YYYY-MM-DD), whatever time zone the computer is set to — the database's payroll uses Cairo time too, so both
+// agree on which days are past (absences). Before 31 Oct 2026 this used the computer's zone: from midnight to 2 a.m. Cairo a PC
+// set to UTC was still on "yesterday" and the payroll check against the database differed.
+const CAIRO_DAY = new Intl.DateTimeFormat('en-CA', { timeZone:'Africa/Cairo', year:'numeric', month:'2-digit', day:'2-digit' });
+function todayStr(){ return CAIRO_DAY.format(new Date()); }
+function thisMonth(){ return todayStr().slice(0,7); }
 // Payroll cycle: period 'YYYY-MM' runs from day <cycleStartDay> of the previous month to the day before it in this month.
 // cycleStartDay 21 → September = 21 Aug … 20 Sep.  cycleStartDay 1 → calendar month.
 function cycleDay(){ const d = Math.round(num(settings.cycleStartDay)); return (d>=2 && d<=28) ? d : 1; }
@@ -453,17 +454,13 @@ function buildLists(){
   const depts = [...new Set(S.employees.map(e=>e.department).filter(Boolean))].sort();
   const units = [...new Set(S.employees.map(e=>e.unit).filter(Boolean))].sort();
   const dOpts = '<option value="">All departments</option>' + depts.map(d=>`<option>${esc(d)}</option>`).join('');
-  ['emp-dept','mon-dept','pay-dept','rep-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
+  ['emp-dept','rep-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
   const uv=$('emp-unit').value; $('emp-unit').innerHTML='<option value="">All units</option>'+units.map(u=>`<option>${esc(u)}</option>`).join(''); $('emp-unit').value=uv;
-  const mEls = S.elements.filter(e => e.input_method==='Monthly' && e.active!==false);
-  const mv=$('mon-el').value;
-  $('mon-el').innerHTML = mEls.length ? mEls.map(e=>`<option value="${e.code}">${e.element_type==='Deduction'?'(−)':'(+)'} ${e.code} · ${esc(e.name_en)}${e.name_ar?' · '+esc(e.name_ar):''}</option>`).join('') : '<option value="">No variable elements yet — create one</option>';
-  if(mv) $('mon-el').value = mv;
 }
 
 // Pages are prepared when they are opened (the payroll calculation, reports and labour cost are the heavy ones)
 const PAGE_RENDER = { dashboard:()=>renderDashboard(), employees:()=>renderEmployees(), attendance:()=>renderAttendance(), projects:()=>renderProjects(),
-  monthly:()=>renderMonthly(), loans:()=>renderLoans(), payroll:()=>renderPayroll(), reports:()=>renderReports(), permissions:()=>renderPermissions(),
+  loans:()=>renderLoans(), reports:()=>renderReports(), permissions:()=>renderPermissions(),
   leaves:()=>renderLeaves(), exempt:()=>renderExempt(), penalties:()=>renderPenalties(), holidays:()=>renderHolidays(), hrreq:()=>renderHrRequests(),
   reporting:()=>renderReporting(), history:()=>renderHistory(), parrules:()=>renderParRules(), approvals:()=>renderApprovals(), assign:()=>renderAssign(), calc:()=>renderCalc(), news:()=>renderNewsPage() };
 let DIRTY = new Set(), LOAD_MS = 0;
@@ -1151,98 +1148,16 @@ function projectDeleted(id){ S.projects = S.projects.filter(p=>String(p.id)!==id
 //  MONTHLY ENTRIES  (one or more project lines per employee)
 // ═════════════════════════════════════════════════════════
 function projLabel(code){ if(!code) return ''; const p=S.projects.find(x=>String(x.id)===String(code)); return p ? `${p.id} — ${p.name||''}` : String(code); }
-function resetMonthly(){ monLines={}; monDirty=new Set(); monEl=null; }
-function buildMonLines(code){
-  monLines = {}; monDirty = new Set(); monEl = code;
-  S.monthly.filter(m=>num(m.element_code)===code).forEach(m => {
-    (monLines[m.emp_id] = monLines[m.emp_id] || []).push({ project: projLabel(m.project_code), amount: String(m.amount ?? '') });
-  });
+// The page, the upload window and "New variable element" moved to React 30 Oct 2026 (react/src/monthly). The old code keeps
+// the loaded amounts (S.monthly — payroll, reports) and the step after a change.
+function renderMonthly(){ if (typeof PKR !== 'undefined') PKR.render(); }
+/** after the React page saved or uploaded amounts: read the period's amounts again; payroll, dashboard and reports follow */
+async function monthlyChanged(){
+  S.monthly = await fetchAll('payroll_period_elements','emp_id', q=>q.eq('period',settings.period));
+  renderPayroll(); renderDashboard(); renderReports(); renderMonthly();
 }
-function linesFor(empId){ return monLines[empId] || [{ project:'', amount:'' }]; }
-function monUpdateFooter(){
-  const code=num($('mon-el').value);
-  const saved = S.monthly.filter(m=>num(m.element_code)===code);
-  const total = saved.reduce((s,m)=>s+num(m.amount),0);
-  const n = monDirty.size;
-  const emps = new Set(saved.map(m=>String(m.emp_id))).size;
-  $('mon-foot').innerHTML = `Period <b>${periodLabel(settings.period)}</b> · ${emps} employee${emps===1?'':'s'} · ${saved.length} saved line${saved.length===1?'':'s'} · total ${fmt(total)} EGP`
-    + (n ? ` · <span style="color:var(--warn)">unsaved changes for ${n} employee${n>1?'s':''}</span>` : '');
-  $('mon-save').textContent = n ? `Save changes (${n})` : 'Save changes';
-}
-let MON_MODE = 'emp', MON_PROJ = '';            // 'emp' = by employee (all lines), 'proj' = one project's line per employee
-const lineProj = ln => parseProjInput(ln.project) || (String(ln.project||'').trim()==='' ? '' : null);
-function projDays(empId, code){ return new Set(S.attendance.filter(a => String(a.emp_id)===String(empId) && (a.projects||[]).some(x => x.code===code)).map(a => a.date)).size; }
-function renderMonthly(){ if (MON_MODE==='proj') return renderMonthlyByProject();
-  const code = num($('mon-el').value), q=$('mon-q').value.trim().toLowerCase(), d=$('mon-dept').value;
-  if (!code){ $('mon-tbl').innerHTML='<tr><td colspan="7" class="empty">No variable elements yet — click “+ New variable element”</td></tr>'; monUpdateFooter(); return; }
-  if (monEl !== code) buildMonLines(code);
-  const el = elOrBlank(code);
-  const list = Object.keys(monLines).filter(id => monLines[id].length).map(id => empById(id) || /** @type {Employee} */ ({ id, name_en:'(unknown employee)' }))
-    .filter(e => orgMatch(e,'mon') && (!q || [e.id,e.name_ar,e.name_en].some(v=>String(v||'').toLowerCase().includes(q))))
-    .sort((a,b)=>String(a.id).localeCompare(String(b.id),undefined,{numeric:true}));
-  $('mon-tbl').innerHTML = list.map(e => {
-    const L = monLines[e.id], id = esc(e.id);
-    return L.map((ln,i) => `<tr${i?' style="background:rgba(59,111,212,.04)"':''}>
-      ${i===0 ? `<td class="mono">${id}</td><td class="ar">${esc(e.name_ar)}</td><td class="strong">${esc(e.name_en)}</td><td>${esc(e.department)}</td>`
-              : `<td></td><td></td><td style="color:var(--muted);font-size:12px">↳ split line ${i+1}</td><td></td>`}
-      <td><input class="inp" style="width:260px" list="dl-proj" placeholder="Project (optional)…" data-me="${id}" data-mi="${i}" data-mf="p" value="${esc(ln.project)}"></td>
-      <td class="num"><input class="inp" style="width:120px;text-align:right" type="number" step="0.01" data-me="${id}" data-mi="${i}" data-mf="a" value="${esc(ln.amount)}"></td>
-      <td style="white-space:nowrap">${i===0?`<button class="btn btn-ghost btn-sm" data-mon-add="${id}" title="Split across another project">+ Project</button> `:''}<button class="icon-btn" data-mon-rm="${id}" data-mi="${i}" title="${L.length===1?'Remove this employee':'Remove this line'}">🗑</button></td></tr>`).join('');
-  }).join('') || `<tr><td colspan="7" class="empty">No ${el.element_type==='Deduction'?'deductions':'amounts'} entered for “${esc(el.name_en||'')}” this period.<br>Type an employee code or name in the box above and click <b>+ Add employee</b>.</td></tr>`;
-  monUpdateFooter();
-}
-function monAddEmployee(){
-  const id = parseEmpInput($('mon-pick').value);
-  if (!id) return toast('Pick an employee from the suggestions','warn');
-  if (!onPayroll(empById(id), settings.period)) return toast(`${id} is not on the ${settings.period} payroll`,'warn');
-  if (MON_MODE==='proj'){ if (!MON_PROJ) return toast('Choose the project first','warn'); monEnsureProjLine(id); }
-  else if (!(monLines[id] && monLines[id].length)) monLines[id] = [{ project:'', amount:'' }];
-  $('mon-pick').value=''; $('mon-q').value=''; $('mon-dept').value='';
-  renderMonthly();
-  const inp = document.querySelector(`[data-me="${String(id).replace(/["\\]/g,'\\$&')}"][data-mf="a"]`); if (inp) { inp.focus(); if (inp.scrollIntoView) inp.scrollIntoView({block:'center'}); }
-}
-function monInput(el){
-  const emp=el.dataset.me, i=num(el.dataset.mi), f=el.dataset.mf;
-  if (!monLines[emp]) monLines[emp] = [{ project:'', amount:'' }];
-  monLines[emp][i][f==='p'?'project':'amount'] = el.value;
-  monDirty.add(emp); monUpdateFooter();
-}
-function monAddLine(emp){ monLines[emp] = linesFor(emp).slice(); monLines[emp].push({ project:'', amount:'' }); monDirty.add(emp); renderMonthly(); }
-function monRemoveLine(emp,i){ monLines[emp] = (monLines[emp]||[]).filter((_,k)=>k!==i); monDirty.add(emp); renderMonthly(); }
-function onMonElementChange(){
-  if (monDirty.size && !confirm('You have unsaved changes for this element. Discard them?')){ $('mon-el').value = monEl; return; }
-  $('mon-pick').value='';
-  resetMonthly(); renderMonthly();
-}
-async function saveMonthly(){
-  if (!monDirty.size) return toast('No changes to save','warn');
-  const code = num($('mon-el').value), emps=[...monDirty], rows=[], problems=[];
-  emps.forEach(emp => {
-    const seen = new Set();
-    linesFor(emp).forEach((ln,i) => {
-      const amt = String(ln.amount).trim(), ptxt = String(ln.project).trim();
-      if (amt==='' && ptxt==='') return;
-      if (amt==='') { if (MON_MODE==='proj') return; return problems.push(`${emp}: line ${i+1} has a project but no amount`); }   // by project: empty = no allowance
-      let pcode = null;
-      if (ptxt){ pcode = parseProjInput(ptxt); if(!pcode) return problems.push(`${emp}: "${ptxt}" is not a valid project — pick it from the suggestions`); }
-      const key = pcode || '(none)';
-      if (seen.has(key)) return problems.push(`${emp}: the same project appears twice`);
-      seen.add(key);
-      rows.push({ emp_id:emp, element_code:code, period:settings.period, project_code:pcode, amount:num(amt) });
-    });
-  });
-  if (problems.length) return toast(problems.slice(0,2).join(' · ') + (problems.length>2?` (+${problems.length-2} more)`:''),'warn');
-  const btn=$('mon-save'); btn.disabled=true; btn.textContent='Saving…';
-  try{
-    // replace each changed employee's lines for this element and period
-    await closeRecords('payroll_period_elements', emps.map(id => ({ element_code: code, period: settings.period, emp_id: String(id) })), 'Changed on the Monthly Entries page (old line replaced)', true);
-    if (rows.length) await chunked(rows, r => sb.from('payroll_period_elements').insert(r));
-    S.monthly = await fetchAll('payroll_period_elements','emp_id', q=>q.eq('period',settings.period));
-    resetMonthly(); renderMonthly(); renderPayroll(); renderDashboard();
-    toast(`Saved ${rows.length} line${rows.length===1?'':'s'} for ${emps.length} employee${emps.length===1?'':'s'}`);
-  }catch(e){ toast(e.message,'err'); }
-  btn.disabled=false; monUpdateFooter();
-}
+/** a new variable element created by the React page @param {SalaryElement} row */
+function elementAdded(row){ S.elements.push(row); buildLists(); renderMonthly(); }
 
 // ═════════════════════════════════════════════════════════
 //  LOANS
@@ -1269,29 +1184,11 @@ function afterLoanChange(){ renderLoans(); renderPayroll(); renderDashboard(); }
 // ═════════════════════════════════════════════════════════
 //  PAYROLL RUN
 // ═════════════════════════════════════════════════════════
-let lastRun = [];
-function renderPayroll(){
-  lastRun = computeAll();
-  const q=$('pay-q').value.trim().toLowerCase(), d=$('pay-dept').value;
-  const list = lastRun.filter(r => orgMatch(r.emp,'pay') && (!q||[r.emp.id,r.emp.name_ar,r.emp.name_en].some(v=>String(v||'').toLowerCase().includes(q))));
-  const T = k => lastRun.reduce((s,r)=>s+r[k],0);
-  const noPkg = lastRun.filter(r=>!r.hasPackage).length;
-  const pj=lastRun.filter(r=>r.joiner).length, pl=lastRun.filter(r=>r.leaver).length;
-  $('pay-sub').textContent = `Period ${periodLabel(settings.period)} · ${lastRun.length} employees on payroll${pj?` · ${pj} joiner${pj>1?'s':''}`:''}${pl?` · ${pl} leaver${pl>1?'s':''}`:''}`;
-  const run = currentRun();
-  $('pay-status').innerHTML = run
-    ? `<div class="alert a-info" style="border-color:rgba(34,197,160,.4);background:rgba(34,197,160,.08);color:var(--accent2)">🔒 <b>Approved and locked</b> on ${esc(String(run.approved_at).slice(0,16).replace('T',' '))} by <b>${esc(run.approved_by)}</b>. These are the permanent approved figures — they are read from the payroll history and will never be recalculated.</div>`
-    : '';
-  $('pay-approve').style.display = run ? 'none' : '';
-  $('pay-note').style.display = run ? 'none' : '';
-  $('pay-note').innerHTML = (noPkg ? `<b>${noPkg} of ${lastRun.length}</b> active employees have no fixed salary elements yet — their pay shows as zero until you import or add their package. ` : '')
-    + `Salary changes apply to whole pay cycles (the package in force on the cycle's last day). Joiners and leavers: fixed additions are reduced by the days not employed ÷ ${num(settings.daysPerMonth)||30}. A past working day with no attendance, leave or mission is an absent day${/^\d{4}-\d{2}-\d{2}$/.test(String(settings.autoAbsentFrom||'')) ? ' (counted from ' + esc(settings.autoAbsentFrom) + ')' : ''}; weekends are never deducted. Unpaid leave is deducted per calendar day. Overtime: hours beyond ${settings.hoursPerDay} a day, only when at least ${settings.otThreshold} h, paid at ${settings.otMultiplier}× hour pay. Late (after ${settings.lateAfter}) and early/short hours are each deducted at delay hour pay, less up to ${settings.permissionMaxHours} h per approved permission (${settings.permissionsPerMonth} a month). Exception employees get no overtime and no deductions. Penalties are not yet captured and show as zero. Payroll taxes are not calculated.`;
-  $('pay-stats').innerHTML = [['Gross',T('gross')],['Social insurance',T('si')],['Loans',T('loans')],['Other deductions',T('otherDed')],['Net payroll',T('net')]]
-    .map(([l,v])=>`<div class="stat"><div class="stat-label">${l}</div><div class="stat-value" style="font-size:19px">${fmt(v)}</div></div>`).join('');
-  renderPayTable(list);     // part32.js: compact / expanded view + per-column search
-}
-function openSlip(id){
-  const r = lastRun.find(x=>String(x.emp.id)===String(id)) || computeEmployee(empById(id));
+// The page and the approval window moved to React 30 Oct 2026 (react/src/payroll). The engine (computeAll, part4) stays here;
+// "redraw the payroll" now means: React draws again (the payroll is recalculated when the page shows).
+function renderPayroll(){ if (typeof PKR !== 'undefined') PKR.render(); }
+/** the payslip window for one row of the Payroll Run page (live or approved snapshot) @param {any} r */
+function openSlip(r){
   $('slip-title').textContent = `${empName(r.emp)} — ${periodLabel(settings.period)}`;
   const line = l => `<div class="pay-line"><span>${l.code!==0?`<span class="mono" style="color:var(--muted)">${l.code}</span> `:''}${esc(l.name)}${l.note?`<div style="font-size:11px;color:var(--muted)">${esc(l.note)}</div>`:''}</span><span class="mono ${l.type==='Deduction'?'neg':'pos'}">${l.type==='Deduction'?'−':''}${fmt(l.amount)}</span></div>`;
   const adds=r.lines.filter(l=>l.type==='Addition'), deds=r.lines.filter(l=>l.type==='Deduction');
@@ -1304,82 +1201,6 @@ function openSlip(id){
     <div class="pay-line total" style="font-size:16px"><span>Net pay</span><span class="mono pos">${fmt(r.net)} EGP</span></div>`;
   openM('m-slip');
 }
-function exportPayroll(){ exportRunCsv(lastRun.length ? lastRun : computeAll(), settings.period); }
-
-// ── new variable element ──
-function openNewVar(){
-  const next = Math.max(0, ...S.elements.map(e=>num(e.code))) + 1;
-  $('vr-code').value=next; $('vr-type').value='Addition'; $('vr-en').value=''; $('vr-ar').value=''; $('vr-tax').value='true'; $('vr-ins').value='false'; $('vr-notes').value='';
-  openM('m-var'); setTimeout(()=>$('vr-en').focus(),50);
-}
-async function saveNewVar(){
-  const code=num($('vr-code').value), en=$('vr-en').value.trim(), type=$('vr-type').value;
-  if (!code || code<1) return toast('Enter a code number','warn');
-  if (elByCode(code)) return toast(`Code ${code} is already used by “${elOrBlank(code).name_en}”`,'warn');
-  if (!en) return toast('Enter the English name','warn');
-  if (S.elements.some(e=>String(e.name_en).trim().toLowerCase()===en.toLowerCase())) return toast('An element with this name already exists','warn');
-  const rec = { code, name_en:en, name_ar:$('vr-ar').value.trim()||null, element_type:type, input_method:'Monthly', calc_method:'Amount', is_basic:false,
-                taxable:$('vr-tax').value==='true', insurable:$('vr-ins').value==='true', active:true, sort_order: type==='Addition' ? 8 : 30, notes:$('vr-notes').value.trim()||null };
-  const b=$('vr-save'); b.disabled=true;
-  const { data, error } = await sb.from('salary_elements').insert(rec).select();
-  b.disabled=false;
-  if (error) return toast(/duplicate/i.test(error.message) ? `Code ${code} is already used` : error.message, 'err');
-  if (!(data && data.length)) return toast(NOPERM,'err');
-  S.elements.push(data[0]); buildLists(); $('mon-el').value = code; resetMonthly(); renderMonthly();
-  closeM('m-var'); toast(`“${en}” created as a variable ${type==='Addition'?'addition':'deduction'} — now add the employees`);
-  setTimeout(()=>$('mon-pick').focus(),50);
-}
-$('mon-add-btn').addEventListener('click', monAddEmployee);
-$('mon-pick').addEventListener('keydown', e => { if (e.key==='Enter') monAddEmployee(); });
-$('vr-type').addEventListener('change', () => { $('vr-tax').value = $('vr-type').value==='Addition' ? 'true' : 'false'; });
-$('vr-save').addEventListener('click', saveNewVar);
-
-// ── By project: pick one project, list every employee with a line for it, one amount each ──
-function renderMonthlyByProject(){
-  const code = num($('mon-el').value), q=$('mon-q').value.trim().toLowerCase(), d=$('mon-dept').value;
-  if (!code){ $('mon-tbl').innerHTML='<tr><td colspan="7" class="empty">No variable elements yet — click “+ New variable element”</td></tr>'; monUpdateFooter(); return; }
-  if (monEl !== code) buildMonLines(code);
-  if (!MON_PROJ){ $('mon-tbl').innerHTML='<tr><td colspan="7" class="empty">Choose the project above to see and enter the amounts for its employees.</td></tr>'; monUpdateFooter(); return; }
-  const rows = [];
-  Object.entries(monLines).forEach(([id, L]) => L.forEach((ln, i) => { if (lineProj(ln) === MON_PROJ) rows.push({ id, i, ln, e: empById(id) || /** @type {Employee} */ ({ id, name_en:'(unknown)' }) }); }));
-  const shown = rows.filter(r => orgMatch(r.e,'mon') && (!q || [r.e.id, r.e.name_ar, r.e.name_en].some(v => String(v||'').toLowerCase().includes(q))))
-                    .sort((a,b) => String(a.id).localeCompare(String(b.id), undefined, { numeric:true }));
-  const total = shown.reduce((s,r) => s + num(r.ln.amount), 0);
-  $('mon-tbl').innerHTML = shown.map(r => `<tr><td class="mono">${esc(r.id)}</td><td class="ar">${esc(r.e.name_ar)}</td><td class="strong">${esc(r.e.name_en)}</td><td>${esc(r.e.department)}</td>
-      <td style="color:var(--label);font-size:12px">${esc(projLabel(MON_PROJ))} · <b>${projDays(r.id, MON_PROJ)}</b> day(s) worked here this cycle</td>
-      <td class="num"><input class="inp" style="width:120px;text-align:right" type="number" step="0.01" data-me="${esc(r.id)}" data-mi="${r.i}" data-mf="a" value="${esc(r.ln.amount)}"></td>
-      <td><button class="icon-btn" data-mon-rm="${esc(r.id)}" data-mi="${r.i}" title="Remove this employee from the project">🗑</button></td></tr>`).join('')
-    || `<tr><td colspan="7" class="empty">No one has an amount for ${esc(projLabel(MON_PROJ))} yet. Add employees one by one above, or click <b>+ Everyone who worked here</b>.</td></tr>`;
-  monUpdateFooter();
-  $('mon-foot').innerHTML += ` · <b>${esc(projLabel(MON_PROJ))}</b>: ${shown.length} employee${shown.length===1?'':'s'}, total ${fmt(total)}`;
-}
-function monEnsureProjLine(id){
-  if (!monLines[id]) monLines[id] = [];
-  if (!monLines[id].some(ln => lineProj(ln) === MON_PROJ)){ monLines[id].push({ project: projLabel(MON_PROJ), amount:'' }); return true; }
-  return false;
-}
-function setMonMode(mode){
-  MON_MODE = mode;
-  $('mm-emp').className = 'btn btn-sm ' + (mode==='emp' ? 'btn-primary' : 'btn-ghost');
-  $('mm-proj').className = 'btn btn-sm ' + (mode==='proj' ? 'btn-primary' : 'btn-ghost');
-  $('mp-box').style.display = mode==='proj' ? 'inline-flex' : 'none';
-  renderMonthly();
-}
-$('mm-emp').addEventListener('click', () => setMonMode('emp'));
-$('mm-proj').addEventListener('click', () => setMonMode('proj'));
-$('mp-proj').addEventListener('change', () => { const c = parseProjInput($('mp-proj').value); if ($('mp-proj').value.trim() && !c) return toast('Pick the project from the suggestions','warn'); MON_PROJ = c || ''; renderMonthly(); });
-$('mp-attended').addEventListener('click', () => {
-  if (!MON_PROJ) return toast('Choose the project first','warn');
-  const ids = [...new Set(S.attendance.filter(a => (a.projects||[]).some(x => x.code===MON_PROJ)).map(a => String(a.emp_id)))].filter(id => onPayroll(empById(id), settings.period));
-  if (!ids.length) return toast(`Nobody has attendance at ${projLabel(MON_PROJ)} in this payroll cycle`,'warn');
-  let added = 0; ids.forEach(id => { if (monEnsureProjLine(id)) added++; });
-  renderMonthly(); toast(added ? `${added} employee${added>1?'s':''} added — enter their amounts, then Save` : 'Everyone who worked here is already listed');
-});
-$('mp-fill-go').addEventListener('click', () => {
-  const v = $('mp-fill').value; if (v==='' || num(v) <= 0) return toast('Type the amount first','warn');
-  let n = 0; document.querySelectorAll('#mon-tbl [data-mf="a"]').forEach(inp => { inp.value = v; monInput(inp); n++; });
-  toast(`${fmt(num(v))} entered for ${n} employee${n===1?'':'s'} — click Save changes to keep it`);
-});
 
 // ═════════════════════════════════════════════════════════
 //  SETTINGS
@@ -1401,7 +1222,7 @@ async function saveSettings(){
   const { data, error } = await sb.from('settings').upsert({ key:'payroll', value:settings }).select();
   if(error) return toast(error.message,'err');
   if (!(data && data.length)) return toast(NOPERM,'err');
-  if (settings.period !== oldPeriod || settings.cycleStartDay !== oldCycle){ resetMonthly(); await loadPeriodData(); loader(false); }
+  if (settings.period !== oldPeriod || settings.cycleStartDay !== oldCycle){ await loadPeriodData(); loader(false); }
   renderAll(); toast('Settings saved');
 }
 
@@ -1462,7 +1283,6 @@ document.addEventListener('click', async ev => {
     if (a==='new-emp') return openEmp(null);
     if (a==='new-att') return openAtt(null);
     if (a==='myprofile') return showSelf(ME, { email: ME.email });
-    if (a==='new-var') return openNewVar();
     if (a==='goto-current') return gotoCurrentPeriod();
     if (a==='theme') return openTheme();
     if (a==='self-leave') return openSelfLeave();
@@ -1474,7 +1294,6 @@ document.addEventListener('click', async ev => {
     if (a==='disconnect'){ ev.preventDefault(); return disconnect(); }
   }
   const er = t.closest('[data-emp]'); if (er) return openEmp(er.dataset.emp);
-  const sl = t.closest('[data-slip]'); if (sl) return openSlip(sl.dataset.slip);
   if (t.closest('[data-rm-split]')){ t.closest('.split')?.remove(); return checkSplits(); }
   const df = t.closest('[data-del-fixed]');
   if (df){ const id=/** @type {string} */ (df.dataset.delFixed); return askReason('Close salary element', 'Close this salary element for the employee? It is kept in the register of closed records with your reason.', 'Close element', async reason=>{ await closeRecords('employee_salary_elements', [{ id }], reason); S.fixed=S.fixed.filter(r=>r.id!==id); renderPackage(); renderPayroll(); renderDashboard(); toast('Element closed'); }); }
@@ -1485,17 +1304,9 @@ document.addEventListener('click', async ev => {
 
 // inputs
 ['emp-q','emp-dept','emp-unit','emp-status'].forEach(id => $(id).addEventListener('input', renderEmployees));
-['pay-q','pay-dept'].forEach(id => $(id).addEventListener('input', renderPayroll));
-['mon-q','mon-dept'].forEach(id => $(id).addEventListener('input', renderMonthly));
-$('mon-el').addEventListener('change', onMonElementChange);
 $('att-q').addEventListener('input', renderAttendance);
 $('att-day').addEventListener('change', e => { attDayFilter = /** @type {PageEl} */ (e.target).value || null; renderAttendance(); });
 $('att-all').addEventListener('click', () => { attDayFilter = null; $('att-day').value=''; renderAttendance(); });
-$('mon-tbl').addEventListener('input', e => { const el=/** @type {PageEl} */ (e.target).closest('[data-me]'); if(el) monInput(el); });
-$('mon-tbl').addEventListener('click', e => {
-  const a=/** @type {PageEl} */ (e.target).closest('[data-mon-add]'); if(a) return monAddLine(a.dataset.monAdd);
-  const r=/** @type {PageEl} */ (e.target).closest('[data-mon-rm]');  if(r) return monRemoveLine(r.dataset.monRm, num(r.dataset.mi));
-});
 $('a-status').addEventListener('change', () => { toggleWork(); checkSplits(); });
 $('a-emp').addEventListener('input', checkSplits);
 $('a-splits').addEventListener('input', checkSplits);
@@ -1503,8 +1314,6 @@ $('a-add-split').addEventListener('click', () => addSplit());
 $('a-save').addEventListener('click', saveAtt);
 $('emp-save').addEventListener('click', saveEmp);
 $('emp-pkg').addEventListener('click', e => { if (/** @type {PageEl} */ (e.target).id==='pk-add') addPackageRow(); });
-$('mon-save').addEventListener('click', saveMonthly);
-$('pay-export').addEventListener('click', exportPayroll);
 $('set-save').addEventListener('click', saveSettings);
 $('btn-connect').addEventListener('click', connectFromForm);
 document.addEventListener('keydown', e => { if (e.key==='Escape') document.querySelectorAll('.overlay.open').forEach(o=>o.classList.remove('open')); });
@@ -2287,6 +2096,8 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 //  PAYROLL APPROVAL (permanent snapshot)
 // ═════════════════════════════════════════════════════════
 function nextPeriod(p){ const [y,m]=p.split('-').map(Number); return m===12 ? `${y+1}-01` : `${y}-${pad(m+1)}`; }
+// The payroll engine's payslip format (what Approve sends for the database to cross-check) and the comparison with the database's
+// own calculation — used by the React approval window (bridge) and by the engine test (tests/payroll/cmp.js).
 function payrollLines(run){
   const keys = ['basic','otherAdd','ot','otH','si','loans','otherDed','days','factor','partial','joiner','leaver','hasPackage','delay','absence','absentDays','autoAbsentDays','unpaidDays','loanOwed','penalty','holiday','holDays','lateH','earlyH','waivedH'];
   return run.map(r => ({ emp_id:String(r.emp.id), name_en:r.emp.name_en||null, name_ar:r.emp.name_ar||null, department:r.emp.department||null, unit:r.emp.unit||null,
@@ -2310,81 +2121,19 @@ function payrollDiffs(mine, srv){
   S2.forEach((s, id) => out.push({ emp:id, what:'only in the database calculation' }));
   return out;
 }
-async function checkWithDatabase(){
-  const box = $('ap-check'); if (!box) return;
-  box.innerHTML = '<div class="alert a-info" style="margin:12px 0 0">🔍 Checking against the database calculation…</div>';
-  const { data, error } = await sb.rpc('payroll_calc', { p_period: settings.period });
-  if (error) { box.innerHTML = `<div class="alert a-warn" style="margin:12px 0 0">🔍 The database calculation is not available yet (${esc(error.message)}). Run <b>57-payroll-server-calculation.sql</b> first — approval needs it.</div>`; return; }
-  const d = payrollDiffs(payrollLines(computeAll()), (data && data.employees) || []);
-  box.innerHTML = d.length
-    ? `<div class="alert a-warn" style="margin:12px 0 0">🔍 <b>${d.length} difference${d.length>1?'s':''}</b> between the desktop and the database — the database will refuse this approval:<br>• ${d.slice(0,12).map(x => `${esc(x.emp)} ${esc(empName(empById(x.emp)) || '')}: ${esc(x.what)}`).join('<br>• ')}${d.length>12?`<br>… and ${d.length-12} more`:''}</div>`
-    : `<div class="alert a-info" style="margin:12px 0 0">🔍 ✓ The database calculated the same payroll — every employee and every amount matches.</div>`;
-}
-function openApprove(){
-  if (runsTableMissing) return toast('Run managers-and-payroll-history.sql first','warn');
-  if (currentRun()) return toast(`The ${settings.period} payroll is already approved`,'warn');
-  const run = computeAll(), T=k=>run.reduce((s,r)=>s+num(r[k]),0);
-  const ps=periodStart(settings.period), pe=periodEnd(settings.period);
-  const warn = [];
-  const pL=S.leaves.filter(l=>l.status==='Pending' && l.date_from<=pe && l.date_to>=ps).length;
-  const pP=S.permissions.filter(p=>p.status==='Pending').length;
-  const noPkg=run.filter(r=>!r.hasPackage).length, zero=run.filter(r=>num(r.net)<=0).length;
-  if (pL) warn.push(`${pL} vacation request${pL>1?'s':''} in this cycle still pending`);
-  if (pP) warn.push(`${pP} permission request${pP>1?'s':''} still pending`);
-  if (noPkg) warn.push(`${noPkg} employee${noPkg>1?'s have':' has'} no fixed salary package`);
-  if (zero) warn.push(`${zero} employee${zero>1?'s have':' has'} zero or negative net pay`);
-  const openAA = typeof aaRows === 'function' ? aaRows().filter(r => r.calc.amount > 0 && r.state !== 'Approved' && r.state !== 'Rejected') : [];
-  if (openAA.length) warn.push(`${openAA.length} automatic project allowance${openAA.length>1?'s are':' is'} not yet approved by manager and HR — ${fmt(openAA.reduce((s,r)=>s+r.calc.amount,0))} EGP will NOT be paid`);
-  const chg = typeof aaRows === 'function' ? aaRows().filter(r => r.state==='Approved' && r.changed).length : 0;
-  if (chg) warn.push(`${chg} approved allowance${chg>1?'s':''} changed since approval — the approved amount is what will be paid`);
-  $('ap-body').innerHTML = `<div style="font-size:15px;color:var(--text);margin-bottom:8px"><b>${esc(periodLabel(settings.period))}</b></div>
-    <div class="pay-line"><span>Employees</span><span class="mono">${run.length}</span></div>
-    <div class="pay-line"><span>Gross</span><span class="mono">${fmt(T('gross'))}</span></div>
-    <div class="pay-line"><span>Deductions</span><span class="mono neg">${fmt(T('ded'))}</span></div>
-    <div class="pay-line total"><span>Net payroll</span><span class="mono pos">${fmt(T('net'))} EGP</span></div>
-    ${warn.length ? `<div class="alert a-warn" style="margin:12px 0 0">Check before approving:<br>• ${warn.join('<br>• ')}</div>` : '<div class="alert a-info" style="margin:12px 0 0">No open items found.</div>'}
-    <div style="margin-top:12px">Approval saves every payslip permanently. <b>It cannot be undone, changed or deleted</b> — not even by the administrator. Attendance, monthly entries, penalties and approved leave for this cycle will be locked. Corrections go into the next payroll.</div>`;
-  $('ap-type-l').textContent = `Type ${settings.period} to confirm`; $('ap-type').value=''; $('ap-next').checked=true;
-  if (!$('ap-check')) $('ap-body').insertAdjacentHTML('afterend', '<div id="ap-check"></div>');
-  openM('m-approve'); setTimeout(()=>$('ap-type').focus(),50);
-  checkBlockers();
-  checkWithDatabase();
-}
-// 85 (rule 5A): the database refuses approval while the cycle is open or attendance is unsettled — show what is left
-async function checkBlockers(){
-  if (!$('ap-block')) $('ap-body').insertAdjacentHTML('afterend', '<div id="ap-block"></div>');
-  const box = $('ap-block'), go = $('ap-go'); box.innerHTML = ''; go.disabled = false; go.title = '';
-  const { data, error } = await sb.rpc('payroll_blockers', { p_period: settings.period });
-  if (error) { box.innerHTML = /function|schema/i.test(error.message) ? '<div class="alert a-warn" style="margin:12px 0 0">Run <b>85-payroll-rules.sql</b> first — approval needs it.</div>' : ''; return; }
-  if (!(data && data.length)) return;
-  go.disabled = true; go.title = 'Settle the items listed first';
-  box.innerHTML = `<div class="alert a-danger" style="margin:12px 0 0;border-color:rgba(217,79,79,.5);background:rgba(217,79,79,.08);color:var(--danger)">⛔ <b>This month cannot be approved yet:</b><br>• ${data.map(x => esc(x.text)).join('<br>• ')}</div>`;
-}
-async function doApprove(){
-  const p = settings.period;
-  if ($('ap-type').value.trim() !== p) return toast(`Type ${p} exactly to confirm`,'warn');
-  const lines = payrollLines(computeAll());
-  const costDetail = laborCost();                                     // project totals, published after approval
-  const b=$('ap-go'); b.disabled=true; b.textContent='Approving…';
-  // 57-payroll-server-calculation.sql: the DATABASE calculates and stores the payroll; these lines are only a cross-check
-  // (the database refuses the approval when its own numbers differ)
-  const { data, error } = await sb.rpc('approve_payroll', { p_period:p, p_check:lines });
-  b.disabled=false; b.textContent='Approve and lock';
-  if (error) return toast(error.message,'err');
-  closeM('m-approve');
-  toast(`${periodLabel(p)} approved and locked — ${data.headcount} employees, net ${fmt(data.net)} EGP`);
+// The approval window moved to React 30 Oct 2026 (react/src/payroll/ApproveDialog.tsx). After the DATABASE approved the month:
+/** publish the project costs taken before approving, move to the next period if asked, read everything again
+ *  @param {string} p @param {any} costDetail @param {boolean} moveNext */
+async function payrollApproved(p, costDetail, moveNext){
   await publishProjectCosts(p, costDetail, true);
-  if ($('ap-next').checked){
+  if (moveNext){
     settings.period = nextPeriod(p);
     const r = await sb.from('settings').upsert({ key:'payroll', value:settings }).select();
     if (r.error || !(r.data && r.data.length)) toast('Approved — but the period could not be moved; change it in Settings','warn');
     applySettingsUI();
   }
-  resetMonthly(); await loadPeriodData(); loader(false); renderAll();
+  await loadPeriodData(); loader(false); renderAll();
 }
-$('pay-approve').addEventListener('click', openApprove);
-$('ap-go').addEventListener('click', doApprove);
-$('ap-type').addEventListener('keydown', e => { if (e.key==='Enter') doApprove(); });
 
 // ═════════════════════════════════════════════════════════
 //  PAYROLL HISTORY
@@ -2459,7 +2208,7 @@ async function gotoCurrentPeriod(){
   settings.period = cur;
   const r = await sb.from('settings').upsert({ key:'payroll', value:settings }).select();
   if (r.error || !(r.data && r.data.length)) { settings.period = old; return toast(r.error ? r.error.message : NOPERM, 'err'); }
-  applySettingsUI(); resetMonthly(); await loadPeriodData(); loader(false); renderAll();
+  applySettingsUI(); await loadPeriodData(); loader(false); renderAll();
   toast(`Now showing ${periodLabel(cur)}`);
 }
 
@@ -2523,30 +2272,9 @@ function openTheme(){ renderThemeList(); openM('m-theme'); }
 document.addEventListener('click', e => { const b = /** @type {HTMLElement | null} */ (/** @type {HTMLElement} */ (e.target).closest('[data-theme-pick]')); if (b) setTheme(b.dataset.themePick); });
 
 // ═════════════════════════════════════════════════════════
-//  BULK UPLOAD — variable (monthly) additions and deductions
+//  READING AN EXCEL / CSV FILE — shared by Bulk upload, the Monthly entries upload (both React now) and the manager team upload
 // ═════════════════════════════════════════════════════════
-/** @type {{ rows: any[], file: string }} — rows read from an uploaded monthly-entries spreadsheet */
-let BULK = { rows:[], file:'' };
-const varElements = () => S.elements.filter(e => e.input_method==='Monthly' && e.active!==false);
-function openBulk(){
-  if (currentRun()) return toast(`The ${periodLabel(settings.period)} payroll is approved and locked — switch to an open period first`,'warn');
-  if (!varElements().length) return toast('Create a variable element first (+ New variable element)','warn');
-  BULK = { rows:[], file:'' }; $('bk-file').value=''; $('bk-fname').textContent=''; $('bk-rows').innerHTML=''; $('bk-summary').innerHTML='';
-  $('bk-import').disabled = true; $('bk-import').textContent='Import';
-  $('bk-title').textContent = `Bulk upload — variable additions and deductions · ${periodLabel(settings.period)}`;
-  $('bk-elements').innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>element_code</th><th>Name</th><th>Type</th></tr></thead><tbody>${varElements().map(e=>`<tr><td class="mono">${e.code}</td><td>${esc(e.name_en)}${e.name_ar?' · '+esc(e.name_ar):''}</td><td>${e.element_type==='Deduction'?'<span class="neg">Deduction (−)</span>':'<span class="pos">Addition (+)</span>'}</td></tr>`).join('')}</tbody></table></div>`;
-  openM('m-bulk');
-}
-function downloadTemplate(){
-  const els = varElements(), emps = S.employees.filter(e => onPayroll(e, settings.period)).slice(0, 3);
-  const rows = [['employee_code','employee_name','element_code','amount','project_code']];
-  emps.forEach((e,i) => rows.push([e.id, empName(e), els[i % els.length].code, (i+1)*500, i===0 && S.projects[0] ? S.projects[0].id : '']));
-  const q = v => { const s=String(v??''); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob(['\uFEFF'+rows.map(r=>r.map(q).join(',')).join('\n')],{type:'text/csv;charset=utf-8'}));
-  a.download=`petrokima-variable-elements-template-${settings.period}.csv`; a.click();
-}
-// ── reading the file ──
+// The Monthly entries upload window itself moved to React 30 Oct 2026 (react/src/monthly/UploadDialog.tsx).
 function parseCsv(text){
   text = text.replace(/^\uFEFF/, '');
   const first = text.split(/\r?\n/)[0] || '', delim = (first.split(';').length > first.split(',').length) ? ';' : ',';
@@ -2576,79 +2304,8 @@ async function readFile(file){
   }
   return parseCsv(await readAs(file, 'text'));
 }
-// ── checking every row ──
+// heading of a column, compared loosely (case, spaces, _ - . ignored) — the manager team upload (part20) uses it
 const H = s => String(s||'').toLowerCase().replace(/[\s_\-.]/g,'');
-const COLS = { emp:['employeecode','empcode','empid','employeeid','employee','code','كودالموظف','الكود'], el:['elementcode','element','elementid','elcode','كودالبند','البند'],
-               amt:['amount','value','المبلغ','القيمة'], proj:['projectcode','project','site','sitecode','كودالمشروع','المشروع'] };
-function checkRows(grid){
-  const rows = grid.filter(r => r.some(c => String(c).trim()!==''));
-  if (rows.length < 2) throw new Error('The file has no data rows');
-  const head = rows[0].map(H), find = k => head.findIndex(h => COLS[k].includes(h));
-  const ix = { emp:find('emp'), el:find('el'), amt:find('amt'), proj:find('proj') };
-  const missing = ['emp','el','amt'].filter(k => ix[k] < 0).map(k => ({ emp:'employee_code', el:'element_code', amt:'amount' }[k]));
-  if (missing.length) throw new Error(`Column${missing.length>1?'s':''} not found: ${missing.join(', ')}. The first row must contain the column names from the template.`);
-  const seen = {};
-  return rows.slice(1).map((r, n) => {
-    const line = n + 2, cell = i => i < 0 ? '' : String(r[i] ?? '').trim();
-    let code = cell(ix.emp).replace(/\.0+$/, ''), elc = cell(ix.el).replace(/\.0+$/, ''), proj = cell(ix.proj);
-    const amtTxt = cell(ix.amt).replace(/[,\s]|EGP|ج\.م/gi, ''), amount = Number(amtTxt);
-    const e = empById(code), el = S.elements.find(x => String(x.code)===elc), p = proj ? S.projects.find(x => String(x.id).toLowerCase()===proj.toLowerCase()) : null;
-    let err = '';
-    if (!code) err = 'Employee code is empty';
-    else if (!e) err = `Employee ${code} not found`;
-    else if (!onPayroll(e, settings.period)) err = `${empName(e)} is not on the ${settings.period} payroll`;
-    else if (!elc) err = 'Element code is empty';
-    else if (!el) err = `Element ${elc} not found`;
-    else if (el.input_method !== 'Monthly') err = `Element ${elc} (${el.name_en}) is not a variable element`;
-    else if (el.active === false) err = `Element ${elc} is inactive`;
-    else if (amtTxt==='' || !isFinite(amount)) err = 'Amount is missing or not a number';
-    else if (amount <= 0) err = 'Amount must be more than zero';
-    else if (proj && !p) err = `Project ${proj} not found`;
-    const key = `${code}|${elc}|${p ? p.id : ''}`;
-    if (!err && seen[key]) err = `Same employee, element and project as row ${seen[key]}`;
-    if (!err) seen[key] = line;
-    return { line, code, name: e ? empName(e) : '', elc, elName: el ? el.name_en : '', elType: el ? el.element_type : '', proj: p ? p.id : proj, amount: isFinite(amount) ? amount : null, err };
-  });
-}
-async function onBulkFile(){
-  const f = $('bk-file').files[0]; if (!f) return;
-  $('bk-fname').textContent = f.name; $('bk-summary').innerHTML = '<div class="loading"><div class="spin"></div> Reading the file…</div>'; $('bk-rows').innerHTML='';
-  try { BULK = { rows: checkRows(await readFile(f)), file: f.name }; }
-  catch(e){ BULK = { rows:[], file:f.name }; $('bk-summary').innerHTML = `<div class="alert a-warn">${esc(e.message)}</div>`; $('bk-import').disabled = true; return; }
-  const ok = BULK.rows.filter(r=>!r.err), bad = BULK.rows.length - ok.length;
-  const add = ok.filter(r=>r.elType==='Addition').reduce((s,r)=>s+r.amount,0), ded = ok.filter(r=>r.elType==='Deduction').reduce((s,r)=>s+r.amount,0);
-  $('bk-summary').innerHTML = `<div class="alert ${bad?'a-warn':'a-info'}"><b>${ok.length}</b> row${ok.length===1?'':'s'} ready · <b>${new Set(ok.map(r=>r.code)).size}</b> employees · additions <b>${fmt(add)}</b> · deductions <b>${fmt(ded)}</b>${bad?` · <b class="neg">${bad} row${bad>1?'s':''} with problems will be skipped</b> — fix them in your file and upload again if needed`:''}</div>`;
-  $('bk-rows').innerHTML = BULK.rows.sort((a,b)=>Number(!!b.err)-Number(!!a.err) || a.line-b.line).map(r => `<tr${r.err?' style="background:rgba(217,79,79,.07)"':''}><td class="mono">${r.line}</td><td class="mono">${esc(r.code)}</td><td class="strong">${esc(r.name)}</td>
-    <td>${esc(r.elc)}${r.elName?' · '+esc(r.elName):''}</td><td class="mono">${esc(r.proj||'')}</td><td class="num ${r.elType==='Deduction'?'neg':''}">${r.amount==null?'':fmt(r.amount)}</td>
-    <td>${r.err ? `<span class="neg">✗ ${esc(r.err)}</span>` : '<span class="pos">✓</span>'}</td></tr>`).join('');
-  $('bk-import').disabled = !ok.length;
-  $('bk-import').textContent = ok.length ? `Import ${ok.length} row${ok.length===1?'':'s'}${bad?` (skip ${bad})`:''}` : 'Nothing to import';
-}
-async function doBulkImport(){
-  const ok = BULK.rows.filter(r=>!r.err); if (!ok.length) return;
-  if (currentRun()) return toast('This payroll period is approved and locked','err');
-  const b=$('bk-import'); b.disabled=true; b.textContent='Importing…';
-  const byEl = {}; ok.forEach(r => (byEl[r.elc] = byEl[r.elc] || []).push(r));
-  try {
-    for (const [elc, rows] of Object.entries(byEl)){
-      const emps = [...new Set(rows.map(r=>r.code))];
-      await closeRecords('payroll_period_elements', emps.map(id => ({ element_code: num(elc), period: settings.period, emp_id: String(id) })), 'Replaced by the monthly entries upload', true);
-      await chunked(rows.map(r => ({ emp_id:r.code, element_code:num(elc), period:settings.period, amount:r.amount, project_code:r.proj||null })),
-                    chunk => sb.from('payroll_period_elements').insert(chunk), 500);
-    }
-  } catch(e){
-    b.disabled=false; b.textContent='Try again';
-    return toast(`Import stopped: ${e.message}. Nothing is duplicated — you can upload the same file again.`,'err');
-  }
-  S.monthly = await fetchAll('payroll_period_elements','emp_id', q=>q.eq('period', settings.period));
-  resetMonthly(); $('mon-el').value = Object.keys(byEl)[0]; renderMonthly(); renderPayroll(); renderDashboard(); renderReports();
-  closeM('m-bulk');
-  toast(`Imported ${ok.length} amount${ok.length===1?'':'s'} for ${new Set(ok.map(r=>r.code)).size} employees across ${Object.keys(byEl).length} element${Object.keys(byEl).length===1?'':'s'}`);
-}
-$('mon-bulk').addEventListener('click', openBulk);
-$('bk-template').addEventListener('click', downloadTemplate);
-$('bk-file').addEventListener('change', onBulkFile);
-$('bk-import').addEventListener('click', doBulkImport);
 
 // ═════════════════════════════════════════════════════════
 //  HQ FINGERPRINT MACHINE (ZKTeco) — import punches into attendance
@@ -2913,7 +2570,6 @@ function allowanceApprovalsUpdated(rows){
 //  DEPARTMENT + UNIT FILTERS — on every page that lists employees
 // ═════════════════════════════════════════════════════════
 const ORG_PAGES = { emp:()=>renderEmployees(), att:()=>renderAttendance(),
-  mon:()=>renderMonthly(), pay:()=>renderPayroll(),
   rep:()=>{ if (repCur) runReport(); } };
 // does this employee match the department and unit chosen on page p?
 function orgMatch(e, p){
@@ -3123,16 +2779,6 @@ async function publishProjectCosts(period, detail, quiet){
   if (error) return toast('Project costs not published: ' + error.message, 'err');
   toast(`${periodLabel(period)}: project costs published for Accounting — ${data.length} project line${data.length>1?'s':''}, total ${fmt(rows.reduce((s,r)=>s+r.total,0))} EGP`);
 }
-$('pay-publish').addEventListener('click', () => {
-  if (!currentRun()) return toast('Approve the payroll first — only approved months can be published','warn');
-  confirmDel(`Publish the project cost totals of ${periodLabel(settings.period)} to Accounting? This replaces what was published for this month before.`, () => publishProjectCosts(settings.period, laborCost()));
-  $('del-title').textContent='Please confirm'; $('del-ok').textContent='Publish'; $('del-ok').className='btn btn-primary';
-});
-// show the button only for an approved month
-const _renderPayrollPublish = renderPayroll;
-// @ts-expect-error — renderPayroll is deliberately extended here (the new version wraps the earlier one)
-renderPayroll = function(){ const r = _renderPayrollPublish.apply(this, arguments); $('pay-publish').style.display = currentRun() ? '' : 'none'; return r; };
-
 // ── the accountant's view (My requests → Project costs) ──
 /** @type {FnResult<'acct_project_costs'>} — project costs of the chosen month */
 let PC_ROWS = [];
@@ -4279,98 +3925,6 @@ document.addEventListener('change', e => {
     const u = document.querySelector('#emp-form [data-f="unit"]');
     if (u && u.tagName === 'SELECT') { const keep = pickOptions('unit', el.value).includes(u.value) ? u.value : ''; u.outerHTML = pickSelect('unit', 'unit', keep, el.value); }   // a unit of another department is cleared
   }
-});
-
-// ═════════════════════════════════════════════════════════
-//  PAYROLL RUN TABLE — compact / expanded view + a search box under every column (21 Oct 2026)
-//   · Compact: Basic, Other add., OT, Gross, Soc. Ins., Loans, Other ded., Net (as before).
-//   · Expanded: one column per addition element, Gross, one column per deduction element, Total ded., Net.
-//   · Number boxes accept  >1000   <500   >=0   =0   1000-2000   or plain digits (contains). Text boxes: contains.
-//   · The last row totals the rows that are showing.
-// ═════════════════════════════════════════════════════════
-let PAY_EXP = (() => { try { return localStorage.getItem('payExpanded') === '1'; } catch (e) { return false; } })();
-let PAY_F = {}, PAY_SIG = '', PAY_LIST = [];
-
-function payElCols(list, type){
-  const M = new Map();
-  list.forEach(r => (r.lines || []).forEach(l => {
-    if (l.type !== type) return;
-    const k = String(l.code);
-    if (!M.has(k)) { const el = elByCode(l.code);
-      M.set(k, { code: num(l.code), name: l.code === 0 ? 'Basic (employee record)' : (el && el.name_en) || String(l.name || '').replace(/ — automatic$/, '') }); }
-  }));
-  return [...M.entries()].sort((a, b) => a[1].code - b[1].code).map(([k, x]) => ({
-    k: (type === 'Addition' ? 'a' : 'd') + k, t: (x.code ? x.code + ' · ' : '') + x.name, n: 1, neg: type === 'Deduction', el: 1,
-    v: r => (r.lines || []).filter(l => l.type === type && String(l.code) === k).reduce((s, l) => s + num(l.amount), 0) }));
-}
-/** @returns {{ k: string, t: string, v: (r: any) => any, s?: (r: any) => string, h?: (r: any) => string, cls?: string, n?: number, el?: number, tot?: number, b?: number, neg?: number, pos?: number }[]} */
-function payCols(list){
-  const name = { k: 'name', t: 'Name', v: r => empName(r.emp), s: r => [r.emp.name_en, r.emp.name_ar].join(' '),
-                 h: r => `${esc(empName(r.emp))}${r.joiner ? ' <span class="chip c-blue">Joiner</span>' : ''}${r.leaver ? ' <span class="chip c-orange">Leaver</span>' : ''}`, cls: 'strong' };
-  const days = { k: 'days', t: 'Days', v: r => r.partial ? String(r.days) : 'full',
-                 h: r => r.partial ? `<span style="color:var(--warn)">${esc(r.days)}</span>` : 'full', cls: 'num' };
-  const head = [{ k: 'code', t: 'Code', v: r => String(r.emp.id), cls: 'mono' }, name, { k: 'dept', t: 'Department', v: r => r.emp.department || '' }];
-  const N = (k, t, f, o = {}) => ({ k, t, v: f, n: 1, ...o });
-  if (!PAY_EXP) return [...head, days,
-    N('basic', 'Basic', r => r.basic), N('oadd', 'Other add.', r => r.otherAdd), N('ot', 'OT', r => r.ot),
-    N('gross', 'Gross', r => r.gross, { b: 1 }), N('si', 'Soc. Ins.', r => r.si, { neg: 1 }), N('loans', 'Loans', r => r.loans, { neg: 1 }),
-    N('oded', 'Other ded.', r => r.otherDed, { neg: 1 }), N('net', 'Net', r => r.net, { b: 1, pos: 1 })];
-  return [...head, { k: 'unit', t: 'Unit', v: r => r.emp.unit || '' }, days,
-    ...payElCols(list, 'Addition'), N('gross', 'Gross', r => r.gross, { b: 1, tot: 1 }),
-    ...payElCols(list, 'Deduction'), N('ded', 'Total ded.', r => r.ded, { neg: 1, tot: 1 }), N('net', 'Net', r => r.net, { b: 1, pos: 1, tot: 1 })];
-}
-function payNumMatch(val, f){
-  f = f.replace(/,/g, '').replace(/\s+/g, ''); let m;
-  if ((m = f.match(/^(>=|<=|>|<|=)(-?\d+(?:\.\d+)?)$/))) { const x = +m[2];
-    return { '>': val > x + 0.004, '<': val < x - 0.004, '>=': val >= x - 0.004, '<=': val <= x + 0.004, '=': Math.abs(val - x) < 0.005 }[m[1]]; }
-  if ((m = f.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/))) return val >= +m[1] - 0.004 && val <= +m[2] + 0.004;
-  return String(Math.round(val * 100) / 100).includes(f);
-}
-function payRowMatch(r, cols){
-  return cols.every(c => {
-    const f = String(PAY_F[c.k] || '').trim(); if (!f) return true;
-    if (c.n) return payNumMatch(num(c.v(r)), f);
-    return String(c.s ? c.s(r) : c.v(r)).toLowerCase().includes(f.toLowerCase());
-  });
-}
-function payCell(c, r){
-  if (c.h) return `<td class="${c.cls || ''}">${c.h(r)}</td>`;
-  if (!c.n) return `<td class="${c.cls || ''}">${esc(c.v(r))}</td>`;
-  const v = num(c.v(r));
-  return `<td class="num${c.b ? ' strong' : ''}${c.neg && v ? ' neg' : ''}${c.pos ? ' pos' : ''}">${v || c.b ? fmt(v) : '—'}</td>`;
-}
-function renderPayTable(list){
-  PAY_LIST = list;
-  const cols = payCols(lastRun);                       // columns from the whole run, so they don't jump while filtering
-  const sig = (PAY_EXP ? 'x' : 'c') + cols.map(c => c.k).join(',');
-  $('pay-table').classList.toggle('pay-expanded', PAY_EXP);
-  $('pay-exp').textContent = PAY_EXP ? '⊟ Compact view' : '⊞ Expanded view';
-  if (sig !== PAY_SIG) {
-    PAY_SIG = sig;
-    Object.keys(PAY_F).forEach(k => { if (!cols.some(c => c.k === k)) delete PAY_F[k]; });
-    $('pay-thead').innerHTML = `<tr>${cols.map(c => `<th class="${c.n ? 'num' : ''}${c.el ? ' pay-el' : ''}${c.tot ? ' pay-tot' : ''}" title="${esc(c.t)}">${esc(c.t)}</th>`).join('')}</tr>
-      <tr class="pay-filter">${cols.map(c => `<th><input data-pf="${c.k}" value="${esc(PAY_F[c.k] || '')}" placeholder="filter" title="${c.n ? 'Numbers: >1000  <500  =0  1000-2000  or digits' : 'Type part of the text'}"></th>`).join('')}</tr>`;
-  }
-  const rows = list.filter(r => payRowMatch(r, cols));
-  $('pay-tbl').innerHTML = rows.map(r => `<tr class="click" data-slip="${esc(r.emp.id)}">${cols.map(c => payCell(c, r)).join('')}</tr>`).join('')
-    || `<tr><td colspan="${cols.length}" class="empty">No employees match</td></tr>`;
-  $('pay-tfoot').innerHTML = rows.length ? `<tr>${cols.map((c, i) => i === 0 ? `<td class="strong">Total</td>`
-      : i === 1 ? `<td style="color:var(--muted)">${rows.length} employee${rows.length > 1 ? 's' : ''}</td>`
-      : c.n ? `<td class="num strong">${fmt(rows.reduce((s, r) => s + num(c.v(r)), 0))}</td>` : '<td></td>').join('')}</tr>` : '';
-  const nf = Object.values(PAY_F).filter(v => String(v).trim()).length;
-  $('pay-fclear').style.display = nf ? '' : 'none';
-  $('pay-foot').textContent = `Showing ${rows.length} of ${lastRun.length}${nf ? ` · ${nf} column filter${nf > 1 ? 's' : ''} on` : ''}. The cards above total all employees; the last table row totals the rows showing.`;
-}
-$('pay-exp').addEventListener('click', () => {
-  PAY_EXP = !PAY_EXP; try { localStorage.setItem('payExpanded', PAY_EXP ? '1' : '0'); } catch (e) {}
-  renderPayTable(PAY_LIST);
-});
-$('pay-fclear').addEventListener('click', () => {
-  PAY_F = {}; document.querySelectorAll('#pay-thead [data-pf]').forEach(i => i.value = ''); renderPayTable(PAY_LIST);
-});
-$('pay-thead').addEventListener('input', ev => {
-  const i = /** @type {PageEl} */ (ev.target).closest('[data-pf]'); if (!i) return;
-  PAY_F[i.dataset.pf] = i.value; renderPayTable(PAY_LIST);
 });
 
 // ═════════════════════════════════════════════════════════

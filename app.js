@@ -2533,50 +2533,16 @@ async function decideLeave(id, status){
   confirmDel(`${status==='Approved'?'Approve':'Reject'} ${empName(e)}'s ${l.leave_type} leave ${l.date_from} → ${l.date_to} (${fmt(l.days)} day${num(l.days)===1?'':'s'})?`, go);
   $('del-title').textContent='Please confirm'; $('del-ok').textContent = status==='Approved' ? 'Approve' : 'Reject'; $('del-ok').className = status==='Approved' ? 'btn btn-success' : 'btn btn-danger';
 }
-function renderHrRequests(){
-  $('hq-missing').innerHTML = hrTableMissing ? '<div class="alert a-warn">The HR requests table does not exist yet. Run <b>self-service.sql</b> in the database SQL Editor, then click ⟳ Refresh.</div>' : '';
-  const st=$('hq-status').value, ty=$('hq-type').value, q=$('hq-q').value.trim().toLowerCase();
-  const list = S.hrreq.filter(r => { const e=empOrBlank(r.emp_id);
-      return orgMatch(e,'hq') && (st==='open' ? (r.status==='Pending'||r.status==='In progress') : (!st || r.status===st)) && (!ty || r.request_type===ty) &&
-             (!q || [r.emp_id, e.name_en, e.name_ar].some(v=>String(v||'').toLowerCase().includes(q))); })
-    .sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
-  const open = S.hrreq.filter(r=>r.status==='Pending'||r.status==='In progress').length;
-  $('hq-sub').textContent = `${open} open request${open===1?'':'s'} · ${S.hrreq.length} in total`;
-  $('hq-tbl').innerHTML = list.map(r => { const e=empOrBlank(r.emp_id);
-    return `<tr><td class="mono">${esc(String(r.created_at||'').slice(0,10))}</td><td class="strong">${esc(empName(e)||r.emp_id)} <span class="mono" style="color:var(--muted)">${esc(r.emp_id)}</span></td>
-      <td>${esc(e.department)}</td><td>${esc(r.request_type)}</td><td style="white-space:normal;min-width:180px">${esc(r.details||'')}</td><td>${chip(r.status)}</td>
-      <td style="white-space:normal;min-width:150px">${esc(r.hr_response||'')}</td><td>${esc(r.handled_by||'')}</td>
-      <td>${(r.status==='Pending'||r.status==='In progress')?`<button class="btn btn-ghost btn-sm" data-hr-handle="${r.id}">Handle</button>`:''}</td></tr>`; }).join('')
-    || '<tr><td colspan="9" class="empty">No requests for this selection</td></tr>';
-  $('hq-foot').textContent = `${list.length} shown`;
-}
-let handling = null;
-function openHandle(id){
-  const r=S.hrreq.find(x=>x.id===id); if(!r) return; handling=r; const e=empOrBlank(r.emp_id);
-  $('hq-body').innerHTML = `<b style="color:var(--text)">${esc(empName(e))}</b> (${esc(r.emp_id)}) · ${esc(e.department||'')}<br><b>${esc(r.request_type)}</b> — submitted ${esc(String(r.created_at).slice(0,10))}<br>${esc(r.details||'(no details)')}`;
-  $('hq-st').value = r.status==='Pending' ? 'In progress' : 'Completed'; $('hq-reply').value = r.hr_response||''; $('hq-by').value = localStorage.getItem('approver') || (ME&&ME.full_name) || '';
-  openM('m-hq');
-}
-async function saveHandle(){
-  const by=$('hq-by').value.trim(); if(!by) return toast('Enter who is handling the request','warn'); localStorage.setItem('approver', by);
-  const st=$('hq-st').value, reply=$('hq-reply').value.trim();
-  if ((st==='Completed'||st==='Rejected') && !reply) return toast('Add a short reply so the employee knows the outcome','warn');
-  const { data, error } = await sb.from('hr_requests').update({ status:st, hr_response:reply||null, handled_by:by, handled_at:new Date().toISOString() }).eq('id', handling.id).select();
-  if (error) return toast(error.message.replace(/^.*?(You cannot)/,'$1'),'err');
-  if (!(data && data.length)) return toast(NOPERM,'err');
-  S.hrreq = S.hrreq.map(x => x.id===handling.id ? data[0] : x);
-  closeM('m-hq'); renderHrRequests(); renderDashboard(); toast(`Request marked ${st.toLowerCase()}`);
-}
+// HR requests page: React now (react/src/hrreq, 30 Oct 2026). It draws from S.hrreq; the Handle window saves and calls this.
+function renderHrRequests(){ if (typeof PKR !== 'undefined') PKR.render(); }
+/** a request HR just handled (React Handle window) → the list, the dashboard and the menu badge @param {HrRequest} row */
+function hrRequestSaved(row){ S.hrreq = S.hrreq.map(x => x.id === row.id ? row : x); renderHrRequests(); renderDashboard(); }
 function updateBadges(){
   const b=(id,n)=>{ const el=$(id); if(!el) return; el.style.display=n?'':'none'; el.textContent=n; };
   b('lv-badge', S.leaves.filter(readyForHR).length);
   b('hr-badge', S.hrreq.filter(r=>r.status==='Pending'||r.status==='In progress').length);
   b('aa-badge', S.allowAppr.filter(a=>a.status==='Pending HR').length);
 }
-$('hq-tbl').addEventListener('click', e => { const b=/** @type {PageEl} */ (e.target).closest('[data-hr-handle]'); if(b) openHandle(b.dataset.hrHandle); });
-['hq-status','hq-type'].forEach(id=>$(id).addEventListener('change', renderHrRequests));
-$('hq-q').addEventListener('input', renderHrRequests);
-$('hq-save').addEventListener('click', saveHandle);
 
 // the manager approves or rejects a team member's Project Allowance
 async function teamDecide(id, approve){
@@ -3447,7 +3413,7 @@ $('aa-q').addEventListener('input', renderApprovals);
 //  DEPARTMENT + UNIT FILTERS — on every page that lists employees
 // ═════════════════════════════════════════════════════════
 const ORG_PAGES = { emp:()=>renderEmployees(), att:()=>renderAttendance(), perm:()=>renderPermissions(), lv:()=>renderLeaves(), pn:()=>renderPenalties(),
-  hq:()=>renderHrRequests(), ex:()=>renderExempt(), rl:()=>renderReporting(), mon:()=>renderMonthly(), pay:()=>renderPayroll(), aa:()=>renderApprovals(),
+  ex:()=>renderExempt(), rl:()=>renderReporting(), mon:()=>renderMonthly(), pay:()=>renderPayroll(), aa:()=>renderApprovals(),
   hs:()=>renderHistLines(), as:()=>renderAssign(), rep:()=>{ if (repCur) runReport(); } };
 // does this employee match the department and unit chosen on page p?
 function orgMatch(e, p){

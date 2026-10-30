@@ -518,19 +518,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 
 <div class="page" id="page-missions"><div id="react-missions"></div></div>
 
-<div class="page" id="page-hrreq">
-  <div class="page-header"><div><div class="page-title">HR requests</div><div class="page-sub" id="hq-sub"></div></div></div>
-  <div id="hq-missing"></div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title">Requests from employees</span>
-      <div class="toolbar-right">
-        <select class="sel" id="hq-status"><option value="open">Open (pending + in progress)</option><option value="Pending">Pending</option><option value="In progress">In progress</option><option value="Completed">Completed</option><option value="Rejected">Rejected</option><option value="Cancelled">Cancelled</option><option value="">All</option></select>
-        <select class="sel" id="hq-type"><option value="">All types</option><option>HR letter</option><option>Salary certificate</option><option>Experience certificate</option><option>Update my personal data</option><option>Payslip copy</option><option>Loan request</option><option>Other</option></select>
-        <input class="inp" id="hq-q" placeholder="Search employee…"></div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Submitted</th><th>Employee</th><th>Department</th><th>Request</th><th>Details</th><th>Status</th><th>Reply</th><th>Handled by</th><th></th></tr></thead><tbody id="hq-tbl"></tbody></table></div>
-    <div class="foot" id="hq-foot"></div>
-  </div>
-</div>
+<div class="page" id="page-hrreq"><div id="react-hrreq"></div></div>
 
 <!-- REPORTING LINES -->
 <div class="page" id="page-reporting">
@@ -1288,16 +1276,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </div></div>
 
 <!-- MODAL: HANDLE HR REQUEST -->
-<div class="overlay" id="m-hq"><div class="modal" style="max-width:500px">
-  <div class="modal-head"><div class="modal-title">Handle HR request</div><button class="x" data-close="m-hq">×</button></div>
-  <div id="hq-body" style="font-size:13px;color:var(--label);line-height:1.7;margin-bottom:14px"></div>
-  <div class="grid2">
-    <div class="field"><label>Status</label><select id="hq-st"><option>In progress</option><option>Completed</option><option>Rejected</option></select></div>
-    <div class="field"><label>Handled by</label><input id="hq-by"></div>
-    <div class="field full"><label>Reply to the employee</label><textarea id="hq-reply" placeholder="e.g. Your certificate is ready at the HR office"></textarea></div>
-  </div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-hq">Cancel</button><button class="btn btn-primary" id="hq-save">Save</button></div>
-</div></div>
 
 <!-- MODAL: BULK UPLOAD -->
 <div class="overlay" id="m-bulk"><div class="modal wide">
@@ -1445,6 +1423,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=b0d98d650eeb"></script>
-<script src="react.js?v=b639cc945529"></script>
+<script src="app.js?v=a5277c27486a"></script>
+<script src="react.js?v=7bd11a6cf5ab"></script>
 </body></html>

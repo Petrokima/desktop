@@ -1507,7 +1507,6 @@ document.addEventListener('click', async ev => {
   if (act){ const a = act.dataset.act;
     if (a==='new-emp') return openEmp(null);
     if (a==='new-att') return openAtt(null);
-    if (a==='new-pen') return openPen(null);
     if (a==='myprofile') return showSelf(ME, { email: ME.email });
     if (a==='new-var') return openNewVar();
     if (a==='goto-current') return gotoCurrentPeriod();
@@ -2060,76 +2059,18 @@ function penaltyValue(x, emp, dailyRate, hourRate){
   return num(x.quantity);
 }
 function penLabel(x){ return x.penalty_type==='Amount' ? `${fmt(x.quantity)} EGP` : `${fmt(x.quantity)} ${x.penalty_type==='Hours'?'hour':'day'}${num(x.quantity)===1?'':'s'}`; }
-function renderPenalties(){
-  $('pn-missing').innerHTML = penTableMissing ? '<div class="alert a-warn">The penalties table does not exist yet. Run <b>absence-penalties-holidays.sql</b> in the database SQL Editor, then click ⟳ Refresh.</div>' : '';
-  const scope=$('pn-scope').value, st=$('pn-status').value, q=$('pn-q').value.trim().toLowerCase();
-  const list = S.penalties.filter(x => { const e=empOrBlank(x.emp_id);
-      return (scope==='year' || x.apply_period===settings.period) && (!st || x.status===st) && orgMatch(e,'pn') &&
-             (!q || [x.emp_id,e.name_en,e.name_ar].some(v=>String(v||'').toLowerCase().includes(q))); })
-    .sort((a,b)=>String(b.incident_date).localeCompare(String(a.incident_date)));
-  const thisP = S.penalties.filter(x=>x.status==='Approved' && x.apply_period===settings.period);
-  $('pn-sub').textContent = `${thisP.length} approved penalt${thisP.length===1?'y':'ies'} deducted in the ${periodLabel(settings.period)} payroll · total ${fmt(thisP.reduce((s,x)=>s+penaltyValue(x),0))} EGP`;
-  $('pn-tbl').innerHTML = list.map(x => { const e=empOrBlank(x.emp_id);
-    return `<tr class="click" data-pen="${x.id}"><td class="mono">${esc(x.incident_date)}</td><td class="strong">${esc(empName(e)||x.emp_id)} <span class="mono" style="color:var(--muted)">${esc(x.emp_id)}</span></td>
-      <td>${esc(e.department)}</td><td>${esc(penLabel(x))}</td><td class="num neg">${fmt(penaltyValue(x))}</td><td class="mono">${esc(x.apply_period)}</td>
-      <td style="white-space:normal;min-width:140px">${esc(x.reason||'')}</td><td>${esc(x.requested_by||'')}</td><td>${esc(x.recorded_by||'')}</td><td>${chip(x.status)}</td>
-      <td><button class="icon-btn" data-del-pen="${x.id}" title="Delete">🗑</button></td></tr>`; }).join('')
-    || '<tr><td colspan="11" class="empty">No penalties for this selection</td></tr>';
-  $('pn-foot').textContent = `${list.length} shown · amounts for hours and days use the employee's own hour pay and daily pay · click a row to edit`;
+// The page and its window moved to React 30 Oct 2026 (react/src/penalties). The old code keeps penaltyValue / penLabel (payroll,
+// reports) and the step after a change.
+function renderPenalties(){ if (typeof PKR !== 'undefined') PKR.render(); }
+/** a penalty saved in the React window — kept only when it belongs to the loaded year (as before) @param {Penalty} saved */
+function penaltySaved(saved){
+  S.penalties = S.penalties.filter(x => x.id !== saved.id);
+  if (saved.apply_period.slice(0,4) === settings.period.slice(0,4)) S.penalties.push(saved);
+  afterPenChange();
 }
-let editingPen = null;
-function penHint(){
-  const t=$('pn-type').value; $('pn-qty-l').textContent = t==='Amount' ? 'Amount (EGP)' : t==='Hours' ? 'Number of hours' : 'Number of days';
-  const e=empById(parseEmpInput($('pn-emp').value)), qty=num($('pn-qty').value), out=[];
-  if (e && qty){ const v=penaltyValue({penalty_type:t, quantity:qty}, e);
-    const R=empRates(e);
-    out.push(`Deduction: <b class="neg">${fmt(v)} EGP</b>${t==='Hours'?` (${fmt(qty)} h × hour pay ${fmt(R.hourly)})`:t==='Days'?` (${fmt(qty)} d × daily pay ${fmt(R.daily)})`:''}`);
-    if ((t==='Hours' && R.hourlyFromBasic) || (t==='Days' && R.dailyFromBasic)) out.push(`<span style="color:var(--warn)">No ${t==='Hours'?'hour':'daily'} pay on file for this employee — calculated from basic salary ÷ ${num(settings.daysPerMonth)||30}${t==='Hours'?' ÷ '+(num(settings.hoursPerDay)||8):''}.</span>`); }
-  const d=$('pn-date').value, per=$('pn-period').value;
-  if (d && per && per!==cycleOf(d)) out.push(`The incident belongs to the ${cycleOf(d)} payroll; it will be deducted in <b>${per}</b> instead.`);
-  if (e && per){ const same=S.penalties.filter(x=>x.id!==editingPen && String(x.emp_id)===String(e.id) && x.status==='Approved' && x.apply_period===per);
-    if (same.length) out.push(`Already ${same.length} approved penalt${same.length===1?'y':'ies'} for this employee in ${per}: ${fmt(same.reduce((s,x)=>s+penaltyValue(x),0))} EGP.`); }
-  $('pn-hint').innerHTML = out.join('<br>');
-}
-function openPen(x){
-  if (penTableMissing) return toast('Run absence-penalties-holidays.sql first','warn');
-  editingPen = x ? x.id : null; $('pn-m-title').textContent = x ? 'Edit penalty' : 'Record penalty';
-  const e = x ? empById(x.emp_id) : null;
-  $('pn-emp').value = x ? `${x.emp_id} — ${empName(e)}` : '';
-  $('pn-date').value = x ? x.incident_date : todayStr(); $('pn-period').value = x ? x.apply_period : cycleOf(todayStr());
-  $('pn-type').value = x ? x.penalty_type : 'Days'; $('pn-qty').value = x ? x.quantity : '';
-  $('pn-req').value = x ? (x.requested_by||'') : ''; $('pn-rec').value = x ? (x.recorded_by||'') : (localStorage.getItem('approver')||'');
-  $('pn-st').value = x ? x.status : 'Approved'; $('pn-reason').value = x ? (x.reason||'') : '';
-  penHint(); openM('m-pen'); if(!x) setTimeout(()=>$('pn-emp').focus(),50);
-}
-async function savePen(){
-  const emp=parseEmpInput($('pn-emp').value); if(!emp) return toast('Pick an employee from the list','warn');
-  const d=$('pn-date').value, per=$('pn-period').value, qty=num($('pn-qty').value);
-  if(!d||!per) return toast('Incident date and payroll month are required','warn');
-  if(qty<=0) return toast('Enter an amount, hours or days greater than zero','warn');
-  if(!$('pn-req').value.trim()) return toast('Enter the manager who requested the penalty','warn');
-  const rec=$('pn-rec').value.trim(); if(rec) localStorage.setItem('approver', rec);
-  const row={ emp_id:emp, incident_date:d, apply_period:per, penalty_type:$('pn-type').value, quantity:qty,
-    requested_by:$('pn-req').value.trim(), recorded_by:rec||null, status:$('pn-st').value, reason:$('pn-reason').value.trim()||null };
-  const btn=$('pn-save'); btn.disabled=true;
-  const res = editingPen ? await sb.from('employee_penalties').update(row).eq('id',editingPen).select() : await sb.from('employee_penalties').insert(row).select();
-  btn.disabled=false;
-  if (res.error) return toast(res.error.message,'err');
-  if (!(res.data && res.data.length)) return toast(NOPERM,'err'); const saved=res.data[0]; S.penalties=S.penalties.filter(x=>x.id!==saved.id);
-  if (saved.apply_period.slice(0,4)===settings.period.slice(0,4)) S.penalties.push(saved);
-  closeM('m-pen'); afterPenChange(); toast(editingPen ? 'Penalty updated' : 'Penalty recorded');
-}
+/** @param {string} id */
+function penaltyDeleted(id){ S.penalties = S.penalties.filter(p => p.id !== id); afterPenChange(); }
 function afterPenChange(){ renderPenalties(); renderPayroll(); renderDashboard(); renderReports(); }
-$('pn-tbl').addEventListener('click', e => {
-  const x=/** @type {PageEl} */ (e.target).closest('[data-del-pen]');
-  if (x){ const id=x.dataset.delPen; return confirmDel('Delete this penalty?', async()=>{ await del('employee_penalties',id); S.penalties=S.penalties.filter(p=>p.id!==id); afterPenChange(); toast('Deleted'); }); }
-  const r=/** @type {PageEl} */ (e.target).closest('[data-pen]'); if(r){ const p=S.penalties.find(z=>z.id===r.dataset.pen); if(p) openPen(p); }
-});
-['pn-scope','pn-status'].forEach(id=>$(id).addEventListener('change', renderPenalties));
-$('pn-q').addEventListener('input', renderPenalties);
-['pn-emp','pn-qty','pn-type','pn-period'].forEach(id=>$(id).addEventListener('input', penHint));
-$('pn-date').addEventListener('change', () => { $('pn-period').value = cycleOf($('pn-date').value); penHint(); });
-$('pn-save').addEventListener('click', savePen);
 
 // ═════════════════════════════════════════════════════════
 //  PUBLIC HOLIDAYS — the page is React now (react/src/holidays, 30 Oct 2026). The old code keeps the loaded
@@ -3102,7 +3043,7 @@ $('aa-q').addEventListener('input', renderApprovals);
 // ═════════════════════════════════════════════════════════
 //  DEPARTMENT + UNIT FILTERS — on every page that lists employees
 // ═════════════════════════════════════════════════════════
-const ORG_PAGES = { emp:()=>renderEmployees(), att:()=>renderAttendance(), pn:()=>renderPenalties(),
+const ORG_PAGES = { emp:()=>renderEmployees(), att:()=>renderAttendance(),
   mon:()=>renderMonthly(), pay:()=>renderPayroll(), aa:()=>renderApprovals(),
   loan:()=>renderLoans(), rep:()=>{ if (repCur) runReport(); } };
 // does this employee match the department and unit chosen on page p?
@@ -5156,35 +5097,7 @@ const _afterLogin27b = afterLogin;
 afterLogin = async function(){ const r = await _afterLogin27b.apply(this, arguments);
   document.body.classList.toggle('can-master', !!(ME && ['admin','hr','hr_officer'].includes(ME.role))); return r; };
 
-// ── HR officers enter attendance, vacations, permissions, penalties (50). Penalties in days / hours of pay:
-//    officers see the days / hours only — the money value would reveal the employee's pay.
-const _renderPenalties27 = renderPenalties;
-// @ts-expect-error — renderPenalties is deliberately extended here (the new version wraps the earlier one)
-renderPenalties = function(){
-  const r = _renderPenalties27.apply(this, arguments);
-  if (!isOfficer()) return r;
-  document.querySelectorAll('#pn-tbl tr[data-pen]').forEach(tr => { const x = S.penalties.find(p => String(p.id) === tr.dataset.pen);
-    if (x && x.penalty_type !== 'Amount'){ const c = /** @type {HTMLElement} */ (tr.children[4]); if (c){ c.textContent = '—'; c.title = 'Worked out in the payroll from the employee\'s pay'; } } });
-  const thisP = S.penalties.filter(x => x.status === 'Approved' && x.apply_period === settings.period), amt = thisP.filter(x => x.penalty_type === 'Amount');
-  $('pn-sub').textContent = `${thisP.length} approved penalt${thisP.length === 1 ? 'y' : 'ies'} in the ${periodLabel(settings.period)} payroll · ${fmt(amt.reduce((s, x) => s + num(x.quantity), 0))} EGP in fixed amounts`
-    + (thisP.length > amt.length ? ` + ${thisP.length - amt.length} in days / hours of pay (worked out in the payroll)` : '');
-  $('pn-foot').textContent = 'Click a row to edit · penalties in days or hours are turned into money by the payroll';
-  return r;
-};
-const _penHint27 = penHint;
-// @ts-expect-error — penHint is deliberately extended here (the new version wraps the earlier one)
-penHint = function(){
-  if (!isOfficer()) return _penHint27.apply(this, arguments);
-  const t = $('pn-type').value; $('pn-qty-l').textContent = t === 'Amount' ? 'Amount (EGP)' : t === 'Hours' ? 'Number of hours' : 'Number of days';
-  const e = empById(parseEmpInput($('pn-emp').value)), qty = num($('pn-qty').value), out = [];
-  if (e && qty) out.push(t === 'Amount' ? `Deduction: <b class="neg">${fmt(qty)} EGP</b>` : `Deduction: <b class="neg">${fmt(qty)} ${t === 'Hours' ? 'hour' : 'day'}${qty === 1 ? '' : 's'} of pay</b> (the payroll works out the amount)`);
-  const d = $('pn-date').value, per = $('pn-period').value;
-  if (d && per && per !== cycleOf(d)) out.push(`The incident belongs to the ${cycleOf(d)} payroll; it will be deducted in <b>${per}</b> instead.`);
-  if (e && per){ const same = S.penalties.filter(x => x.id !== editingPen && String(x.emp_id) === String(e.id) && x.status === 'Approved' && x.apply_period === per);
-    if (same.length) out.push(`Already ${same.length} approved penalt${same.length === 1 ? 'y' : 'ies'} for this employee in ${per}: ${same.map(penLabel).join(', ')}.`); }
-  $('pn-hint').innerHTML = out.join('<br>');
-};
-['pn-emp','pn-qty','pn-type','pn-period'].forEach(id => $(id).addEventListener('input', () => penHint()));
+// ── HR officers: penalties in days / hours show no money — handled in the React Penalties page (bridge penaltyValue).
 
 // ── employee window: show the contract end as soon as the start is typed (the database applies the same rule on Save)
 function contractEndPreview(ev){

@@ -154,8 +154,8 @@ body:not(.can-hr) :is([data-act="new-proj"],[data-act="new-hol"],
   [data-del-proj],[data-del-hol]){display:none!important}
 body:not(.can-hr) :is([data-hr-handle],[data-dev-reset]){display:none!important}
 /* attendance, vacations, permissions, penalties: HR and HR officers (50) */
-body:not(.can-hr):not(.can-master) :is([data-act="new-att"],#mi-open,[data-act="new-perm"],[data-act="new-leave"],[data-act="new-pen"],
-  #a-save,#pr-save,#lv-save,#pn-save,#dc-approve,#dc-reject,#a-add-split,[data-decide],[data-del-att],[data-del-perm],[data-del-leave],[data-del-pen],
+body:not(.can-hr):not(.can-master) :is([data-act="new-att"],#mi-open,[data-act="new-perm"],[data-act="new-leave"],
+  #a-save,#pr-save,#lv-save,#dc-approve,#dc-reject,#a-add-split,[data-decide],[data-del-att],[data-del-perm],[data-del-leave],
   [data-lv-approve],[data-lv-reject]){display:none!important}
 /* payroll run table: column search boxes, expanded view (part32) */
 #pay-table tr.pay-filter th{padding:4px 6px;position:static}
@@ -669,21 +669,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div class="page" id="page-permissions"><div id="react-permissions"></div></div>
 
 <!-- PENALTIES -->
-<div class="page" id="page-penalties">
-  <div class="page-header"><div><div class="page-title">Penalties</div><div class="page-sub" id="pn-sub"></div></div>
-    <button class="btn btn-primary" data-act="new-pen">+ Record penalty</button></div>
-  <div id="pn-missing"></div>
-  <div class="lock-note"></div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title">Penalty register</span>
-      <div class="toolbar-right">
-        <select class="sel" id="pn-scope"><option value="period">Deducted in this payroll</option><option value="year">Whole year</option></select>
-        <select class="sel" id="pn-status"><option value="">All statuses</option><option>Approved</option><option>Pending</option><option>Rejected</option><option>Cancelled</option></select>
-        <input class="inp" id="pn-q" placeholder="Search employee…"></div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Incident</th><th>Employee</th><th>Department</th><th>Penalty</th><th class="num">Amount</th><th>Payroll</th><th>Reason</th><th>Requested by</th><th>Recorded by</th><th>Status</th><th></th></tr></thead><tbody id="pn-tbl"></tbody></table></div>
-    <div class="foot" id="pn-foot"></div>
-  </div>
-</div>
+<div class="page" id="page-penalties"><div id="react-penalties"></div></div>
 
 <!-- LOANS -->
 <div class="page" id="page-loans">
@@ -1063,23 +1049,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 
 
 <!-- MODAL: PENALTY -->
-<div class="overlay" id="m-pen"><div class="modal">
-  <div class="modal-head"><div class="modal-title" id="pn-m-title">Record penalty</div><button class="x" data-close="m-pen">×</button></div>
-  <div class="grid2">
-    <div class="field full"><label>Employee</label><input id="pn-emp" list="dl-emp" placeholder="Start typing…"></div>
-    <div class="field"><label>Incident date</label><input type="date" id="pn-date"></div>
-    <div class="field"><label>Deduct in payroll</label><input type="month" id="pn-period"></div>
-    <div class="field"><label>Penalty type</label><select id="pn-type"><option value="Amount">Fixed amount (EGP)</option><option value="Hours">Hours of pay</option><option value="Days">Days of pay</option></select></div>
-    <div class="field"><label id="pn-qty-l">Amount</label><input type="number" step="0.25" min="0" id="pn-qty"></div>
-    <div class="field"><label>Requested by (manager)</label><input id="pn-req"></div>
-    <div class="field"><label>Recorded by (HR)</label><input id="pn-rec"></div>
-    <div class="field"><label>Status</label><select id="pn-st"><option>Approved</option><option>Pending</option><option>Rejected</option><option>Cancelled</option></select></div>
-    <div class="field full"><label>Reason</label><input id="pn-reason"></div>
-  </div>
-  <div id="pn-hint" style="font-size:12px;margin-top:10px;line-height:1.6"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-pen">Cancel</button><button class="btn btn-primary" id="pn-save">Save penalty</button></div>
-</div></div>
-
 <!-- MODAL: HOLIDAY -->
 
 
@@ -1276,6 +1245,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=5fa3af5cf7dd"></script>
-<script src="react.js?v=c34b0ba0d1b9"></script>
+<script src="app.js?v=6d8f7f3f423b"></script>
+<script src="react.js?v=044b597abf47"></script>
 </body></html>

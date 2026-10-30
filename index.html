@@ -514,27 +514,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 
 <!-- HR REQUESTS -->
 <div class="page" id="page-coreq"><div id="react-coreq"></div></div>
-<div class="page" id="page-dreq">
-  <div class="page-header"><div><div class="page-title">Data requests</div><div class="page-sub" id="dq-sub">Ask employees to update their own data on the phone. Personal mobile, e-mail and address are saved at once; everything else waits for your review here.</div></div>
-    <div class="toolbar-right"><button class="btn btn-primary" id="dq-new">📝 New request</button></div></div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title">Requests sent to employees</span>
-      <div class="toolbar-right">
-        <select class="sel" id="dq-status"><option value="Answered">Waiting for your review</option><option value="open">Waiting for the employee</option><option value="done">Done (saved / accepted)</option><option value="Cancelled">Cancelled</option><option value="">All</option></select>
-        <select class="sel" id="dq-dept"><option value="">All departments</option></select>
-        <input class="inp" id="dq-q" placeholder="Search employee…"></div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Sent</th><th>Employee</th><th>Fields asked</th><th>Message</th><th>Status</th><th>Employee's answer</th><th></th></tr></thead><tbody id="dq-tbl"></tbody></table></div>
-    <div class="foot" id="dq-foot"></div>
-  </div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title">✏️ Changes made by employees <span class="chip c-orange" id="sc-count" style="display:none"></span></span>
-      <div class="toolbar-right">
-        <select class="sel" id="sc-show"><option value="unseen">Not seen yet</option><option value="">All (last 1,000)</option></select>
-        <button class="btn btn-ghost" id="sc-all">✓ Mark all shown as seen</button></div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>When</th><th>Employee</th><th>Field</th><th>Old value</th><th>New value</th><th>How</th><th>Seen</th></tr></thead><tbody id="sc-tbl"></tbody></table></div>
-    <div class="foot">Personal mobile, e-mail and address changed by the employee himself on the phone. HR receives one summary notification per hour (08:00–21:00).</div>
-  </div>
-</div>
+<div class="page" id="page-dreq"><div id="react-dreq"></div></div>
 
 <div class="page" id="page-missions"><div id="react-missions"></div></div>
 
@@ -1137,21 +1117,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="modal-foot"><button class="btn btn-ghost" data-close="m-loan">Cancel</button><button class="btn btn-primary" id="l-save">Save loan</button></div>
 </div></div>
 
-<!-- MODAL: POSTPONE A LOAN INSTALMENT (62) -->
-<div class="overlay" id="m-dreq"><div class="modal" style="max-width:760px">
-  <div class="modal-head"><div class="modal-title">📝 Ask employees to update their data</div><button class="x" data-close="m-dreq">×</button></div>
-  <div class="grid2">
-    <div class="field"><label>Department</label><select id="dqn-dept"><option value="">— choose —</option></select></div>
-    <div class="field"><label>Unit</label><select id="dqn-unit"><option value="">All units</option></select></div>
-    <div class="field full"><label>…or employee codes (comma, space or new line)</label><textarea id="dqn-codes" rows="2" placeholder="e.g. 615, 1166, 33"></textarea></div>
-    <div class="field full"><label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="dqn-missing" checked> Only employees whose record is missing at least one of the chosen fields</label></div>
-    <div class="field full"><label>Fields to update</label><div id="dqn-fields" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:4px 12px;font-size:13px"></div></div>
-    <div class="field full"><label>Message to the employee (optional)</label><input id="dqn-msg" maxlength="300" placeholder="e.g. Please complete your file before 31 October"></div>
-  </div>
-  <div id="dqn-count" style="font-size:13px;margin-top:8px"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-dreq">Cancel</button><button class="btn btn-primary" id="dqn-send">Send</button></div>
-</div></div>
-
 <div class="overlay" id="m-lpp"><div class="modal">
   <div class="modal-head"><div class="modal-title">⏸ Postpone a loan instalment</div><button class="x" data-close="m-lpp">×</button></div>
   <div id="lpp-info" style="font-size:13px;margin-bottom:12px"></div>
@@ -1480,6 +1445,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=f4cec4f06116"></script>
-<script src="react.js?v=666d432bd619"></script>
+<script src="app.js?v=b0d98d650eeb"></script>
+<script src="react.js?v=b639cc945529"></script>
 </body></html>

@@ -453,7 +453,7 @@ function buildLists(){
   const depts = [...new Set(S.employees.map(e=>e.department).filter(Boolean))].sort();
   const units = [...new Set(S.employees.map(e=>e.unit).filter(Boolean))].sort();
   const dOpts = '<option value="">All departments</option>' + depts.map(d=>`<option>${esc(d)}</option>`).join('');
-  ['emp-dept','mon-dept','pay-dept','rep-dept','lv-dept','ex-dept','rl-dept','dq-dept','loan-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
+  ['emp-dept','mon-dept','pay-dept','rep-dept','lv-dept','ex-dept','rl-dept','loan-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
   const uv=$('emp-unit').value; $('emp-unit').innerHTML='<option value="">All units</option>'+units.map(u=>`<option>${esc(u)}</option>`).join(''); $('emp-unit').value=uv;
   const mEls = S.elements.filter(e => e.input_method==='Monthly' && e.active!==false);
   const mv=$('mon-el').value;
@@ -6403,142 +6403,24 @@ REPORTS.push({ id:'emp-missing', g:'HR', t:'Missing employee data',
   } });
 
 // ═════════════════════════════════════════════════════════
-//  DATA REQUESTS — HR asks employees to update their own data on the phone (23 Oct 2026, 77-data-update-requests.sql)
-//  Page 📝 Data requests (Workforce): list + review (Accept → saved on the record / Return with a note / Cancel).
-//  "📝 New request" window: employees by department + unit or by codes, optionally only those missing the chosen
-//  fields; fields from data_fields(); message. Employee window: "📝 Ask to update data" (this employee, his missing fields).
-//  Personal mobile / e-mail / address are saved at once when the employee answers; the rest waits for HR here.
+//  DATA REQUESTS — HR asks employees to update their own data on the phone (23 Oct 2026, 77 + 78)
+//  The page and the "📝 New request" window are React now (react/src/datareq, 30 Oct 2026).
+//  Kept here: the menu badge (answers waiting for review + changes employees made that nobody has seen yet, refreshed after
+//  the period data loads) and the employee window's "📝 Ask employee to update data" button, which opens the React window.
 // ═════════════════════════════════════════════════════════
-/** @type {{ rows: Row<'data_requests'>[], fields: any[] | null, t: any, error?: string | null }} — data-update requests */
-let DQ = { rows: [], fields: null, t: null };
-const dqChip = s => `<span class="chip ${({Answered:'c-orange',Requested:'c-blue',Returned:'c-blue',Accepted:'c-green',Completed:'c-green',Cancelled:'c-grey'})[s] || 'c-grey'}">${esc(
-  ({Answered:'Waiting for your review',Requested:'Waiting for the employee',Returned:'Returned to the employee',Accepted:'Accepted — saved',Completed:'Saved',Cancelled:'Cancelled'})[s] || s)}</span>`;
-async function dqFields(){
-  if (DQ.fields) return DQ.fields;
-  const { data, error } = await sb.rpc('data_fields');
-  DQ.fields = error ? [] : /** @type {any[]} — the list of fields employees may update (data_fields() package) */ (data || []); return DQ.fields;
+/** @param {number} n */
+function setDataRequestsBadge(n){ const b = $('dq-badge'); if (b) { b.style.display = n ? '' : 'none'; b.textContent = String(n); } }
+async function loadDataRequestsBadge(){
+  const [a, c] = await Promise.all([
+    sb.from('data_requests').select('id', { count: 'exact', head: true }).eq('status', 'Answered'),
+    sb.from('employee_self_changes').select('id', { count: 'exact', head: true }).is('seen_at', null)]);
+  if (!a.error) setDataRequestsBadge((a.count || 0) + (c.error ? 0 : (c.count || 0)));
 }
-const dqLabel = k => ((DQ.fields || []).find(f => f.key === k) || { en: k }).en;
-const dqDirect = k => !!((DQ.fields || []).find(f => f.key === k) || {}).direct;
-async function loadDreqs(){
-  await dqFields();
-  const { data, error } = await sb.from('data_requests').select('*').order('requested_at', { ascending: false }).limit(2000);
-  if (error) { DQ.rows = []; DQ.error = /does not exist|schema cache/i.test(error.message) ? 'missing' : error.message; }
-  else { DQ.rows = data || []; DQ.error = null; }
-  const n = DQ.rows.filter(r => r.status === 'Answered').length, b = $('dq-badge');
-  if (b) { b.style.display = n ? '' : 'none'; b.textContent = n; }
-}
-function dqAnswer(r){
-  if (!r.answer) return '<span style="color:var(--muted)">—</span>';
-  return Object.keys(r.answer).map(k => {
-    const was = r.before ? r.before[k] : null, now = r.answer[k], pend = r.pending && k in r.pending;
-    return `<div style="font-size:12px;white-space:nowrap"><b>${esc(dqLabel(k))}:</b> ${was ? `<span style="color:var(--muted);text-decoration:line-through">${esc(String(was).slice(0, 40))}</span> → ` : ''}<span class="${pend ? '' : 'pos'}">${esc(String(now).slice(0, 60))}</span>${pend ? '' : ' <span style="color:var(--muted)">(saved)</span>'}</div>`;
-  }).join('');
-}
-async function renderDreqs(){
-  await loadDreqs();
-  if (DQ.error) { $('dq-tbl').innerHTML = `<tr><td colspan="7" class="empty">${DQ.error === 'missing' ? 'Data requests are not set up yet — run database file 77-data-update-requests.sql.' : esc(DQ.error)}</td></tr>`; return; }
-  const st = $('dq-status').value, q = $('dq-q').value.trim().toLowerCase();
-  const rows = DQ.rows.filter(r => {
-    if (st === 'open' ? !['Requested','Returned'].includes(r.status) : st === 'done' ? !['Accepted','Completed'].includes(r.status) : st && r.status !== st) return false;
-    const e = empOrBlank(r.emp_id);
-    if (!orgMatch(e, 'dq')) return false;
-    return !q || [r.emp_id, r.emp_name, e.name_en, e.name_ar].some(v => String(v || '').toLowerCase().includes(q));
-  });
-  const wait = DQ.rows.filter(r => r.status === 'Answered').length, open = DQ.rows.filter(r => ['Requested','Returned'].includes(r.status)).length;
-  $('dq-sub').textContent = `${wait} waiting for your review · ${open} waiting for the employee · personal mobile, e-mail and address are saved at once; everything else waits for your review here.`;
-  $('dq-tbl').innerHTML = rows.map(r => { const e = empById(r.emp_id) || /** @type {Employee} */ ({ id: r.emp_id, name_en: r.emp_name });
-    return `<tr><td class="mono" style="white-space:nowrap">${esc(String(r.requested_at).slice(0, 10))}<div style="font-size:11px;color:var(--muted)">${esc(r.requested_by || '')}</div></td>
-      <td class="strong">${esc(empName(e) || r.emp_name || r.emp_id)} <span class="mono" style="color:var(--muted)">${esc(r.emp_id)}</span><div style="font-size:11px;color:var(--muted)">${esc(e.department || '')}</div></td>
-      <td style="white-space:normal;max-width:220px;font-size:12px">${esc((r.fields || []).map(dqLabel).join(', '))}</td>
-      <td style="white-space:normal;max-width:200px;font-size:12px">${esc(r.message || '')}</td>
-      <td>${dqChip(r.status)}${r.review_note ? `<div style="font-size:11px">💬 ${esc(r.review_note)}</div>` : ''}${r.reviewed_by ? `<div style="font-size:11px;color:var(--muted)">${esc(r.reviewed_by)}</div>` : ''}</td>
-      <td>${dqAnswer(r)}</td>
-      <td style="white-space:nowrap">${r.status === 'Answered' ? `<button class="btn btn-success btn-sm" data-dq-ok="${r.id}">✓ Accept</button> <button class="btn btn-ghost btn-sm" data-dq-ret="${r.id}">↩ Return</button> ` : ''}${['Requested','Returned','Answered'].includes(r.status) ? `<button class="btn btn-ghost btn-sm" data-dq-cancel="${r.id}" title="Cancel this request">✕</button>` : ''}</td></tr>`; }).join('')
-    || '<tr><td colspan="7" class="empty">Nothing here</td></tr>';
-  $('dq-foot').textContent = `${rows.length} shown.`;
-}
-async function dqReview(id, ok){
-  let note = null;
-  if (!ok) { note = prompt('What should the employee correct? (he will see this note on his phone)'); if (note === null) return; if (!note.trim()) return toast('Write what needs to be corrected', 'warn'); }
-  const { error } = await sb.rpc('review_data_request', { p_id: id, p_accept: ok, p_note: note });
-  if (error) return toast(error.message.replace(/^[A-Z_]+: ?/, ''), 'err');
-  toast(ok ? 'Accepted — saved on the employee record; the employee is notified' : 'Returned — the employee is notified');
-  if (ok) { try { await loadAll(); } catch(e){} }
-  renderDreqs();
-}
-async function dqCancel(id){
-  if (!confirm('Cancel this request? The employee will no longer see it.')) return;
-  const { error } = await sb.rpc('cancel_data_request', { p_id: id });
-  if (error) return toast(error.message, 'err');
-  toast('Request cancelled'); renderDreqs();
-}
-PAGE_RENDER.dreq = () => renderDreqs();
-$('dq-tbl').addEventListener('click', e => {
-  const a = /** @type {PageEl} */ (e.target).closest('[data-dq-ok]'); if (a) { a.disabled = true; return dqReview(a.dataset.dqOk, true); }
-  const r = /** @type {PageEl} */ (e.target).closest('[data-dq-ret]'); if (r) return dqReview(r.dataset.dqRet, false);
-  const c = /** @type {PageEl} */ (e.target).closest('[data-dq-cancel]'); if (c) return dqCancel(c.dataset.dqCancel);
-});
-['dq-status', 'dq-dept'].forEach(id => $(id).addEventListener('change', renderDreqs));
-$('dq-q').addEventListener('input', () => { clearTimeout(DQ.t); DQ.t = setTimeout(renderDreqs, 250); });
-const _showPageDq = showPage;
-// @ts-expect-error — showPage is deliberately extended here (the new version wraps the earlier one)
-showPage = function(name){ const r = _showPageDq.apply(this, arguments); if (name === 'dreq') renderDreqs(); return r; };
 const _loadPeriodDataDq = loadPeriodData;
 // @ts-expect-error — loadPeriodData is deliberately extended here (the new version wraps the earlier one)
-loadPeriodData = async function(){ const r = await _loadPeriodDataDq.apply(this, arguments); loadDreqs().catch(() => {}); return r; };
+loadPeriodData = async function(){ const r = await _loadPeriodDataDq.apply(this, arguments); loadDataRequestsBadge().catch(() => {}); return r; };
 
-// ── New request window ──
-const dqBlank = v => v === null || v === undefined || String(v).trim() === '';
-function dqTargets(){
-  const codes = $('dqn-codes').value.split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
-  const fields = [...document.querySelectorAll('#dqn-fields input:checked')].map(x => x.value);
-  let list;
-  if (codes.length) list = codes.map(c => empById(c)).filter(Boolean);
-  else { const d = $('dqn-dept').value, u = $('dqn-unit').value;
-    list = d ? (S.employees || []).filter(e => e.department === d && (!u || (u === '__none__' ? !e.unit : e.unit === u))) : []; }
-  list = list.filter(e => e.status !== 'Inactive');
-  if ($('dqn-missing').checked && fields.length) list = list.filter(e => fields.some(k => dqBlank(e[k])));
-  return { list, fields, unknown: codes.filter(c => !empById(c)) };
-}
-function dqCount(){
-  const { list, fields, unknown } = dqTargets();
-  $('dqn-count').innerHTML = `<b>${list.length}</b> employee${list.length === 1 ? '' : 's'} will receive the request${fields.length ? '' : ' — choose at least one field'}`
-    + (unknown.length ? ` · <span style="color:var(--warn)">unknown codes: ${esc(unknown.join(', '))}</span>` : '');
-}
-function dqUnits(){
-  const d = $('dqn-dept').value, units = [...new Set((S.employees || []).filter(e => e.department === d && e.status !== 'Inactive').map(e => e.unit).filter(Boolean))].sort();
-  $('dqn-unit').innerHTML = `<option value="">All units</option>${units.map(u => `<option>${esc(u)}</option>`).join('')}<option value="__none__">(no unit)</option>`;
-}
-async function openDataRequest(empId, preFields){
-  const fields = await dqFields();
-  if (!fields.length) return toast('Data requests are not set up yet — run database file 77-data-update-requests.sql.', 'warn');
-  const depts = [...new Set((S.employees || []).filter(e => e.status !== 'Inactive').map(e => e.department).filter(Boolean))].sort();
-  $('dqn-dept').innerHTML = `<option value="">— choose —</option>${depts.map(d => `<option>${esc(d)}</option>`).join('')}`; dqUnits();
-  $('dqn-codes').value = empId || ''; $('dqn-msg').value = '';
-  $('dqn-missing').checked = !empId;
-  $('dqn-fields').innerHTML = fields.map(f => `<label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" value="${esc(f.key)}"${(preFields || []).includes(f.key) ? ' checked' : ''}> ${esc(f.en)}${f.direct ? ' <span style="color:var(--muted);font-size:11px">(saved at once)</span>' : ''}</label>`).join('');
-  dqCount(); openM('m-dreq');
-}
-['dqn-codes', 'dqn-msg'].forEach(id => $(id).addEventListener('input', dqCount));
-$('dqn-dept').addEventListener('change', () => { dqUnits(); dqCount(); });
-['dqn-unit', 'dqn-missing'].forEach(id => $(id).addEventListener('change', dqCount));
-$('dqn-fields').addEventListener('change', dqCount);
-$('dq-new').addEventListener('click', () => openDataRequest('', []));
-$('dqn-send').addEventListener('click', async () => {
-  const { list, fields } = dqTargets();
-  if (!fields.length) return toast('Choose at least one field', 'warn');
-  if (!list.length) return toast('No employee matches — choose a department or type codes', 'warn');
-  const b = $('dqn-send'); b.disabled = true; b.textContent = 'Sending…';
-  const { data, error } = await sb.rpc('request_data_update', { p_emps: list.map(e => String(e.id)), p_fields: fields, p_msg: $('dqn-msg').value.trim() || null });
-  b.disabled = false; b.textContent = 'Send';
-  if (error) return toast(error.message.replace(/^[A-Z_]+: ?/, ''), 'err');
-  closeM('m-dreq');
-  toast(`Sent to ${data.sent} employee${data.sent === 1 ? '' : 's'}${data.skipped ? ` · ${data.skipped} skipped (inactive or already have an open request)` : ''} — they are notified on the phone`);
-  if (document.querySelector('#page-dreq.active, #page-dreq.on')) renderDreqs(); else loadDreqs().catch(() => {});
-});
-
-// ── Employee window: "📝 Ask to update data" ──
+// ── Employee window: "📝 Ask employee to update data" (this employee, his missing fields ticked) ──
 const _openEmpDq = openEmp;
 // @ts-expect-error — openEmp is deliberately extended here (the new version wraps the earlier one)
 openEmp = function(){
@@ -6548,58 +6430,10 @@ openEmp = function(){
   const b = $('emp-dq'); if (b) b.style.display = editingEmp && canHRA() ? '' : 'none';
   return r;
 };
-document.addEventListener('click', async e => {
+document.addEventListener('click', e => {
   if (!/** @type {PageEl} */ (e.target).closest || !/** @type {PageEl} */ (e.target).closest('#emp-dq')) return;
-  const emp = empById(editingEmp); if (!emp) return;
-  const fields = await dqFields();
-  const miss = fields.map(f => f.key).filter(k => dqBlank(emp[k]) && !(k === 'military_status' && emp.gender !== 'Male') && !((k === 'bank_account' || k === 'bank_branch') && emp.payment_method !== 'Bank'));
-  openDataRequest(String(emp.id), miss);
+  if (editingEmp && typeof PKR !== 'undefined') PKR.openDataRequest(String(editingEmp));
 });
-
-// ── Changes made by employees themselves (78-employee-self-changes.sql) ──
-/** @type {{ rows: Row<'employee_self_changes'>[], missing?: boolean, shown?: any, t?: any }} — changes employees made themselves */
-let SC = { rows: [] };
-async function loadSelfChanges(){
-  const { data, error } = await sb.from('employee_self_changes').select('*').order('changed_at', { ascending: false }).limit(1000);
-  SC.rows = error ? [] : (data || []); SC.missing = !!error && /does not exist|schema cache/i.test(error.message);
-  const unseen = SC.rows.filter(r => !r.seen_at).length, c = $('sc-count');
-  if (c) { c.style.display = unseen ? '' : 'none'; c.textContent = `${unseen} not seen`; }
-  const wait = (DQ.rows || []).filter(r => r.status === 'Answered').length, b = $('dq-badge');
-  if (b) { const n = wait + unseen; b.style.display = n ? '' : 'none'; b.textContent = n; }
-}
-function renderSelfChanges(){
-  const tb = $('sc-tbl'); if (!tb) return;
-  if (SC.missing) { tb.innerHTML = '<tr><td colspan="7" class="empty">Not set up yet — run database file 78-employee-self-changes.sql.</td></tr>'; return; }
-  const only = $('sc-show').value === 'unseen', q = $('dq-q').value.trim().toLowerCase();
-  const rows = SC.rows.filter(r => (!only || !r.seen_at) && orgMatch(empOrBlank(r.emp_id), 'dq')
-    && (!q || [r.emp_id, r.emp_name].some(v => String(v || '').toLowerCase().includes(q))));
-  tb.innerHTML = rows.map(r => { const e = empOrBlank(r.emp_id);
-    return `<tr><td class="mono" style="white-space:nowrap">${esc(String(r.changed_at).slice(0, 16).replace('T', ' '))}</td>
-      <td class="strong">${esc(r.emp_name || empName(e) || r.emp_id)} <span class="mono" style="color:var(--muted)">${esc(r.emp_id)}</span><div style="font-size:11px;color:var(--muted)">${esc(e.department || '')}</div></td>
-      <td>${esc(dqLabel(r.field))}</td><td style="color:var(--muted)">${esc(r.old_value || '—')}</td><td class="strong">${esc(r.new_value || '—')}</td>
-      <td style="font-size:12px">${esc(r.source)}</td>
-      <td style="white-space:nowrap;font-size:12px">${r.seen_at ? `✓ ${esc(r.seen_by || '')}<div style="color:var(--muted)">${esc(String(r.seen_at).slice(0, 10))}</div>` : `<button class="btn btn-ghost btn-sm" data-sc-seen="${r.id}">✓ Seen</button>`}</td></tr>`; }).join('')
-    || `<tr><td colspan="7" class="empty">${only ? 'Nothing new — every change has been seen' : 'No changes yet'}</td></tr>`;
-  SC.shown = rows.filter(r => !r.seen_at).map(r => r.id);
-}
-async function scSeen(ids){
-  if (!ids.length) return toast('Nothing to mark', 'warn');
-  const { data, error } = await sb.rpc('mark_self_changes_seen', { p_ids: ids });
-  if (error) return toast(error.message, 'err');
-  toast(`${data} change${data === 1 ? '' : 's'} marked as seen`);
-  await loadSelfChanges(); renderSelfChanges();
-}
-$('sc-tbl').addEventListener('click', e => { const b = /** @type {PageEl} */ (e.target).closest('[data-sc-seen]'); if (b) { b.disabled = true; scSeen([b.dataset.scSeen]); } });
-$('sc-show').addEventListener('change', renderSelfChanges);
-$('sc-all').addEventListener('click', () => scSeen(SC.shown || []));
-['dq-dept'].forEach(id => $(id).addEventListener('change', renderSelfChanges));
-$('dq-q').addEventListener('input', () => { clearTimeout(SC.t); SC.t = setTimeout(renderSelfChanges, 250); });
-const _renderDreqsSc = renderDreqs;
-// @ts-expect-error — renderDreqs is deliberately extended here (the new version wraps the earlier one)
-renderDreqs = async function(){ const r = await _renderDreqsSc.apply(this, arguments); await loadSelfChanges(); renderSelfChanges(); return r; };
-const _loadDreqsSc = loadDreqs;
-// @ts-expect-error — loadDreqs is deliberately extended here (the new version wraps the earlier one)
-loadDreqs = async function(){ const r = await _loadDreqsSc.apply(this, arguments); await loadSelfChanges().catch(() => {}); return r; };
 
 // ═════════════════════════════════════════════════════════
 //  CHECK-OUTS TO RECORD (24 Oct 2026, 80-checkout-requests.sql)   ·   page 🚪 Check-outs to record (Workforce)

@@ -2369,6 +2369,7 @@ let ACCT_FLAGS = {};
 // ═════════════════════════════════════════════════════════
 //  USERS & ROLES (admin only)
 // ═════════════════════════════════════════════════════════
+/** @type {FnResult<'admin_list_users'>} — the sign-in accounts (Users page) */
 let USERS = [];
 async function loadUsers(){
   if (!ME || ME.role!=='admin') return;
@@ -2542,6 +2543,9 @@ const fmtHM = v => { const tm = Math.round(num(v) * 60), h = Math.floor(tm / 60)
 // ═════════════════════════════════════════════════════════
 //  SELF-SERVICE (employee's own requests)
 // ═════════════════════════════════════════════════════════
+/** @type {{ emp: Employee | null, leaves: Leave[], perms: Permission[], reqs: HrRequest[], slips?: PayrollRunLine[],
+ *   manager?: FnResult<'my_manager'>[number] | null, team?: AllowanceApproval[], teamLeaves?: Leave[], teamPerms?: Permission[],
+ *   myTeam?: FnResult<'my_team'> }}} — the signed-in person's own data (self-service) */
 let SD = { emp:null, leaves:[], perms:[], reqs:[] };
 async function loadSelf(){
   const id = SELF.me.emp_id;
@@ -2597,6 +2601,7 @@ function renderSelf(){
     || '<tr><td colspan="6" class="empty">You have not made any requests yet</td></tr>';
   // team approvals (managers only)
   const team = (SD.team||[]).slice().sort((a,b) => (a.status==='Pending manager' ? 0 : 1) - (b.status==='Pending manager' ? 0 : 1) || String(b.period).localeCompare(String(a.period)));
+  /** @type {{ kind: string, r: any, when: string }[]} — r is a leave or a permission (see kind) */
   const tReq = [...(SD.teamLeaves||[]).map(l => ({ kind:'leave', r:l, when:l.date_from })), ...(SD.teamPerms||[]).map(x => ({ kind:'perm', r:x, when:x.date }))]
     .sort((a,b) => (waitingManager(a.r)?0:1) - (waitingManager(b.r)?0:1) || String(b.when).localeCompare(String(a.when))).slice(0, 60);
   const waiting = team.filter(a => a.status==='Pending manager').length + tReq.filter(x => waitingManager(x.r)).length;
@@ -2932,6 +2937,7 @@ $('ap-type').addEventListener('keydown', e => { if (e.key==='Enter') doApprove()
 // ═════════════════════════════════════════════════════════
 //  PAYROLL HISTORY
 // ═════════════════════════════════════════════════════════
+/** @type {{ period: string | null, lines: PayrollRunLine[] }} — the approved month being looked at (Payroll history) */
 let HIST = { period:null, lines:[] };
 function renderHistory(){
   $('hs-missing').innerHTML = runsTableMissing ? '<div class="alert a-warn">The payroll history tables do not exist yet. Run <b>managers-and-payroll-history.sql</b>, then click ⟳ Refresh.</div>' : '';
@@ -3132,6 +3138,7 @@ document.addEventListener('click', e => { const b = /** @type {HTMLElement | nul
 // ═════════════════════════════════════════════════════════
 //  BULK UPLOAD — variable (monthly) additions and deductions
 // ═════════════════════════════════════════════════════════
+/** @type {{ rows: any[], file: string }} — rows read from an uploaded monthly-entries spreadsheet */
 let BULK = { rows:[], file:'' };
 const varElements = () => S.elements.filter(e => e.input_method==='Monthly' && e.active!==false);
 function openBulk(){
@@ -3259,6 +3266,7 @@ $('bk-import').addEventListener('click', doBulkImport);
 // ═════════════════════════════════════════════════════════
 //  HQ FINGERPRINT MACHINE (ZKTeco) — import punches into attendance
 // ═════════════════════════════════════════════════════════
+/** @type {{ punches: any[], days: any[], file: string }} — fingerprint-machine import: raw punches and the days built from them */
 let MI = { punches:[], days:[], file:'' };
 const pad2 = n => String(n).padStart(2,'0');
 function miParseTime(s){
@@ -3787,7 +3795,7 @@ $('as-proj-tbl').addEventListener('click', e => { const rm = /** @type {PageEl} 
 // ── a manager on the desktop (My requests → Team approvals) ──
 let tprojEmp = null, tprojT;
 async function openTeamProj(empId){
-  tprojEmp = empId; const m = (SD.myTeam||[]).find(x => x.id === empId) || { id: empId };
+  tprojEmp = empId; const m = (SD.myTeam||[]).find(x => x.id === empId) || /** @type {FnResult<'my_team'>[number]} */ ({ id: empId });
   const { data, error } = await sb.rpc('team_projects', { p_emp: empId }); if (error) return toast(error.message, 'err');
   $('tproj-title').textContent = `📌 ${m.name_en || m.name_ar || empId} — ${(data||[]).length ? 'can check in only at these projects' : 'no projects: any project'}`;
   $('tproj-tbl').innerHTML = (data||[]).map(p => `<tr><td class="mono">${esc(p.id)}</td><td>${esc(p.name||'')}</td><td>${esc(p.assigned_by||'')}</td><td><button class="icon-btn" data-tproj-rm="${esc(p.id)}" title="Remove">🗑</button></td></tr>`).join('')
@@ -3915,6 +3923,7 @@ const _renderPayrollPublish = renderPayroll;
 renderPayroll = function(){ const r = _renderPayrollPublish.apply(this, arguments); $('pay-publish').style.display = currentRun() ? '' : 'none'; return r; };
 
 // ── the accountant's view (My requests → Project costs) ──
+/** @type {FnResult<'acct_project_costs'>} — project costs of the chosen month */
 let PC_ROWS = [];
 async function loadProjectCosts(){
   const per = await sb.rpc('acct_cost_periods');
@@ -3940,7 +3949,8 @@ $('pc-period').addEventListener('change', showProjectCosts);
 $('pc-xlsx').addEventListener('click', async () => {
   if (!PC_ROWS.length) return toast('Nothing to download','warn');
   const XL = await loadSheetJs(), p = $('pc-period').value;
-  const aoa = [['Project','Name','People','Hours','Total cost (EGP)','Cost per hour','Note']].concat(PC_ROWS.map(r => [r.project_code || '', r.project_name || '', r.people, num(r.hours),
+  // spreadsheet rows: a heading row, then text and numbers
+  const aoa = /** @type {any[][]} */ ([['Project','Name','People','Hours','Total cost (EGP)','Cost per hour','Note']]).concat(PC_ROWS.map(r => [r.project_code || '', r.project_name || '', r.people, num(r.hours),
     r.total == null ? '' : num(r.total), r.total != null && num(r.hours) > 0 ? Math.round(num(r.total)/num(r.hours)*100)/100 : '', r.note || '']));
   const wb = XL.utils.book_new(); XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(aoa), 'Project costs ' + p);
   XL.writeFile(wb, `petrokima-project-costs-${p}.xlsx`); toast('Project costs downloaded');
@@ -4030,6 +4040,7 @@ renderUsers = function(){ const r = _renderUsersSA.apply(this, arguments);
 //  BULK UPLOAD — one page for every kind of data (template → upload → preview → save)
 // ═════════════════════════════════════════════════════════
 // ── reading cell values (Excel dates and times come as numbers) ──
+/** @type {{ type: string | null, rows: any[], file: string, results: any, existing?: any }} — bulk upload: rows read from the uploaded spreadsheet */
 const BU = { type:null, rows:[], file:'', results:null };
 const buTxt = v => (v === null || v === undefined) ? '' : String(v).trim();
 function buDate(v){
@@ -4283,6 +4294,7 @@ $('bu-replace').addEventListener('change', () => { if (BU.rows.length && BU.type
 // ═════════════════════════════════════════════════════════
 //  MANAGER — bulk upload of his own team's project assignments (My requests → Team approvals)
 // ═════════════════════════════════════════════════════════
+/** @type {any[]} — manager bulk-assign rows read from the uploaded spreadsheet */
 let MBU = [];
 async function mbuTemplate(){
   const XL = await loadSheetJs(), wb = XL.utils.book_new(), team = (SD && SD.myTeam) || [];
@@ -4550,6 +4562,8 @@ function stRenderYTD(){
 // ═════════════════════════════════════════════════════════
 //  ANNOUNCEMENTS · EMPLOYEE VOICE · BIRTHDAYS (desktop)
 // ═════════════════════════════════════════════════════════
+/** @type {{ news: Row<'announcements'>[], reads: Row<'announcement_reads'>[], fb: Row<'feedback'>[], hire: Row<'hiring_requests'>[],
+ *   train: Row<'training_requests'>[], act: Row<'manager_actions'>[], sal?: Row<'salary_change_requests'>[] }}} — Employee voice: news, feedback and manager requests */
 const V = { news:[], reads:[], fb:[], hire:[], train:[], act:[] };
 const vDate = ts => ts ? new Date(ts).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '';
 const vChip = s => `<span class="chip ${({'Waiting for board':'c-orange','Waiting for HR':'c-blue',Approved:'c-green',Cancelled:'c-grey',New:'c-orange','In review':'c-blue','In progress':'c-blue',Closed:'c-green',Done:'c-green',Rejected:'c-red'})[s]||'c-grey'}">${esc(s)}</span>`;
@@ -4650,7 +4664,7 @@ async function renderVoicePage(){
 let VO_CUR = null;
 document.addEventListener('click', e => {
   const r = /** @type {PageEl} */ (e.target).closest('[data-vo]'); if (!r) return;
-  const [kind, id] = r.dataset.vo.split(':'), x = (kind === 'fb' ? V.fb : kind === 'hire' ? V.hire : kind === 'act' ? V.act : V.train).find(y => y.id === id); if (!x) return;
+  const [kind, id] = r.dataset.vo.split(':'), x = /** @type {any} — a complaint, hiring, training or manager request (see kind) */ ((kind === 'fb' ? V.fb : kind === 'hire' ? V.hire : kind === 'act' ? V.act : V.train).find(y => y.id === id)); if (!x) return;
   VO_CUR = { kind, x };
   $('mv-close').style.display = kind === 'hire' && x.status !== 'Closed' && !x.hr_closed ? '' : 'none';
   $('mv-reject').style.display = 'none'; $('mv-save').style.display = ''; $('mv-st').closest('.field').style.display = '';
@@ -5041,6 +5055,7 @@ const AUDIT_AREAS = {
   public_holidays:'Public holidays', settings:'Settings', attendance:'Attendance (staff edits)', employee_leaves:'Vacations (staff edits)',
   attendance_permissions:'Permissions (staff edits)', two_step_sign_in:'Two-step sign-in' };
 const AUDIT_ACT = { INSERT:['Added','c-green'], UPDATE:['Changed','c-blue'], DELETE:['Deleted','c-red'] };
+/** @type {Row<'audit_log'>[]} — the change log */
 let AUDIT = [];
 (function initAuditFilters(){
   const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -5118,6 +5133,7 @@ const LOC_FLAG = {
   clock_changed:    ['Phone clock was changed', 'c-red'],
   phone_restarted:  ['Phone restarted offline — time not verified', 'c-orange'] };
 let LOC_RULES = { outside:'flag', default_radius:300, block_mock:true, android_app_only:false };
+/** @type {Row<'work_locations'>[]} — offices (work locations) */
 let WORK_LOCS = [], wlMissing = false;
 const fmtDist = m => m == null ? '' : (m >= 1000 ? (m/1000).toFixed(1) + ' km' : Math.round(m) + ' m');
 const locFlagged = () => S.clocks.filter(c => (Array.isArray(c.location_flags) && c.location_flags.length) || (c.applied === false && c.mock_location));
@@ -5285,7 +5301,7 @@ $('wl-tbl').addEventListener('click', async e => {
 $('wl-add').addEventListener('click', () => {
   if (wlMissing) return toast('Run database update 41-location-integrity.sql first', 'warn');
   if (WORK_LOCS.some(w => w.id === 'new')) return;
-  WORK_LOCS = WORK_LOCS.concat({ id:'new', name:'', lat:'', lng:'', radius_m:200, active:true }); renderOffices();
+  WORK_LOCS = WORK_LOCS.concat(/** @type {any} — a new office, not saved yet (empty fields) */ ({ id:'new', name:'', lat:'', lng:'', radius_m:200, active:true })); renderOffices();
 });
 
 // ── rules ──
@@ -5311,6 +5327,7 @@ renderDashboard = function(){
 };
 
 // ── employees fixed to an office (67) ──
+/** @type {Row<'employee_work_locations'>[]} — employees fixed to an office */
 let OFFICE_EMPS = [], OFFICE_EMPS_MISSING = false, WLE = null;
 async function loadOfficeEmps(){
   const { data, error } = await sb.from('employee_work_locations').select('*');
@@ -5533,6 +5550,7 @@ const HRA_KIND = { contract:['📄 Contract renewal','c-orange'], probation:['�
 const HRA_DEC = { seen:'Handled', renew:'Renew', not_renew:'Do not renew', confirm:'Confirm', not_confirm:'Do not confirm' };
 const HR_RULES_DEF = { leave_rules:{ start_year:2026, first_year_days:15, normal_days:21, senior_days:30, senior_insured_years:10, senior_age:50, emergency_days:7, wait_months:6, carry_cap:7 },
                        hr_alerts:{ contract_days:75, probation_days:30, id_days:30, cert_days:30, disability_days:30 } };
+/** @type {{ list: any[], loaded: boolean, loading: boolean, missing: boolean }} — HR alerts (hr_alerts() package — not described yet) */
 let HRA = { list:[], loaded:false, loading:false, missing:false };
 let HR_RULES = JSON.parse(JSON.stringify(HR_RULES_DEF));
 const canHRA = () => !!(ME && ['admin','hr','hr_officer'].includes(ME.role));
@@ -5673,6 +5691,7 @@ renderDashboard = function(){
 
 // ═════════════ ANNUAL LEAVE BALANCE (from the database) ═════════════
 const LB = new Map();                       // "emp|year" → balance
+/** @type {{ year: number | null, rows: any[] }} — leave balances of all staff (leave_balances() packages) */
 let LB_ALL = { year:null, rows:[] };
 async function getLB(emp, year, force){
   const k = `${emp}|${year}`; if (!force && LB.has(k)) return LB.get(k);
@@ -5809,6 +5828,7 @@ async function renderEmpLeave(id){
     </div>
     <div style="font-size:12px;margin-top:8px;color:${b.eligible_from > todayStr() && !b.early_ok ? 'var(--warn)' : 'var(--muted)'}">May request annual / emergency leave from <b>${esc(b.eligible_from || '—')}</b>${b.early_ok ? ' — HR exception: allowed before that' : ''}.</div>`;
 }
+/** @type {Row<'employee_certificates'>[]} — certificates */
 let CERTS = [], CERT_EDIT = null;
 async function renderCerts(id){
   const box = $('emp-certs'); if (!box) return;
@@ -6370,6 +6390,7 @@ renderDashboard = function(){
 //  HR / HR officers give the final approval here. An approved mission day: no late / early deduction,
 //  no "outside the site" warning, and the mission's project is allowed for check-in.
 // ═════════════════════════════════════════════════════════
+/** @type {{ rows: Mission[], loaded: boolean, error?: string | null, t?: any }} — missions page */
 let MS = { rows: [], loaded: false };
 const msStatusChip = s => `<span class="chip ${({'Waiting for HR':'c-orange','Waiting for manager':'c-blue','Waiting for employee':'c-blue',Approved:'c-green',Rejected:'c-red',Cancelled:'c-grey'})[s] || 'c-grey'}">${esc(s)}</span>`;
 const msWhen = m => `${m.date_from}${m.date_to !== m.date_from ? ' → ' + m.date_to : ''}${m.time_from ? ` · ${String(m.time_from).slice(0,5)}–${String(m.time_to).slice(0,5)}` : ''}`;
@@ -6436,6 +6457,7 @@ showPage = function(name){ const r = _showPageMs.apply(this, arguments); if (nam
 //  OUTSIDE MISSIONS in desktop SELF-SERVICE (66/68, 22 Oct 2026) — same rules as the phone:
 //  employee asks → direct manager → HR · manager assigns → employee acknowledges (or straight to HR if he does not use the app) → HR
 // ═════════════════════════════════════════════════════════
+/** @type {{ mine: Mission[], team: Mission[], assign: boolean, part: boolean, missing?: boolean }} — missions in self-service */
 let SMIS = { mine: [], team: [], assign: false, part: false };
 const smisWhen = m => `${m.date_from}${m.date_to !== m.date_from ? ' → ' + m.date_to : ''}${m.time_from ? ` · ${String(m.time_from).slice(0,5)}–${String(m.time_to).slice(0,5)}` : ''}`;
 function smisStatus(m, asManager){
@@ -6805,13 +6827,14 @@ REPORTS.push({ id:'emp-missing', g:'HR', t:'Missing employee data',
 //  fields; fields from data_fields(); message. Employee window: "📝 Ask to update data" (this employee, his missing fields).
 //  Personal mobile / e-mail / address are saved at once when the employee answers; the rest waits for HR here.
 // ═════════════════════════════════════════════════════════
+/** @type {{ rows: Row<'data_requests'>[], fields: any[] | null, t: any, error?: string | null }} — data-update requests */
 let DQ = { rows: [], fields: null, t: null };
 const dqChip = s => `<span class="chip ${({Answered:'c-orange',Requested:'c-blue',Returned:'c-blue',Accepted:'c-green',Completed:'c-green',Cancelled:'c-grey'})[s] || 'c-grey'}">${esc(
   ({Answered:'Waiting for your review',Requested:'Waiting for the employee',Returned:'Returned to the employee',Accepted:'Accepted — saved',Completed:'Saved',Cancelled:'Cancelled'})[s] || s)}</span>`;
 async function dqFields(){
   if (DQ.fields) return DQ.fields;
   const { data, error } = await sb.rpc('data_fields');
-  DQ.fields = error ? [] : (data || []); return DQ.fields;
+  DQ.fields = error ? [] : /** @type {any[]} — the list of fields employees may update (data_fields() package) */ (data || []); return DQ.fields;
 }
 const dqLabel = k => ((DQ.fields || []).find(f => f.key === k) || { en: k }).en;
 const dqDirect = k => !!((DQ.fields || []).find(f => f.key === k) || {}).direct;
@@ -6952,6 +6975,7 @@ document.addEventListener('click', async e => {
 });
 
 // ── Changes made by employees themselves (78-employee-self-changes.sql) ──
+/** @type {{ rows: Row<'employee_self_changes'>[], missing?: boolean, shown?: any, t?: any }} — changes employees made themselves */
 let SC = { rows: [] };
 async function loadSelfChanges(){
   const { data, error } = await sb.from('employee_self_changes').select('*').order('changed_at', { ascending: false }).limit(1000);
@@ -7004,6 +7028,7 @@ loadDreqs = async function(){ const r = await _loadDreqsSc.apply(this, arguments
 //  closes the open period in the attendance record; or rejects it with a reason. The employee is notified either way.
 //  If the employee checks out normally later, the request closes by itself ("Employee checked out himself").
 // ═════════════════════════════════════════════════════════
+/** @type {{ rows: Row<'checkout_requests'>[], t: any, error?: string | null }} — check-outs to record */
 let CO = { rows: [], t: null };
 const coChip = s => `<span class="chip ${({ Waiting:'c-orange', Recorded:'c-green', Rejected:'c-red', 'Checked out':'c-grey' })[s] || 'c-grey'}">${esc(
   ({ Waiting:'Waiting for HR', Recorded:'Recorded', Rejected:'Rejected', 'Checked out':'Employee checked out himself' })[s] || s)}</span>`;
@@ -7075,6 +7100,7 @@ loadPeriodData = async function(){ const r = await _loadPeriodDataCo.apply(this,
 //  Period: per person — present days, late arrivals, short days, working days with no record, leave, mission, hours;
 //  click a person for the day-by-day list. No pay and no GPS points are ever loaded.
 // ═════════════════════════════════════════════════════════
+/** @type {{ view: string, data: any, open: any, q: string }} — team attendance (team_attendance() package) */
 let TA = { view:'today', data:null, open:null, q:'' };
 const taMin = t => { if (!t) return null; const [h, m] = String(t).split(':').map(Number); return h * 60 + (m || 0); };
 const taDays = (a, b) => { const out = []; for (let d = dObj(a), g = 0; dStr(d) <= b && g < 400; d.setDate(d.getDate() + 1), g++) out.push(dStr(d)); return out; };
@@ -7487,6 +7513,7 @@ function repWithData(D, fn){
 //  MAY CHECK IN AWAY FROM OFFICE / SITE (26 Oct 2026, database 89-location-free-employees.sql)
 //  Location checks page → card 🧭: the employees whose away check-ins are accepted even when the rule is "Refuse it".
 // ═════════════════════════════════════════════════════════
+/** @type {Row<'location_free_employees'>[]} — employees free to check in anywhere */
 let LOC_FREE = [], lfMissing = false;
 async function loadLocFree(){
   const r = await sb.from('location_free_employees').select('*').order('added_at');
@@ -7536,6 +7563,7 @@ PAGE_RENDER.locations = () => { loadLocationData().then(renderLocations, renderL
 //  WHO MAY SET SITE LOCATIONS FROM THE PHONE + latest changes (26 Oct 2026, database 91-site-points-office-rule.sql)
 //  Location checks → card 📍: HR chooses trusted employees; they save a project's map point on the phone where they stand.
 // ═════════════════════════════════════════════════════════
+/** @type {Row<'site_point_setters'>[]} — who may set site locations from the phone */
 let SP_SETTERS = [], SP_LOG = [], spwMissing = false;
 async function loadSitePointData(){
   const [a, b] = await Promise.all([

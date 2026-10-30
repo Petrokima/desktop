@@ -747,45 +747,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </div>
 
 <!-- HR ALERTS -->
-<div class="page" id="page-hralerts">
-  <div class="page-header"><div><div class="page-title">HR alerts</div><div class="page-sub">Contracts, probation, national IDs, certificates and disability cards that need attention</div></div>
-    <button class="btn btn-ghost btn-sm" id="hra-refresh">⟳ Refresh</button></div>
-  <div id="hra-missing"></div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title" id="hra-count">Alerts</span>
-      <div class="toolbar-right">
-        <select class="sel" id="hra-kind"><option value="">All alerts</option><option value="contract">Contract renewal</option><option value="probation">End of probation</option><option value="id">National ID expiry</option><option value="cert">Certificate expiry</option><option value="disability">Disability card expiry</option></select>
-        <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--label);cursor:pointer"><input type="checkbox" id="hra-done" style="width:auto"> Show the ones already handled</label>
-        <input class="inp" id="hra-q" placeholder="Search code or name…">
-        <button class="btn btn-ghost btn-sm" id="hra-doc-all" title="Send a request to every employee in the list whose national ID alert has no request yet">📄 Request new ID from all listed</button>
-      </div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Alert</th><th>Employee</th><th>Department</th><th>Date</th><th>Days left</th><th>Manager / HR response</th><th></th></tr></thead><tbody id="hra-tbl"></tbody></table></div>
-    <div class="foot">An alert leaves this list once someone in HR marks it handled, or when the date is updated (for example a renewed contract or a new ID expiry date). Direct managers see their team's contract and probation alerts on the phone app and can recommend a decision.</div>
-  </div>
-  <div class="card" style="padding:18px" id="hra-rules">
-    <div class="sec" style="margin-top:0">Annual leave rules</div>
-    <div class="grid3" style="align-items:end">
-      <div class="field"><label>Days per year in the first employment year</label><input id="lrl-first" type="number" min="0" step="0.5"></div>
-      <div class="field"><label>Days per year after the first year</label><input id="lrl-normal" type="number" min="0" step="0.5"></div>
-      <div class="field"><label>Days per year after 10 years of insurance or age 50</label><input id="lrl-senior" type="number" min="0" step="0.5"></div>
-      <div class="field"><label>Years of insurance for the higher rate</label><input id="lrl-senyears" type="number" min="1" step="1"></div>
-      <div class="field"><label>…or from this age (whichever comes first)</label><input id="lrl-senage" type="number" min="18" step="1"></div>
-      <div class="field"><label>Emergency days inside the annual leave (per full year)</label><input id="lrl-emerg" type="number" min="0" step="0.5"></div>
-      <div class="field"><label>Months of service before an employee may request leave</label><input id="lrl-wait" type="number" min="0" step="1"></div>
-      <div class="field"><label>Most unused days moved to the next year (the joining year always moves in full)</label><input id="lrl-cap" type="number" min="0" step="0.5"></div>
-      <div class="field"><label>First year counted by the system (balances before it = "leave balance carried in" on the employee)</label><input id="lrl-start" type="number" min="2000" step="1"></div>
-    </div>
-    <div class="sec">Alert days</div>
-    <div class="grid3" style="align-items:end">
-      <div class="field"><label>Contract renewal — days before the end</label><input id="hal-contract" type="number" min="1" step="1"></div>
-      <div class="field"><label>End of probation — days before</label><input id="hal-probation" type="number" min="1" step="1"></div>
-      <div class="field"><label>National ID expiry — days before</label><input id="hal-id" type="number" min="1" step="1"></div>
-      <div class="field"><label>Certificate expiry — days before</label><input id="hal-cert" type="number" min="1" step="1"></div>
-      <div class="field"><label>Disability card expiry — days before</label><input id="hal-dis" type="number" min="1" step="1"></div>
-    </div>
-    <button class="btn btn-primary" id="hra-save-rules" style="margin-top:12px">Save rules</button> <span id="hra-rules-note" style="font-size:12px;color:var(--muted);margin-left:8px"></span>
-  </div>
-</div>
+<div class="page" id="page-hralerts"><div id="react-hralerts"></div></div>   <!-- drawn by React: react/src/hralerts -->
 
 <!-- SETTINGS -->
 <div class="page" id="page-settings">
@@ -892,13 +854,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="modal-foot"><button class="btn btn-ghost" data-close="m-cert">Cancel</button><button class="btn btn-primary" id="cert-save">Save certificate</button></div>
 </div></div>
 
-<!-- MODAL: HR ALERT DECISION -->
-<div class="overlay" id="m-hra"><div class="modal" style="max-width:560px">
-  <div class="modal-head"><div class="modal-title" id="hra-m-title">Decision</div><button class="x" data-close="m-hra">×</button></div>
-  <div id="hra-m-info" style="font-size:13px;line-height:1.6;margin-bottom:10px"></div>
-  <div class="field"><label>Note (optional)</label><textarea id="hra-m-note" rows="3"></textarea></div>
-  <div class="modal-foot" id="hra-m-btns"></div>
-</div></div>
 
 <!-- MODAL: ATTENDANCE -->
 <div class="overlay" id="m-att"><div class="modal" style="max-width:680px">
@@ -1142,12 +1097,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="modal-foot"><button class="btn btn-ghost" id="idle-out">Sign out now</button><button class="btn btn-primary" id="idle-stay">Stay signed in</button></div>
 </div></div>
 
-<!-- MODAL: DOCUMENT REQUESTS (part31.js) -->
-<div class="overlay" id="m-doc"><div class="modal" style="max-width:520px">
-  <div class="modal-head"><div class="modal-title" id="doc-m-title"></div><button class="x" data-close="m-doc">×</button></div>
-  <div id="doc-m-body"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-doc">Cancel</button><button class="btn btn-primary" id="doc-m-ok">OK</button></div>
-</div></div>
 
 <!-- MODAL: CONFIRM -->
 <!-- MODAL: CANCEL / CLOSE WITH A REASON (records are never deleted — database file 100) -->
@@ -1168,6 +1117,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=b7aba2c0886f"></script>
-<script src="react.js?v=ae521857b5fa"></script>
+<script src="app.js?v=25b014a1ff52"></script>
+<script src="react.js?v=98a4f21f26a0"></script>
 </body></html>

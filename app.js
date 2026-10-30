@@ -4422,117 +4422,26 @@ function addYearISO(s, n = 1){ const [y, m, d] = s.split('-').map(Number), x = n
 async function loadHRAlerts(){
   if (!canHRA()) return;
   HRA.loading = true;
-  const [a, r] = await Promise.all([ sb.rpc('hr_alerts'), sb.from('settings').select('*').in('key', ['leave_rules','hr_alerts']),
-                                    typeof loadDocRequests === 'function' ? loadDocRequests().catch(()=>{}) : null ]);
+  const [a, r] = await Promise.all([ sb.rpc('hr_alerts'), sb.from('settings').select('*').in('key', ['leave_rules','hr_alerts']) ]);
   HRA.loading = false; HRA.loaded = true;
   HRA.missing = !!a.error; HRA.list = Array.isArray(a.data) ? a.data : [];
   (r.data || []).forEach(x => { if (HR_RULES_DEF[x.key]) HR_RULES[x.key] = { ...HR_RULES_DEF[x.key], .../** @type {object} — the saved alert rule */ (x.value || {}) }; });
   hraBadge();
+  if (typeof PKR !== 'undefined') PKR.render();
 }
 const hraOpen = () => HRA.list.filter(a => !a.done);
 function hraBadge(){ const n = hraOpen().length, el = $('hra-badge'); if (el){ el.style.display = n ? '' : 'none'; el.textContent = n; } }
-const hraDays = n => { n = Number(n); return n < 0 ? `<span class="neg">${-n} day${n === -1 ? '' : 's'} ago</span>` : n === 0 ? '<span class="neg">today</span>' : `in ${n} day${n === 1 ? '' : 's'}`; };
-const hraKey = a => [a.kind, a.emp_id, a.ref_id || '', a.due].join('|');
-const hraFind = k => HRA.list.find(a => hraKey(a) === k);
-function hraResp(a){
-  return (a.responses || []).map(r => `<div style="font-size:12px;margin-bottom:3px"><span class="chip ${/^(not_|seen)/.test(r.decision) ? 'c-grey' : 'c-green'}" style="padding:1px 6px">${esc(HRA_DEC[r.decision] || r.decision)}</span>
-      ${r.role === 'manager' ? 'Manager' : 'HR'}: ${esc(r.name || r.emp || '')}${r.note ? ` — ${esc(r.note)}` : ''}</div>`).join('') || '<span style="color:var(--muted)">—</span>';
+// The HR alerts PAGE is React since 30 Oct 2026 (react/src/hralerts, incl. the national-ID requests of the old part31).
+// Kept here: the list (HRA) for the dashboard banner + menu badge, the rules (HR_RULES) used by leave balances.
+// Bridge for React: after a decision / document review the list is read again and the dashboard redrawn.
+async function hrAlertsChanged(){ await loadHRAlerts(); renderDashboard(); }
+/** @param {typeof HR_RULES} rules */
+function hrRulesSaved(rules){ HR_RULES = rules; LB.clear(); LB_ALL.year = null; }
+/** an employee's record changed outside the employee window (contract renewed, new ID expiry accepted) @param {string} id @param {Partial<Employee>} patch */
+function employeePatched(id, patch){
+  const i = S.employees.findIndex(x => String(x.id) === String(id));
+  if (i >= 0) S.employees[i] = { ...S.employees[i], ...patch };
 }
-function renderHRAlerts(){
-  const noStart = S.employees.filter(e => e.status !== 'Inactive' && (e.contract_type || '') !== 'Permanent' && !e.contract_start_date && !e.contract_end_date);
-  $('hra-missing').innerHTML = HRA.missing
-    ? '<div class="alert a-warn" style="margin-bottom:12px">Database update <b>47-leave-entitlement-hr-alerts.sql</b> has not been run yet — alerts are not available.</div>'
-    : noStart.length ? `<div class="alert a-warn" style="margin-bottom:12px">📄 <b>${noStart.length}</b> temporary / contract employee${noStart.length === 1 ? ' has' : 's have'} no contract start date, so no renewal alert can be made for ${noStart.length === 1 ? 'him' : 'them'}.
-        Open the employee → <b>Contract</b> → enter <b>Contract start</b> and save (the end date fills in by itself).
-        <details style="margin-top:6px"><summary style="cursor:pointer">Show them</summary><div style="margin-top:6px;line-height:1.9">${noStart.map(e => `<a href="#" data-hra-emp="${esc(e.id)}">${esc(e.id)} ${esc(empName(e))}</a>`).join(' · ')}</div></details></div>` : '';
-  const k = $('hra-kind').value, showDone = $('hra-done').checked, q = $('hra-q').value.trim().toLowerCase();
-  const list = HRA.list.filter(a => (!k || a.kind === k) && (showDone || !a.done)
-                                 && (!q || [a.emp_id, a.name_en, a.name_ar].some(v => String(v || '').toLowerCase().includes(q))));
-  $('hra-count').textContent = `${list.length} alert${list.length === 1 ? '' : 's'}${showDone ? '' : ' to handle'}`;
-  $('hra-tbl').innerHTML = list.map(a => { const kd = HRA_KIND[a.kind] || [a.kind, 'c-grey'], key = esc(hraKey(a));
-    let btns;
-    if (a.kind === 'contract') btns = (canEditMaster() ? `<button class="btn btn-success btn-sm" data-hra-act="renew" data-k="${key}">Renew 1 year</button> ` : '')
-                                    + `<button class="btn btn-ghost btn-sm" data-hra-act="not_renew" data-k="${key}">Not renewing</button>`;
-    else if (a.kind === 'probation') btns = `<button class="btn btn-success btn-sm" data-hra-act="confirm" data-k="${key}">Confirm</button> <button class="btn btn-ghost btn-sm" data-hra-act="not_confirm" data-k="${key}">Do not confirm</button>`;
-    else btns = (a.kind === 'id' && typeof hraDocCell === 'function' ? hraDocCell(a) : '')
-              + (canEditMaster() ? `<button class="btn btn-ghost btn-sm" data-hra-emp="${esc(a.emp_id)}">Update the date</button> ` : '') + `<button class="btn btn-ghost btn-sm" data-hra-act="seen" data-k="${key}">Mark handled</button>`;
-    return `<tr${a.done ? ' style="opacity:.6"' : ''}><td><span class="chip ${kd[1]}">${kd[0]}</span>${a.detail ? `<div style="font-size:12px;margin-top:4px">${esc(a.kind === 'disability' ? 'Card ' + a.detail : a.detail)}</div>` : ''}</td>
-      <td class="strong"><a href="#" data-hra-emp="${esc(a.emp_id)}">${esc(a.name_en || a.name_ar || a.emp_id)}</a> <span class="mono" style="color:var(--muted)">${esc(a.emp_id)}</span>${a.job ? `<div style="font-size:12px;color:var(--muted);font-weight:400">${esc(a.job)}</div>` : ''}</td>
-      <td>${esc(a.department || '')}</td><td class="mono">${esc(a.due)}</td><td style="white-space:nowrap">${hraDays(a.days_left)}</td>
-      <td style="white-space:normal;min-width:190px">${hraResp(a)}</td><td style="white-space:nowrap">${a.done ? '<span class="chip c-green">handled</span>' : btns}</td></tr>`; }).join('')
-    || `<tr><td colspan="7" class="empty">${HRA.loaded ? 'Nothing needs attention' : 'Loading…'}</td></tr>`;
-  renderHRRules();
-}
-function renderHRRules(){
-  const L = HR_RULES.leave_rules, A = HR_RULES.hr_alerts;
-  const set = (id, v) => { const el = $(id); if (el && document.activeElement !== el) el.value = v; };
-  set('lrl-first', L.first_year_days); set('lrl-normal', L.normal_days); set('lrl-senior', L.senior_days); set('lrl-senyears', L.senior_insured_years); set('lrl-senage', L.senior_age);
-  set('lrl-emerg', L.emergency_days); set('lrl-wait', L.wait_months); set('lrl-cap', L.carry_cap); set('lrl-start', L.start_year);
-  set('hal-contract', A.contract_days); set('hal-probation', A.probation_days); set('hal-id', A.id_days); set('hal-cert', A.cert_days); set('hal-dis', A.disability_days);
-  const ro = !canHRW();
-  document.querySelectorAll('#hra-rules input').forEach(i => { i.disabled = ro; });
-  $('hra-save-rules').style.display = ro ? 'none' : '';
-  $('hra-rules-note').textContent = ro ? 'View only — HR or an administrator can change these rules.' : '';
-}
-PAGE_RENDER.hralerts = () => { renderHRAlerts(); loadHRAlerts().then(renderHRAlerts, renderHRAlerts); };
-['hra-kind','hra-done'].forEach(id => $(id).addEventListener('change', renderHRAlerts));
-$('hra-q').addEventListener('input', renderHRAlerts);
-$('hra-refresh').addEventListener('click', () => loadHRAlerts().then(() => { renderHRAlerts(); toast('Alerts refreshed'); }));
-$('hra-save-rules').addEventListener('click', async () => {
-  const n = id => Number($(id).value);
-  const L = { ...HR_RULES.leave_rules, first_year_days:n('lrl-first'), normal_days:n('lrl-normal'), senior_days:n('lrl-senior'), senior_insured_years:Math.round(n('lrl-senyears')), senior_age:Math.round(n('lrl-senage')),
-              emergency_days:n('lrl-emerg'), wait_months:Math.round(n('lrl-wait')), carry_cap:n('lrl-cap'), start_year:Math.round(n('lrl-start')) };
-  const A = { ...HR_RULES.hr_alerts, contract_days:Math.round(n('hal-contract')), probation_days:Math.round(n('hal-probation')), id_days:Math.round(n('hal-id')),
-              cert_days:Math.round(n('hal-cert')), disability_days:Math.round(n('hal-dis')) };
-  if ([L.first_year_days, L.normal_days, L.senior_days, L.emergency_days, L.carry_cap, L.wait_months].some(v => !(v >= 0)) || !(L.senior_insured_years >= 1) || !(L.senior_age >= 18) || !(L.start_year >= 2000))
-    return toast('Check the leave rules — every box needs a number', 'warn');
-  if (Object.values(A).some(v => !(v >= 1 && v <= 400))) return toast('Alert days must be between 1 and 400', 'warn');
-  for (const [key, value] of [['leave_rules', L], ['hr_alerts', A]]){
-    const { error } = await sb.rpc('save_hr_rules', { p_key:key, p_value:value });
-    if (error) return toast(error.message, 'err');
-  }
-  HR_RULES = { leave_rules:L, hr_alerts:A }; LB.clear(); LB_ALL.year = null;
-  await loadHRAlerts(); renderHRAlerts(); toast('Rules saved');
-});
-// decisions
-let HRA_PICK = null;
-document.addEventListener('click', e => {
-  const em = /** @type {PageEl} */ (e.target).closest('[data-hra-emp]'); if (em){ e.preventDefault(); return openEmp(em.dataset.hraEmp); }
-  const b = /** @type {PageEl} */ (e.target).closest('[data-hra-act]'); if (!b) return;
-  const a = hraFind(b.dataset.k); if (!a) return;
-  const act = /** @type {string} */ (b.dataset.hraAct), nm = `<b>${esc(a.name_en || a.name_ar || a.emp_id)}</b> (${esc(a.emp_id)})`;
-  HRA_PICK = { a, act };
-  const info = {
-    renew: `${nm}'s contract ends on <b>${esc(a.due)}</b>. Renewing sets the new contract <b>${esc(addDaysISO(a.due, 1))} → ${esc(addYearISO(a.due))}</b> (one year, ending the day before) on the employee record.`,
-    not_renew: `${nm}'s contract ends on <b>${esc(a.due)}</b>. Record that it will <b>not</b> be renewed. (Nothing else changes — when he leaves, make him Inactive with the resignation date as usual.)`,
-    confirm: `${nm}'s probation ends on <b>${esc(a.due)}</b>. Record that he is <b>confirmed</b> in his job.`,
-    not_confirm: `${nm}'s probation ends on <b>${esc(a.due)}</b>. Record that he is <b>not confirmed</b>.`,
-    seen: `${HRA_KIND[a.kind] ? HRA_KIND[a.kind][0] : a.kind} for ${nm} on <b>${esc(a.due)}</b>. Mark it handled — it leaves the list. Tip: entering the new expiry date on the employee also clears it.`
-  }[act];
-  const mgr = (a.responses || []).filter(r => r.role === 'manager');
-  $('hra-m-title').textContent = { renew:'Renew contract for 1 year', not_renew:'Contract will not be renewed', confirm:'Confirm after probation', not_confirm:'Not confirmed after probation', seen:'Mark handled' }[act];
-  $('hra-m-info').innerHTML = info + (mgr.length ? `<div style="margin-top:8px">Manager's recommendation: ${hraResp({ responses:mgr })}</div>` : '');
-  $('hra-m-note').value = '';
-  $('hra-m-btns').innerHTML = `<button class="btn btn-ghost" data-close="m-hra">Cancel</button><button class="btn ${/^not_/.test(act) ? 'btn-danger' : 'btn-primary'}" id="hra-m-go">${esc($('hra-m-title').textContent)}</button>`;
-  openM('m-hra');
-});
-document.addEventListener('click', async e => {
-  if (!/** @type {PageEl} */ (e.target).closest('#hra-m-go') || !HRA_PICK) return;
-  const { a, act } = HRA_PICK, btn = $('hra-m-go'); btn.disabled = true;
-  try {
-    if (act === 'renew'){
-      const upd = { contract_start_date:addDaysISO(a.due, 1), contract_end_date:addYearISO(a.due) };   // next day → one year later, the day before
-      const res = await sb.from('employees').update(upd).eq('id', a.emp_id).select();
-      if (res.error) throw res.error; if (!(res.data && res.data.length)) throw new Error(NOPERM);
-      const i = S.employees.findIndex(x => String(x.id) === String(a.emp_id)); if (i >= 0) S.employees[i] = { ...S.employees[i], ...res.data[0] };
-    }
-    const { error } = await sb.rpc('hr_alert_respond', { p_kind:a.kind, p_emp:a.emp_id, p_ref:a.ref_id || '', p_due:a.due, p_decision:act, p_note:$('hra-m-note').value.trim() || null });
-    if (error) throw error;
-    closeM('m-hra'); toast(act === 'renew' ? `Contract renewed until ${addYearISO(a.due)}` : 'Saved');
-    await loadHRAlerts(); renderHRAlerts(); renderDashboard();
-  } catch (err){ toast(err.message || String(err), 'err'); }
-  btn.disabled = false;
-});
 // dashboard alert + menu badge (loads once after sign-in, again when the page is opened)
 const _renderDashboard26 = renderDashboard;
 // @ts-expect-error — renderDashboard is deliberately extended here (the new version wraps the earlier one)
@@ -4938,85 +4847,6 @@ document.addEventListener('change', e => {
     const u = document.querySelector('#emp-form [data-f="unit"]');
     if (u && u.tagName === 'SELECT') { const keep = pickOptions('unit', el.value).includes(u.value) ? u.value : ''; u.outerHTML = pickSelect('unit', 'unit', keep, el.value); }   // a unit of another department is cleared
   }
-});
-
-// ═════════════════════════════════════════════════════════
-//  DOCUMENT REQUESTS from the HR alerts page (61-document-requests.sql, 21 Oct 2026)
-//  National ID alerts: "📄 Request new ID" → the employee answers from the phone with a photo + the new expiry date →
-//  HR views the copy, Accepts (the employee's ID expiry date is updated, the alert disappears) or Returns it with a note.
-// ═════════════════════════════════════════════════════════
-let DOCS = { byEmp: new Map(), missing: false }, DOC_PICK = null;
-async function loadDocRequests(){
-  const r = await sb.from('doc_requests').select('*').eq('kind', 'national_id').neq('status', 'Cancelled').order('requested_at', { ascending:false });
-  DOCS.missing = !!r.error; DOCS.byEmp = new Map();
-  (r.data || []).forEach(d => { if (!DOCS.byEmp.has(d.emp_id)) DOCS.byEmp.set(d.emp_id, d); });     // latest per employee
-}
-const docOpen = d => d && ['Requested', 'Submitted', 'Returned'].includes(d.status);
-const docDay = t => t ? new Date(t).toLocaleDateString('en-GB', { day:'numeric', month:'short' }) : '';
-// the status line + buttons shown on a national-ID alert row
-function hraDocCell(a){
-  if (DOCS.missing) return '';
-  const d = DOCS.byEmp.get(a.emp_id);
-  if (d && d.status === 'Submitted') return `<div style="margin-bottom:4px"><span class="chip c-blue">📄 Copy received ${esc(docDay(d.submitted_at))}</span></div>
-      <button class="btn btn-ghost btn-sm" data-doc-view="${esc(d.id)}">👁 View copy</button> <button class="btn btn-success btn-sm" data-doc-ok="${esc(d.id)}">✓ Accept</button> <button class="btn btn-ghost btn-sm" data-doc-back="${esc(d.id)}">↩ Return</button> `;
-  if (docOpen(d)) return `<div style="margin-bottom:4px"><span class="chip c-orange" title="${esc(d.review_note || '')}">📄 ${d.status === 'Returned' ? 'Returned' : 'Requested'} ${esc(docDay(d.status === 'Returned' ? d.reviewed_at : d.requested_at))} — waiting for the employee</span></div>
-      <button class="btn btn-ghost btn-sm" data-doc-cancel="${esc(d.id)}">Cancel request</button> `;
-  return `<button class="btn btn-primary btn-sm" data-doc-req="${esc(a.emp_id)}">📄 Request new ID</button> `;
-}
-function docModal(title, html, okText, okClass, onOk){
-  $('doc-m-title').textContent = title; $('doc-m-body').innerHTML = html;
-  $('doc-m-ok').textContent = okText; $('doc-m-ok').className = 'btn ' + okClass;
-  $('doc-m-ok').onclick = async () => { $('doc-m-ok').disabled = true; try { await onOk(); } catch(e){ toast(e.message, 'err'); } $('doc-m-ok').disabled = false; };
-  openM('m-doc');
-}
-const DOC_MSG = 'Your national ID card has expired (or expires soon). Please send a photo of the renewed card. · بطاقة الرقم القومي منتهية أو قاربت على الانتهاء — يرجى إرسال صورة البطاقة الجديدة.';
-function docRequest(emps){
-  const n = emps.length, who = n === 1 ? `<b>${esc(empName(empById(emps[0])) || emps[0])}</b> (${esc(emps[0])})` : `<b>${n}</b> employees`;
-  docModal('📄 Request the renewed national ID',
-    `<p style="color:var(--label)">${who} will get a request in the phone app (and a notification) to attach a photo of the new ID card and its expiry date.</p>
-     <div class="field"><label>Message to the employee (optional)</label><textarea id="doc-msg" rows="3">${esc(DOC_MSG)}</textarea></div>`,
-    n === 1 ? 'Send request' : `Send ${n} requests`, 'btn-primary', async () => {
-      const { data, error } = await sb.rpc('request_documents', { p_emps: emps, p_kind: 'national_id', p_message: $('doc-msg').value.trim() });
-      if (error) throw error;
-      closeM('m-doc'); toast(`${data} request${data === 1 ? '' : 's'} sent${data < n ? ` · ${n - data} skipped (already asked, or not active)` : ''}`);
-      await loadDocRequests(); renderHRAlerts();
-    });
-}
-document.addEventListener('click', async e => {
-  const rq = /** @type {PageEl} */ (e.target).closest('[data-doc-req]'); if (rq) return docRequest([rq.dataset.docReq]);
-  if (/** @type {PageEl} */ (e.target).closest('#hra-doc-all')) {
-    const emps = [...new Set([...document.querySelectorAll('#hra-tbl [data-doc-req]')].map(b => b.dataset.docReq))];
-    return emps.length ? docRequest(emps) : toast('Every national-ID alert listed already has a request', 'warn');
-  }
-  const vw = /** @type {PageEl} */ (e.target).closest('[data-doc-view]');
-  if (vw) { const d = [...DOCS.byEmp.values()].find(x => x.id === vw.dataset.docView); if (!d) return;
-    const { data, error } = await sb.storage.from('employee-docs').createSignedUrl(d.file_path, 600);
-    return error ? toast(error.message, 'err') : window.open(data.signedUrl, '_blank', 'noopener'); }
-  const ok = /** @type {PageEl} */ (e.target).closest('[data-doc-ok]');
-  if (ok) { const d = [...DOCS.byEmp.values()].find(x => x.id === ok.dataset.docOk); if (!d) return;
-    return docModal('✓ Accept the new ID',
-      `<p style="color:var(--label)"><b>${esc(empName(empById(d.emp_id)) || d.emp_id)}</b> (${esc(d.emp_id)}) sent the copy on ${esc(docDay(d.submitted_at))}. Check the photo first (👁 View copy).</p>
-       <div class="field"><label>New national ID expiry date (as typed by the employee — correct it if the card shows another date)</label><input type="date" id="doc-exp" value="${esc(d.new_expiry || '')}"></div>`,
-      'Accept and update the date', 'btn-success', async () => {
-        const { error } = await sb.rpc('review_document', { p_id: d.id, p_accept: true, p_new_expiry: $('doc-exp').value || null, p_note: null });
-        if (error) throw error;
-        const emp = empById(d.emp_id); if (emp) emp.national_id_expiry = $('doc-exp').value;
-        closeM('m-doc'); toast('Accepted — the national ID expiry date is updated'); await loadDocRequests(); await loadHRAlerts(); renderHRAlerts();
-      }); }
-  const bk = /** @type {PageEl} */ (e.target).closest('[data-doc-back]');
-  if (bk) { const d = [...DOCS.byEmp.values()].find(x => x.id === bk.dataset.docBack); if (!d) return;
-    return docModal('↩ Return to the employee',
-      `<p style="color:var(--label)">The employee is asked to send it again, with your note.</p>
-       <div class="field"><label>What is wrong? (the employee sees this)</label><textarea id="doc-note" rows="3" placeholder="e.g. The photo is not clear — please take it again in good light · الصورة غير واضحة"></textarea></div>`,
-      'Return', 'btn-danger', async () => {
-        const { error } = await sb.rpc('review_document', { p_id: d.id, p_accept: false, p_new_expiry: null, p_note: $('doc-note').value.trim() });
-        if (error) throw error;
-        closeM('m-doc'); toast('Returned to the employee'); await loadDocRequests(); renderHRAlerts();
-      }); }
-  const cn = /** @type {PageEl} */ (e.target).closest('[data-doc-cancel]');
-  if (cn) return confirmDel('Cancel this document request? The employee will no longer see it.', async () => {
-    const { error } = await sb.rpc('cancel_document_request', { p_id: /** @type {string} */ (cn.dataset.docCancel) }); if (error) throw error;
-    toast('Request cancelled'); await loadDocRequests(); renderHRAlerts(); });
 });
 
 // ═════════════════════════════════════════════════════════

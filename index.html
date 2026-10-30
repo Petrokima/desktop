@@ -166,8 +166,6 @@ body:not(.can-hr):not(.can-master) :is([data-act="new-att"],#mi-open,[data-act="
 #pay-table.pay-expanded :is(th,td):nth-child(2){position:sticky;left:0;z-index:2;background:var(--card);box-shadow:1px 0 0 var(--border)}
 a.maplink{color:var(--link);text-decoration:none;white-space:nowrap} a.maplink:hover{text-decoration:underline}
 body:not(.can-pay) :is(#pk-add,[data-del-fixed]){display:none!important}
-/* loans: HR adds loans and postpones instalments too (62) */
-body:not(.can-pay):not(.can-hr) :is([data-act="new-loan"],#l-save,[data-del-loan],[data-lpp],[data-lpp-undo],#lpp-save){display:none!important}
 .lpp-chip{display:inline-flex;align-items:center;gap:4px;margin:3px 4px 0 0;font-size:11px}
 .lpp-chip button{border:0;background:none;cursor:pointer;color:inherit;padding:0 2px;font-size:12px}
 body:not(.can-var) :is(#mon-save,#mon-add-btn,#mon-pick,#mon-bulk,#mp-attended,#mp-fill,#mp-fill-go,[data-act="new-var"],[data-mon-add],[data-mon-rm]){display:none!important}
@@ -672,12 +670,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div class="page" id="page-penalties"><div id="react-penalties"></div></div>
 
 <!-- LOANS -->
-<div class="page" id="page-loans">
-  <div class="page-header"><div><div class="page-title">Staff Loans</div><div class="page-sub" id="loan-sub"></div></div>
-    <button class="btn btn-primary" data-act="new-loan">+ New Loan</button></div>
-  <div class="card"><div class="toolbar"><span class="toolbar-title">Loans</span><div class="toolbar-right"><select class="sel" id="loan-status" title="Filter by status"><option value="">All statuses</option></select><select class="sel" id="loan-dept"><option value="">All departments</option></select><input class="inp" id="loan-q" placeholder="Search employee or reference…"></div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Reference</th><th class="num">Loan</th><th class="num">Months</th><th class="num">Instalment</th><th>First deduction</th><th class="num">Settled</th><th class="num">Outstanding</th><th>This period</th><th>Status</th><th></th></tr></thead><tbody id="loan-tbl"></tbody></table></div><div class="foot" id="loan-foot"></div></div>
-</div>
+<div class="page" id="page-loans"><div id="react-loans"></div></div>
 
 <!-- PAYROLL -->
 <div class="page" id="page-payroll">
@@ -983,31 +976,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 
 <!-- MODAL: PROJECT -->
 <!-- MODAL: LOAN -->
-<div class="overlay" id="m-loan"><div class="modal">
-  <div class="modal-head"><div class="modal-title">New staff loan</div><button class="x" data-close="m-loan">×</button></div>
-  <div class="grid2">
-    <div class="field full"><label>Employee</label><input id="l-emp" list="dl-emp" placeholder="Start typing…"></div>
-    <div class="field"><label>Loan amount (EGP)</label><input type="number" id="l-amt"></div>
-    <div class="field"><label>Number of months</label><input type="number" id="l-per"></div>
-    <div class="field"><label>First deduction month</label><input type="month" id="l-start"></div>
-    <div class="field"><label>Already settled (EGP)</label><input type="number" id="l-set" value="0"></div>
-    <div class="field full"><label>Reference</label><input id="l-ref"></div>
-  </div>
-  <div id="l-preview" style="font-size:12px;color:var(--muted);margin-top:10px"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-loan">Cancel</button><button class="btn btn-primary" id="l-save">Save loan</button></div>
-</div></div>
-
-<div class="overlay" id="m-lpp"><div class="modal">
-  <div class="modal-head"><div class="modal-title">⏸ Postpone a loan instalment</div><button class="x" data-close="m-lpp">×</button></div>
-  <div id="lpp-info" style="font-size:13px;margin-bottom:12px"></div>
-  <div class="grid2">
-    <div class="field full"><label>Month to postpone (no deduction that month)</label><select id="lpp-month"></select></div>
-    <div class="field full"><label>Who approved it — required (the request and approval are handled outside the app)</label><input id="lpp-note" maxlength="300" placeholder="e.g. Employee asked on 19 Oct · approved by Dalia on 20 Oct"></div>
-  </div>
-  <div id="lpp-preview" style="font-size:12px;color:var(--muted);margin-top:10px"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-lpp">Cancel</button><button class="btn btn-primary" id="lpp-save">Postpone</button></div>
-</div></div>
-
 <!-- MODAL: EMPLOYEES FIXED TO AN OFFICE (67) -->
 <div class="overlay" id="m-wlemp"><div class="modal" style="max-width:760px">
   <div class="modal-head"><div class="modal-title" id="wle-title">Employees of the office</div><button class="x" data-close="m-wlemp">×</button></div>
@@ -1245,6 +1213,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=6d8f7f3f423b"></script>
-<script src="react.js?v=044b597abf47"></script>
+<script src="app.js?v=c213de7adfb3"></script>
+<script src="react.js?v=eee387fd1bd7"></script>
 </body></html>

@@ -453,7 +453,7 @@ function buildLists(){
   const depts = [...new Set(S.employees.map(e=>e.department).filter(Boolean))].sort();
   const units = [...new Set(S.employees.map(e=>e.unit).filter(Boolean))].sort();
   const dOpts = '<option value="">All departments</option>' + depts.map(d=>`<option>${esc(d)}</option>`).join('');
-  ['emp-dept','mon-dept','pay-dept','rep-dept','loan-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
+  ['emp-dept','mon-dept','pay-dept','rep-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
   const uv=$('emp-unit').value; $('emp-unit').innerHTML='<option value="">All units</option>'+units.map(u=>`<option>${esc(u)}</option>`).join(''); $('emp-unit').value=uv;
   const mEls = S.elements.filter(e => e.input_method==='Monthly' && e.active!==false);
   const mv=$('mon-el').value;
@@ -1247,93 +1247,24 @@ async function saveMonthly(){
 // ═════════════════════════════════════════════════════════
 //  LOANS
 // ═════════════════════════════════════════════════════════
-function renderLoans(){
-  const p=settings.period;
-  const out = S.loans.reduce((s,l)=>s+Math.max(0,num(l.loan_amount)-num(l.amount_settled)),0);
-  const thisP = S.loans.reduce((s,l)=>s+loanInstalment(l,p),0);
-  $('loan-sub').textContent = `${S.loans.length} loans · outstanding ${fmt(out)} EGP · deducting ${fmt(thisP)} EGP in ${p}`;
-  const q = ($('loan-q').value||'').trim().toLowerCase();
-  const base = S.loans.filter(l => { const e=empOrBlank(l.emp_id);
-    return orgMatch(e,'loan') && (!q || [l.emp_id, e.name_en, e.name_ar, l.reference].some(v=>String(v||'').toLowerCase().includes(q))); });
-  const st = stFill('loan-status', base.map(l => l.status));
-  const list = base.filter(l => !st || l.status===st);
-  $('loan-foot').textContent = `${list.length} of ${S.loans.length} loan${S.loans.length===1?'':'s'} shown` + (list.length ? ` · outstanding ${fmt(list.reduce((s,l)=>s+Math.max(0,num(l.loan_amount)-num(l.amount_settled)),0))} EGP · this period ${fmt(list.reduce((s,l)=>s+loanInstalment(l,p),0))} EGP` : '');
-  $('loan-tbl').innerHTML = list.map(l => { const e=empById(l.emp_id); const inst=loanInstalment(l,p);
-    return `<tr><td class="strong">${esc(empName(e)||l.emp_id)} <span class="mono" style="color:var(--muted)">${esc(l.emp_id)}</span></td>
-      <td class="mono">${esc(l.reference||'—')}</td><td class="num">${fmt(l.loan_amount)}</td><td class="num">${esc(l.periods)}</td>
-      <td class="num">${fmt(l.installment)}</td><td class="mono">${esc(l.start_period)}${loanEndCell(l)}</td><td class="num">${fmt(l.amount_settled)}</td>
-      <td class="num">${fmt(num(l.loan_amount)-num(l.amount_settled))}</td>
-      <td>${inst?`<span class="chip c-orange">−${fmt(inst)}</span>`:'<span class="chip c-grey">none</span>'}</td>
-      <td>${chip(l.status)}</td><td style="white-space:nowrap">${l.status==='Active'?`<button class="icon-btn" data-lpp="${l.id}" title="Postpone an instalment">⏸️</button>`:''}<button class="icon-btn" data-del-loan="${l.id}">🗑</button></td></tr>`; }).join('')
-    || `<tr><td colspan="11" class="empty">${S.loans.length ? 'No loans for this selection' : 'No loans recorded'}</td></tr>`;
-}
-// "ends 2027-03" under the first deduction month, plus one chip per postponed month (✕ = undo)
-function loanEndCell(l){
-  const pp = (Array.isArray(l.postponed)?l.postponed:[]).slice().sort();
-  const end = loanEnd(l);
-  return (end ? `<div style="font-size:11px;color:var(--muted)">ends ${esc(end)}</div>` : '') +
-    pp.map(m => `<span class="chip c-blue lpp-chip" title="Instalment postponed — not deducted in ${esc(m)}">⏸️ ${esc(m)}<button data-lpp-undo="${esc(l.id)}|${esc(m)}" title="Undo: deduct in ${esc(m)} again">✕</button></span>`).join('');
-}
-let LPP = null;
+// The page and its two windows moved to React 30 Oct 2026 (react/src/loans). The loan arithmetic stays in part4 (= database
+// _pk_loan_*); the old code keeps the list and the step after a change.
+function renderLoans(){ if (typeof PKR !== 'undefined') PKR.render(); }
 function approvedPeriods(){ return new Set((S.runs||[]).map(r => r.period)); }
-function openLoanPostpone(id){
-  const l = S.loans.find(x => String(x.id) === String(id)); if (!l) return;
-  const e = empById(l.emp_id), done = approvedPeriods(), from = periodIdx(settings.period), opts = [];
+/** months that may still be postponed: from the loaded payroll on, not approved, an instalment due — at most 18 @param {Loan} l */
+function loanPostponeOptions(l){
+  const done = approvedPeriods(), from = periodIdx(settings.period), opts = [];
   for (let i = from; i < from + 36 && opts.length < 18; i++){
     const p = `${Math.floor(i/12)}-${pad(i%12+1)}`;
     if (!done.has(p) && loanDue(l, i)) opts.push(p);
   }
-  if (!opts.length) return toast('This loan has no instalment left to postpone from '+settings.period+' onwards','warn');
-  LPP = l;
-  $('lpp-info').innerHTML = `<b>${esc(empName(e)||l.emp_id)}</b> <span class="mono" style="color:var(--muted)">${esc(l.emp_id)}</span> · loan ${fmt(l.loan_amount)} EGP · instalment ${fmt(loanInstalment(l, opts[0]))} EGP`;
-  $('lpp-month').innerHTML = opts.map(p => `<option value="${p}">${p}${p===settings.period?' (this payroll)':''}</option>`).join('');
-  $('lpp-note').value = '';
-  lppPreview(); openM('m-lpp');
+  return opts;
 }
-function lppPreview(){
-  if (!LPP) return;
-  const m = $('lpp-month').value, before = loanEnd(LPP), after = loanEnd({ ...LPP, postponed:[...(LPP.postponed||[]), m] });
-  $('lpp-preview').textContent = `No deduction in ${m}. The instalment amount stays the same; the last instalment moves from ${before} to ${after}.`;
-}
-async function refreshLoan(id){
-  const { data } = await sb.from('employee_loans').select('*').eq('id', id);
-  if (data && data[0]) S.loans = S.loans.map(x => String(x.id) === String(id) ? data[0] : x);
-  renderLoans(); renderPayroll(); renderDashboard();
-}
-async function saveLoanPostpone(){
-  if (!LPP) return;
-  const note = $('lpp-note').value.trim();
-  if (!note) return toast('Write who approved the postponement','warn');
-  const m = $('lpp-month').value;
-  const { data, error } = await sb.rpc('postpone_loan_instalment', { p_loan: LPP.id, p_period: m, p_note: note });
-  if (error) return toast(error.message,'err');
-  closeM('m-lpp'); await refreshLoan(LPP.id);
-  toast(`Postponed: no deduction in ${m}. The loan now ends ${data||loanEnd(LPP)}.`);
-}
-function undoLoanPostpone(key){
-  const [id, m] = key.split('|');
-  confirmDel(`Undo the postponement? The instalment will be deducted in ${m} again.`, async () => {
-    const { error } = await sb.rpc('undo_loan_postponement', { p_loan: id, p_period: m });
-    if (error) throw error;
-    await refreshLoan(id); toast(`${m} will be deducted again`);
-  });
-  $('del-title').textContent = 'Undo postponement'; $('del-ok').textContent = 'Undo'; $('del-ok').className = 'btn btn-primary';
-}
-function loanPreview(){
-  const a=num($('l-amt').value), n=num($('l-per').value), s=$('l-start').value;
-  if(!a||!n||!s){ $('l-preview').textContent=''; return; }
-  const endI = periodIdx(s)+n-1, y=Math.floor(endI/12), m=endI%12+1;
-  $('l-preview').textContent = `Instalment ${fmt(a/n)} EGP per month, from ${s} to ${y}-${pad(m)}.`;
-}
-async function saveLoan(){
-  const empId=parseEmpInput($('l-emp').value); if(!empId) return toast('Pick an employee from the list','warn');
-  const a=num($('l-amt').value), n=num($('l-per').value), s=$('l-start').value;
-  if(!a||!n||!s) return toast('Amount, months and first deduction month are required','warn');
-  const rec={ emp_id:empId, loan_amount:a, periods:n, start_period:s, amount_settled:num($('l-set').value), reference:$('l-ref').value.trim(), status:'Active' };
-  const { data, error } = await sb.from('employee_loans').insert(rec).select();
-  if(error) return toast(error.message,'err');
-  if (!(data && data.length)) return toast(NOPERM,'err'); S.loans.push(data[0]); closeM('m-loan'); renderLoans(); renderPayroll(); renderDashboard(); toast('Loan saved');
-}
+/** a loan added or read again after a postponement @param {Loan} row */
+function loanSaved(row){ S.loans = S.loans.some(x => String(x.id) === String(row.id)) ? S.loans.map(x => String(x.id) === String(row.id) ? row : x) : S.loans.concat([row]); afterLoanChange(); }
+/** @param {string} id */
+function loanDeleted(id){ S.loans = S.loans.filter(l => l.id !== id); afterLoanChange(); }
+function afterLoanChange(){ renderLoans(); renderPayroll(); renderDashboard(); }
 
 // ═════════════════════════════════════════════════════════
 //  PAYROLL RUN
@@ -1514,7 +1445,6 @@ document.addEventListener('click', async ev => {
     if (a==='self-leave') return openSelfLeave();
     if (a==='self-perm') return openSelfPerm();
     if (a==='self-hr') return openSelfHr();
-    if (a==='new-loan'){ ['l-emp','l-amt','l-per','l-ref'].forEach(i=>$(i).value=''); $('l-set').value='0'; $('l-start').value=settings.period; loanPreview(); return openM('m-loan'); }
     if (a==='reload') return loadAll();
     if (a==='signout') return signOut();
     if (a==='chpass') return openM('m-pass');
@@ -1528,10 +1458,6 @@ document.addEventListener('click', async ev => {
   const da = t.closest('[data-del-att]');
   if (da){ const id=da.dataset.delAtt; return confirmDel('Delete this attendance record?', async()=>{ await del('attendance',id); S.attendance=S.attendance.filter(r=>r.id!==id); if (ATT_RANGE) ATT_RANGE.rows=ATT_RANGE.rows.filter(r=>r.id!==id); renderAttendance(); renderDashboard(); renderPayroll(); renderReports(); toast('Deleted'); }); }
   const ae = t.closest('[data-att-edit]'); if (ae && !t.closest('[data-del-att]')) { const r=attRows().find(x=>String(x.id)===ae.dataset.attEdit); if(r) return openAtt(r); }
-  const lp = t.closest('[data-lpp]'); if (lp) return openLoanPostpone(lp.dataset.lpp);
-  const lu = t.closest('[data-lpp-undo]'); if (lu) return undoLoanPostpone(lu.dataset.lppUndo);
-  const dl = t.closest('[data-del-loan]');
-  if (dl){ const id=dl.dataset.delLoan; return confirmDel('Delete this loan record?', async()=>{ await del('employee_loans',id); S.loans=S.loans.filter(l=>l.id!==id); renderLoans(); renderPayroll(); renderDashboard(); toast('Deleted'); }); }
 });
 
 // inputs
@@ -1550,14 +1476,10 @@ $('mon-tbl').addEventListener('click', e => {
 $('a-status').addEventListener('change', () => { toggleWork(); checkSplits(); });
 $('a-emp').addEventListener('input', checkSplits);
 $('a-splits').addEventListener('input', checkSplits);
-['l-amt','l-per','l-start'].forEach(id => $(id).addEventListener('input', loanPreview));
 $('a-add-split').addEventListener('click', () => addSplit());
 $('a-save').addEventListener('click', saveAtt);
 $('emp-save').addEventListener('click', saveEmp);
 $('emp-pkg').addEventListener('click', e => { if (/** @type {PageEl} */ (e.target).id==='pk-add') addPackageRow(); });
-$('l-save').addEventListener('click', saveLoan);
-$('lpp-save').addEventListener('click', saveLoanPostpone);
-$('lpp-month').addEventListener('change', lppPreview);
 $('mon-save').addEventListener('click', saveMonthly);
 $('pay-export').addEventListener('click', exportPayroll);
 $('set-save').addEventListener('click', saveSettings);
@@ -3045,7 +2967,7 @@ $('aa-q').addEventListener('input', renderApprovals);
 // ═════════════════════════════════════════════════════════
 const ORG_PAGES = { emp:()=>renderEmployees(), att:()=>renderAttendance(),
   mon:()=>renderMonthly(), pay:()=>renderPayroll(), aa:()=>renderApprovals(),
-  loan:()=>renderLoans(), rep:()=>{ if (repCur) runReport(); } };
+  rep:()=>{ if (repCur) runReport(); } };
 // does this employee match the department and unit chosen on page p?
 function orgMatch(e, p){
   const d = ($(p+'-dept') || {}).value || '', u = ($(p+'-unit') || {}).value || '';
@@ -6097,10 +6019,8 @@ function stFill(id, vals){
   sel.classList.toggle('st-on', !!keep);
   return keep;
 }
-/** @type {[string, () => void][]} */ ([['att-status', () => renderAttendance()],
- ['loan-status', () => renderLoans()]])   // loan-dept / loan-unit: part19 ORG_PAGES
+/** @type {[string, () => void][]} */ ([['att-status', () => renderAttendance()]])   // loans: React page since 30 Oct
   .forEach(([id, fn]) => { const el = $(id); if (el) el.addEventListener('change', fn); });
-if ($('loan-q')) $('loan-q').addEventListener('input', () => renderLoans());
 
 // on-screen filter for a table body: adds the box to the card's toolbar and re-applies whenever the rows are redrawn
 function stCellText(td){

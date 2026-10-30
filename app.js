@@ -1,3 +1,4 @@
+// @ts-check — checked by TypeScript (tsconfig.json); keep it free of type errors
 // ═════════════════════════════════════════════════════════
 //  ERROR REPORTING (30 Oct 2026) — keep IDENTICAL in desktop/src/part0err.js and mobile/index.html (checked automatically)
 //  Unexpected errors on staff PCs and phones are reported to Sentry (EU), the standard error-monitoring service, through
@@ -47,10 +48,17 @@ const PK_ERR = (function(){
   };
 })();
 
+// @ts-check — checked by TypeScript (tsconfig.json); keep it free of type errors
 // ═════════════════════════════════════════════════════════
 //  STATE
 // ═════════════════════════════════════════════════════════
 let sb = null;
+/** The data loaded for the current payroll cycle — rows straight from the database (types: types/globals.d.ts).
+ * @type {{ employees: Employee[], projects: Project[], attendance: AttendanceRow[], elements: SalaryElement[], fixed: FixedElement[],
+ *          monthly: MonthlyEntry[], loans: Loan[], permissions: Permission[], leaves: Leave[], penalties: Penalty[], holidays: Holiday[],
+ *          hrreq: HrRequest[], runs: PayrollRun[], runLines: PayrollRunLine[], clocks: ClockEvent[], devices: EmployeeDevice[],
+ *          parRules: AllowanceRule[], allowAppr: AllowanceApproval[], phoneAlerts: PhoneAlert[], empProjects: EmployeeProject[],
+ *          missions: Mission[], [more: string]: any }} */
 const S = { employees:[], projects:[], attendance:[], elements:[], fixed:[], monthly:[], loans:[], permissions:[], leaves:[], penalties:[], holidays:[], hrreq:[], runs:[], runLines:[], clocks:[], devices:[], parRules:[], allowAppr:[], phoneAlerts:[], empProjects:[], missions:[] };
 let permTableMissing = false, leaveTableMissing = false, penTableMissing = false, holTableMissing = false, hrTableMissing = false, runsTableMissing = false, parTableMissing = false, apprTableMissing = false, assignTableMissing = false;
 let holidaySet = new Set();
@@ -58,7 +66,7 @@ const DEFAULTS = {
   companyName:'Petrokima Engineering & Contracting S.A.E.', period:'',
   hoursPerDay:8, daysPerMonth:30, otMultiplier:1.5,
   cycleStartDay:21, shiftStart:'08:00', lateAfter:'09:00', eveningShiftAfter:'14:00', otThreshold:1, otMode:'threshold', permissionsPerMonth:2, permissionMaxHours:2,
-  weekendDays:[5,6], annualLeaveDefault:21, casualCountsAnnual:'yes', noProjectMode:'everyone', requestFlow:'hr', permDeadlineMin:30, annualNoticeDays:1, acctMinEmployees:3, codeUnpaid:40, codeProjAllow:12, codeAbsent:41, codeHoliday:42, holidayExtraDays:1,
+  autoAbsentFrom:'', weekendDays:[5,6], annualLeaveDefault:21, casualCountsAnnual:'yes', noProjectMode:'everyone', requestFlow:'hr', permDeadlineMin:30, annualNoticeDays:1, acctMinEmployees:3, codeUnpaid:40, codeProjAllow:12, codeAbsent:41, codeHoliday:42, holidayExtraDays:1,
   siRateEG:11, siRateSA:10,
   codeOT:5, codeSI:15, codeLoan:6, codeDelay:4, codePenalty:2
 };
@@ -94,6 +102,7 @@ let monEl = null;           // element code monLines was built for
 // ═════════════════════════════════════════════════════════
 //  HELPERS
 // ═════════════════════════════════════════════════════════
+/** @type {(id: string) => any} element by id (typed loosely on purpose: forms, buttons, inputs …) */
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num = v => { const n = Number(v); return isFinite(n) ? n : 0; };
@@ -113,7 +122,7 @@ function cycleOf(date){ if(!date) return ''; const sd=cycleDay(), [y,m,d]=String
 function periodLabel(p){ const f=s=>{ const [y,m,d]=s.split('-').map(Number); return `${d} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1]}`; };
   return `${p} (${f(periodStart(p))} → ${f(periodEnd(p))})`; }
 function daysBetweenIncl(a,b){ const [y1,m1,d1]=a.split('-').map(Number), [y2,m2,d2]=b.split('-').map(Number);
-  return Math.round((new Date(y2,m2-1,d2) - new Date(y1,m1-1,d1))/86400000) + 1; }
+  return Math.round((new Date(y2,m2-1,d2).getTime() - new Date(y1,m1-1,d1).getTime())/86400000) + 1; }
 // Who is on this period's payroll: employed at any point in the cycle (includes leavers who resigned inside it)
 function onPayroll(e, p){
   const s=periodStart(p), en=periodEnd(p);
@@ -153,8 +162,14 @@ function toast(msg, type='ok'){
 function loader(on, msg){ $('loader').style.display = on ? 'flex' : 'none'; if(msg) $('loader-msg').textContent = msg; }
 function openM(id){ $(id).classList.add('open'); }
 function closeM(id){ $(id).classList.remove('open'); }
+/** @returns {Employee | undefined} */
 function empById(id){ return S.employees.find(e => String(e.id) === String(id)); }
+/** the employee, or an empty record when the code is unknown (never undefined) @returns {Employee} */
+function empOrBlank(id){ return empById(id) || /** @type {Employee} */ ({}); }
+/** @returns {SalaryElement | undefined} */
 function elByCode(c){ return S.elements.find(e => Number(e.code) === Number(c)); }
+/** the salary element, or an empty one when the code is unknown @returns {SalaryElement} */
+function elOrBlank(c){ return elByCode(c) || /** @type {SalaryElement} */ ({}); }
 function parseEmpInput(v){ const id = String(v||'').split(' — ')[0].trim(); return empById(id) ? id : null; }
 function parseProjInput(v){ const id = String(v||'').split(' — ')[0].trim(); return S.projects.find(p=>String(p.id)===id) ? id : null; }
 
@@ -455,6 +470,7 @@ function renderAll(){
   renderPageIfNeeded(currentPage());
 }
 
+// @ts-check — checked by TypeScript (tsconfig.json); keep it free of type errors
 // ═════════════════════════════════════════════════════════
 //  PAYROLL ENGINE
 // ═════════════════════════════════════════════════════════
@@ -731,7 +747,7 @@ function computeEmployee(emp){
   const gross = lines.filter(l=>l.type==='Addition').reduce((s,l)=>s+l.amount,0);
   const ded = lines.filter(l=>l.type==='Deduction').reduce((s,l)=>s+l.amount,0);
   const pick = code => lines.filter(l=>String(l.code)===String(code)).reduce((s,l)=>s+l.amount,0);
-  const basicLine = lines.filter(l => l.code===0 || (elByCode(l.code)||{}).is_basic).reduce((s,l)=>s+l.amount,0);
+  const basicLine = lines.filter(l => l.code===0 || (elOrBlank(l.code)).is_basic).reduce((s,l)=>s+l.amount,0);
   const ot = pick(settings.codeOT), si = pick(settings.codeSI), loans = pick(settings.codeLoan), delay = pick(settings.codeDelay);
   const absence = pick(settings.codeAbsent), penalty = pick(settings.codePenalty), holiday = pick(settings.codeHoliday);
   return { emp, lines, basic: basicLine, absence, absentDays: absentDates.length, autoAbsentDays: autoAbs, unpaidDays, loanOwed, penalty, holiday, holDays, days: emp_.days, factor: emp_.factor, partial: emp_.partial, joiner: !!emp_.joiner, leaver: !!emp_.leaver,
@@ -741,7 +757,7 @@ function computeEmployee(emp){
 }
 function currentRun(){ return S.runs.find(r => r.period === settings.period) || null; }
 function snapToResult(l){
-  const live = empById(l.emp_id) || {};
+  const live = empOrBlank(l.emp_id);
   return { otherAdd:0, otherDed:0, basic:0, ot:0, si:0, loans:0, delay:0, absence:0, penalty:0, holiday:0, days:0, ...(l.summary||{}),
     emp: { ...live, id:l.emp_id, name_en:l.name_en, name_ar:l.name_ar, department:l.department, unit:l.unit, entity:l.entity,
            payment_method:l.payment_method, bank_branch:l.bank_branch, bank_account:l.bank_account },
@@ -803,9 +819,11 @@ function renderEmployees(){
   $('emp-foot').textContent = `Showing ${list.length} of ${S.employees.length}. Click any row to view or edit.`;
 }
 
+// @ts-check — checked by TypeScript (tsconfig.json); keep it free of type errors
 // ═════════════════════════════════════════════════════════
 //  EMPLOYEE MODAL
 // ═════════════════════════════════════════════════════════
+/** the employee window: [section, [[field, label, kind, options?], …]] @type {Array<[string, any[][]]>} */
 const EMP_FIELDS = [
   ['Identity', [['id','Code','text'],['name_ar','Arabic name','text','ar'],['name_en','English name','text']]],
   ['Organisation', [['department','Department','pick','dept'],['unit','Unit','pick','unit'],['entity','Entity','select',['Petrokima Egypt HQ','Petrokima Saudi Branch','Affiliate — Cairo']],
@@ -838,7 +856,7 @@ function nextEmpCode(ids){
   ids = (ids || S.employees.map(e=>String(e.id))).map(String);
   const nums = ids.filter(x=>/^\d+$/.test(x)).map(Number);
   if (nums.length) return String(Math.max(...nums) + 1);
-  let best=null; ids.forEach(x=>{ const m=x.match(/^(.*?)(\d+)$/); if(m){ const n=+m[2]; if(!best||n>best.n) best={p:m[1],n,w:m[2].length}; } });
+  /** @type {{p:string, n:number, w:number} | null} */ let best=null; ids.forEach(x=>{ const m=x.match(/^(.*?)(\d+)$/); if(m){ const n=+m[2]; if(!best||n>best.n) best={p:m[1],n,w:m[2].length}; } });
   return best ? best.p + String(best.n+1).padStart(best.w,'0') : '1';
 }
 function openEmp(id){
@@ -882,7 +900,7 @@ function renderPackage(){
   // amounts that ended before this payroll period are history — kept for past payrolls, shown separately
   const ended = r => r.effective_to && r.effective_to < ps;
   const current = all.filter(r => !ended(r)), history = all.filter(ended).sort((a,b)=>String(b.effective_to).localeCompare(String(a.effective_to)));
-  const row = (r, old) => { const el = elByCode(r.element_code)||{};
+  const row = (r, old) => { const el = elOrBlank(r.element_code);
     const state = old ? '<span class="chip c-grey">Ended</span>' : r.effective_from > pe ? `<span class="chip c-blue">Starts ${esc(r.effective_from)}</span>` : fixedActive(r,p) ? '<span class="chip c-green">Yes</span>' : '<span class="chip c-grey">No</span>';
     return `<tr${old?' style="opacity:.6"':''}><td class="mono">${r.element_code}</td><td class="strong">${esc(el.name_en||'?')}</td><td>${el.element_type==='Deduction'?'<span class="neg">Deduction</span>':'<span class="pos">Addition</span>'}</td>
       <td class="num">${fmt(r.amount)}${el.calc_method==='PercentOfBasic'?' %':''}</td><td class="mono">${esc(r.effective_from)}</td><td class="mono">${esc(r.effective_to||'—')}</td>
@@ -905,7 +923,7 @@ function renderPackage(){
 async function addPackageRow(){
   const code = num($('pk-el').value), amt = $('pk-amt').value, from = $('pk-from').value, to = $('pk-to').value;
   if (!code || amt==='' || !from) return toast('Element, amount and start date are required','warn');
-  if ((elByCode(code) || {}).is_basic) return openSalaryRequest(editingEmp, code, num(amt), from);   // basic salary → board approval
+  if ((elOrBlank(code)).is_basic) return openSalaryRequest(editingEmp, code, num(amt), from);   // basic salary → board approval
   const rec = { emp_id: editingEmp, element_code: code, amount: num(amt), effective_from: from, effective_to: to || null };
   const { data, error } = await sb.from('employee_salary_elements').insert(rec).select();
   if (error) return toast(error.message.includes('duplicate') ? 'This element already starts on that date for this employee' : error.message, 'err');
@@ -917,8 +935,8 @@ async function addPackageRow(){
 
 async function saveEmp(){
   const rec = {};
-  document.querySelectorAll('#emp-form [data-f]').forEach(el => {
-    const k = el.dataset.f; let v = el.value.trim();
+  document.querySelectorAll('#emp-form [data-f]').forEach(/** @param {HTMLInputElement} el */ el => {
+    const k = el.dataset.f; let v = /** @type {string | number | boolean | null} */ (el.value.trim());
     const def = EMP_FIELDS.flatMap(s=>s[1]).find(f=>f[0]===k);
     if (def && def[2]==='manager') v = v ? String(v).split(' — ')[0].trim() : null;
     else if (def && def[2]==='bool') v = (v==='Yes');
@@ -930,7 +948,7 @@ async function saveEmp(){
   if (!rec.name_ar && !rec.name_en) return toast('Enter an Arabic or English name','warn');
   rec.top_of_org = !!($('emp-top') && $('emp-top').checked);
   if (rec.top_of_org) rec.manager_id = null;
-  const mgrBox = document.querySelector('#emp-form [data-f="manager_id"]');
+  const mgrBox = /** @type {HTMLInputElement} */ (document.querySelector('#emp-form [data-f="manager_id"]'));
   if (rec.manager_id && !empById(rec.manager_id)) { mgrBox.focus(); return toast(`Manager “${rec.manager_id}” not found — pick from the suggestions`,'warn'); }
   if (rec.manager_id && editingEmp && String(rec.manager_id)===String(editingEmp)) { mgrBox.focus(); return toast('An employee cannot be their own manager','warn'); }
   if (rec.manager_id && empById(rec.manager_id).status==='Inactive') { mgrBox.focus(); return toast('That manager is inactive — choose an active employee','warn'); }
@@ -1008,7 +1026,7 @@ function segHours(tin, tout){
 function addSplit(code='', tin='', tout=''){
   const rows=[...document.querySelectorAll('#a-splits .split')];
   const st = settings.shiftStart || '08:00';
-  if (!tin) tin = rows.length ? (rows[rows.length-1].querySelector('[data-s="out"]').value || '') : st;
+  if (!tin) tin = rows.length ? (/** @type {HTMLInputElement} */ (rows[rows.length-1].querySelector('[data-s="out"]')).value || '') : st;
   if (!tout && !rows.length){ const m=(toMin(st)+Math.round(num(settings.hoursPerDay)*60))%1440; tout=`${pad(Math.floor(m/60))}:${pad(m%60)}`; }
   const d=document.createElement('div');
   d.className='split'; d.style='display:grid;grid-template-columns:1fr 104px 104px 58px 32px;gap:8px;margin-bottom:8px;align-items:center';
@@ -1021,8 +1039,8 @@ function addSplit(code='', tin='', tout=''){
 }
 function readSplits(){
   return [...document.querySelectorAll('#a-splits .split')].map(r => ({
-    row:r, proj:r.querySelector('[data-s="proj"]').value.trim(),
-    tin:r.querySelector('[data-s="in"]').value, tout:r.querySelector('[data-s="out"]').value }));
+    row:r, proj:/** @type {HTMLInputElement} */ (r.querySelector('[data-s="proj"]')).value.trim(),
+    tin:/** @type {HTMLInputElement} */ (r.querySelector('[data-s="in"]')).value, tout:/** @type {HTMLInputElement} */ (r.querySelector('[data-s="out"]')).value }));
 }
 function checkSplits(){
   const L=readSplits(), msgs=[]; let total=0;
@@ -1570,12 +1588,13 @@ function cycleHint(){
 }
 ['s-cycle','s-period'].forEach(id => $(id).addEventListener('input', cycleHint));
 
+// @ts-check — checked by TypeScript (tsconfig.json); keep it free of type errors
 // ═════════════════════════════════════════════════════════
 //  REPORTS
 // ═════════════════════════════════════════════════════════
 const C = (k,l,t='text',s=false) => ({k,l,t,s});
 const activeEmps = () => S.employees.filter(e => e.status!=='Inactive');
-const daysUntil = d => d ? Math.round((new Date(d+'T00:00:00') - new Date(todayStr()+'T00:00:00'))/86400000) : null;
+const daysUntil = d => d ? Math.round((new Date(d+'T00:00:00').getTime() - new Date(todayStr()+'T00:00:00').getTime())/86400000) : null;
 const inPeriod = d => d && d >= periodStart(settings.period) && d <= periodEnd(settings.period);
 function projName(c){ if(!c) return '(unallocated)'; const p=S.projects.find(x=>String(x.id)===String(c)); return p ? (p.name||'') : ''; }
 function groupBy(arr, fn){ const m={}; arr.forEach(x=>{ const k=fn(x)||'(blank)'; (m[k]=m[k]||[]).push(x); }); return m; }
@@ -1605,7 +1624,7 @@ const REPORTS = [
   { id:'att-daily', g:'Attendance', t:'Daily attendance register',
     d:'Every attendance record between the two dates, with each project line and its times. For one day, click “Today” or type the same date in both boxes.',
     build:p => ({ cols:[C('date','Date','date'),C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('status','Status'),C('in','Check-in','mono'),C('out','Check-out','mono'),C('hours','Hours','num',true),C('ot','OT','num',true),C('late','Late','num',true),C('early','Early','num',true),C('split','Project lines')],
-      rows:S.attendance.slice().sort((x,y)=>String(x.date).localeCompare(String(y.date))||String(x.emp_id).localeCompare(String(y.emp_id),undefined,{numeric:true})).map(a=>{ const e=empById(a.emp_id)||{}, R=dayRules(a,e); return { date:a.date, code:a.emp_id, name:a.emp_name||empName(e), department:e.department, status:a.status,
+      rows:S.attendance.slice().sort((x,y)=>String(x.date).localeCompare(String(y.date))||String(x.emp_id).localeCompare(String(y.emp_id),undefined,{numeric:true})).map(a=>{ const e=empOrBlank(a.emp_id), R=dayRules(a,e); return { date:a.date, code:a.emp_id, name:a.emp_name||empName(e), department:e.department, status:a.status,
         in:a.check_in, out:attNoOut(a) ? 'MISSING' : a.check_out, hours:attNoOut(a) ? 0 : num(a.total_hours), ot:R.ot, late:R.late, early:R.early, split:(a.projects||[]).map(x=>`${x.code}${x.in?' '+x.in+'–'+x.out:''} (${fmt(x.hours)}h)`).join(' | ') }; }) }) },
   { id:'att-missing', g:'Attendance', t:'Missing attendance',
     d:'Working days between the two dates on which an employee has no attendance record, no approved vacation and no approved mission — use it to chase supervisors before payroll closes. Weekends, public holidays and future days are skipped. For one day, click “Today” or type the same date in both boxes.',
@@ -1656,7 +1675,7 @@ const REPORTS = [
   { id:'att-perm', g:'Attendance', t:'Permission requests',
     d:'All late-arrival and early-leave permission requests between the two dates with their decision, and how many each employee has used.',
     build:() => ({ cols:[C('date','Date','date'),C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('type','Type'),C('hours','Hours','num',true),C('reason','Reason'),C('status','Status'),C('by','Decided by'),C('used','Approved this month','int')],
-      rows:S.permissions.map(p=>{ const e=empById(p.emp_id)||{}; return { date:p.date, code:p.emp_id, name:empName(e), department:e.department, type:p.type, hours:num(p.hours), reason:p.reason, status:p.status, by:p.decided_by, used:permUsed(p.emp_id, monthOf(p.date)) }; })
+      rows:S.permissions.map(p=>{ const e=empOrBlank(p.emp_id); return { date:p.date, code:p.emp_id, name:empName(e), department:e.department, type:p.type, hours:num(p.hours), reason:p.reason, status:p.status, by:p.decided_by, used:permUsed(p.emp_id, monthOf(p.date)) }; })
         .sort((a,b)=>a.date.localeCompare(b.date)) }) },
   { id:'att-exempt', g:'Attendance', t:'Exception employees',
     d:'Employees on the exception rule — no delay deduction and no overtime. Change this on the employee record.',
@@ -1667,7 +1686,7 @@ const REPORTS = [
     d:'Every approved vacation overlapping the two dates, with the days that fall inside them.',
     build:p => { const ps=p.from, pe=p.to;
       return { cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('type','Type'),C('from','From','date'),C('to','To','date'),C('days','Total days','num',true),C('inp','Days in range','num',true),C('reason','Reason'),C('by','Entered by')],
-        rows:S.leaves.filter(l=>l.status==='Approved' && l.date_from<=pe && l.date_to>=ps).map(l=>{ const e=empById(l.emp_id)||{}; return { code:l.emp_id, name:empName(e), department:e.department, type:l.leave_type, from:l.date_from, to:l.date_to, days:num(l.days), inp:leaveDaysIn(l,ps,pe), reason:l.reason, by:l.entered_by }; })
+        rows:S.leaves.filter(l=>l.status==='Approved' && l.date_from<=pe && l.date_to>=ps).map(l=>{ const e=empOrBlank(l.emp_id); return { code:l.emp_id, name:empName(e), department:e.department, type:l.leave_type, from:l.date_from, to:l.date_to, days:num(l.days), inp:leaveDaysIn(l,ps,pe), reason:l.reason, by:l.entered_by }; })
           .sort((a,b)=>a.from.localeCompare(b.from)) }; } },
   { id:'lv-balance', g:'Vacations', t:'Annual leave balance',
     d:'Entitlement, days taken and days remaining for the year of the current period. Casual leave counts against annual leave unless switched off in Settings.',
@@ -1677,7 +1696,7 @@ const REPORTS = [
   { id:'lv-today', g:'Vacations', t:'Who is on vacation',
     d:'Employees on approved vacation at any time between the two dates. For one day, click “Today” or type the same date in both boxes.',
     build:p => ({ cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('job','Job'),C('type','Type'),C('from','From','date'),C('to','To','date'),C('inr','Days in range','num',true),C('back','Back on','date')],
-      rows:S.leaves.filter(l=>l.status==='Approved' && l.date_from<=p.to && l.date_to>=p.from).map(l=>{ const e=empById(l.emp_id)||{}; const b=dObj(l.date_to); do { b.setDate(b.getDate()+1); } while(!isWorkday(dStr(b)));
+      rows:S.leaves.filter(l=>l.status==='Approved' && l.date_from<=p.to && l.date_to>=p.from).map(l=>{ const e=empOrBlank(l.emp_id); const b=dObj(l.date_to); do { b.setDate(b.getDate()+1); } while(!isWorkday(dStr(b)));
         return { code:l.emp_id, name:empName(e), department:e.department, job:e.job_name, type:l.leave_type, from:l.date_from, to:l.date_to, inr:leaveDaysIn(l,p.from,p.to), back:dStr(b) }; }) }) },
 
   { id:'att-absence', g:'Attendance', t:'Absence deductions',
@@ -1688,18 +1707,18 @@ const REPORTS = [
   { id:'pay-penalties', g:'Payroll', t:'Penalties',
     d:'Penalties whose incident date falls between the two dates, with their value, the payroll they are deducted in, who requested them and who recorded them.',
     build:() => ({ cols:[C('date','Incident','date'),C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('pen','Penalty'),C('amt','Amount','num',true),C('per','Payroll','mono'),C('reason','Reason'),C('req','Requested by'),C('rec','Recorded by'),C('status','Status')],
-      rows:S.penalties.map(x=>{ const e=empById(x.emp_id)||{}; return { date:x.incident_date, code:x.emp_id, name:empName(e), department:e.department, pen:penLabel(x), amt:x.status==='Approved'?penaltyValue(x):0, per:x.apply_period, reason:x.reason, req:x.requested_by, rec:x.recorded_by, status:x.status }; })
+      rows:S.penalties.map(x=>{ const e=empOrBlank(x.emp_id); return { date:x.incident_date, code:x.emp_id, name:empName(e), department:e.department, pen:penLabel(x), amt:x.status==='Approved'?penaltyValue(x):0, per:x.apply_period, reason:x.reason, req:x.requested_by, rec:x.recorded_by, status:x.status }; })
         .sort((a,b)=>a.date.localeCompare(b.date)) }) },
   { id:'pay-holiday', g:'Payroll', t:'Public holiday work',
     d:'Employees who worked on a public holiday between the two dates and the extra pay they receive.',
-    build:() => { const R=[]; S.attendance.filter(a=>isHoliday(a.date) && (a.status==='Present'||a.status==='Half Day')).forEach(a=>{ const e=empById(a.emp_id)||{id:a.emp_id}, rate=empRates(e).daily, x=num(settings.holidayExtraDays)||1, f=a.status==='Present'?1:0.5;
-        R.push({ date:a.date, hol:(holidayOn(a.date)||{}).name, code:a.emp_id, name:empName(e), department:e.department, hours:num(a.total_hours), rate, pay:rate*x*f }); });
+    build:() => { const R=[]; S.attendance.filter(a=>isHoliday(a.date) && (a.status==='Present'||a.status==='Half Day')).forEach(a=>{ const e=empById(a.emp_id)||/** @type {Employee} */ ({id:a.emp_id}), rate=empRates(e).daily, x=num(settings.holidayExtraDays)||1, f=a.status==='Present'?1:0.5;
+        R.push({ date:a.date, hol:(holidayOn(a.date)||/** @type {Holiday} */ ({})).name, code:a.emp_id, name:empName(e), department:e.department, hours:num(a.total_hours), rate, pay:rate*x*f }); });
       return { cols:[C('date','Date','date'),C('hol','Holiday'),C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('hours','Hours worked','num',true),C('rate','Daily pay','num'),C('pay','Extra pay','num',true)], rows:R.sort((a,b)=>a.date.localeCompare(b.date)) }; } },
 
   { id:'att-mobile', g:'Attendance', t:'Mobile check-in log',
     d:'Every check-in and check-out tapped on the mobile app between the two dates — time, site and GPS location. Taps made with no internet are marked offline: their time comes from the phone clock, corrected by the server when the phone reconnected. This log is permanent and cannot be edited.',
     build:() => ({ cols:[C('date','Date','date'),C('time','Time','mono'),C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('ev','Event'),C('site','Site','id'),C('sname','Site name'),C('acc','GPS accuracy (m)','int'),C('dist','Distance from site'),C('warn','Location warnings'),C('map','Location','link'),C('how','Recorded'),C('state','Status')],
-      rows:S.clocks.map(c=>{ const e=empById(c.emp_id)||{}; return { date:c.local_date, time:c.local_time, code:c.emp_id, name:empName(e), department:e.department, ev:c.event_type==='in'?'Check in':'Check out',
+      rows:S.clocks.map(c=>{ const e=empOrBlank(c.emp_id); return { date:c.local_date, time:c.local_time, code:c.emp_id, name:empName(e), department:e.department, ev:c.event_type==='in'?'Check in':'Check out',
         how: (c.offline ? `📴 offline · sent ${String(c.received_at||'').slice(0,16).replace('T',' ')} UTC` : 'online') + (c.location_exempt ? ' · ⚠ no location (exception)' : ''),
         state: /corrected/.test(c.time_method||'') ? '⚠ phone clock was wrong — time corrected' : 'OK',
         site:c.project_code||'', sname:c.project_code?projName(c.project_code):(c.event_type==='in'?'No project':''), acc:c.accuracy, map: mapUrl(c) || '',
@@ -1709,24 +1728,24 @@ const REPORTS = [
   { id:'att-review', g:'Attendance', t:'Offline check-ins to review',
     d:'Check-ins made with no internet and sent later. The Petrokima Android app (new version) also sends the phone\'s “time since switched on” counter, which the user cannot change: the server then records the REAL time (✓ verified), and if the phone clock had been changed it shows ⚠ Phone clock was changed and tells HR. Without the counter (iPhone, older apps, or the phone restarted) the time comes from the phone clock: the server compares it with its own when the phone reconnects and corrects any difference. A tap that reached the server more than 5 minutes after its time is marked ⏳ HR to confirm: that day has no deductions or overtime until HR checks the time on the Attendance page and saves it, and the month cannot be approved before. Taps more than 72 hours old, or earlier than one already recorded, are refused and stay on the phone — HR records those manually.',
     build:() => ({ cols:[C('state','Status','strong'),C('date','Date','date'),C('time','Time recorded','mono'),C('claimed','Phone showed','mono'),C('recv','Sent (Cairo time)','mono'),C('delay','Hours until sent','num'),C('code','Code','id'),C('name','Employee'),C('ev','Event'),C('site','Site','id'),C('map','Location','link')],
-      rows:S.clocks.filter(c=>c.offline).map(c=>{ const e=empById(c.emp_id)||{}, corr=/corrected/.test(c.time_method||''), delay = c.received_at ? (new Date(c.received_at)-new Date(c.at))/3600000 : null;
+      rows:S.clocks.filter(c=>c.offline).map(c=>{ const e=empOrBlank(c.emp_id), corr=/corrected/.test(c.time_method||''), delay = c.received_at ? (new Date(c.received_at).getTime()-new Date(c.at).getTime())/3600000 : null;
         const tz = String(e.entity||'').toLowerCase().includes('saudi') ? 'Asia/Riyadh' : 'Africa/Cairo', changed = /clock was changed/.test(c.time_method || ''), verified = /counter \(verified\)/.test(c.time_method || '');
         return { state: changed ? '⚠ Phone clock was changed — real time recorded' : /^Offline — sent/.test(c.review_note || '') ? ((c.location_flags||[]).includes('phone_restarted') ? '⏳ HR to confirm (phone restarted)' : '⏳ HR to confirm the time') : verified ? '✓ Real time verified' : corr ? '⚠ Phone clock was wrong' : 'OK', date:c.local_date, time:c.local_time,
           claimed: (c.phone_said_at || c.client_at) ? new Date(c.phone_said_at || c.client_at).toLocaleString('en-GB',{ timeZone: tz, hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short' }) : '',
           recv: c.received_at ? new Date(c.received_at).toLocaleString('en-GB',{ timeZone: tz, hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short' }) : '', delay: delay==null ? '' : Math.round(delay*100)/100,
           code:c.emp_id, name:empName(e), ev:c.event_type==='in'?'Check in':'Check out', site:c.project_code||'(no project)', map:mapUrl(c)||'' }; })
-        .sort((a,b)=>(/^(OK|✓)/.test(a.state))-(/^(OK|✓)/.test(b.state)) || (a.date+a.time).localeCompare(b.date+b.time)) }) },
+        .sort((a,b)=>Number(/^(OK|✓)/.test(a.state))-Number(/^(OK|✓)/.test(b.state)) || (a.date+a.time).localeCompare(b.date+b.time)) }) },
 
   { id:'att-fix', g:'Attendance', t:'Missing punches to correct',
     d:'Days with only one fingerprint-machine punch, days over 16 hours, offline phone taps sent late (time to confirm), and phone check-ins with no check-out on a past day. They carry no deductions or overtime until HR opens the record on the Attendance page, checks the times and saves. The month cannot be approved while any remain.',
-    build:() => { const R=[]; S.attendance.forEach(a => (a.projects||[]).forEach(x => { if (x.missing || x.review || x.forgotten || (x.in && !x.out && a.date < todayStr())) { const e=empById(a.emp_id)||{};
+    build:() => { const R=[]; S.attendance.forEach(a => (a.projects||[]).forEach(x => { if (x.missing || x.review || x.forgotten || (x.in && !x.out && a.date < todayStr())) { const e=empOrBlank(a.emp_id);
         R.push({ issue: x.missing ? 'Missing punch' : x.review ? (x.why === 'offline' ? 'Offline time to confirm' : 'Over 16 hours') : 'Missing phone check-out', source: a.source==='Machine' ? 'Fingerprint machine' : a.source==='Mobile' ? 'Phone' : (a.source||''),
                  date:a.date, code:a.emp_id, name:empName(e), department:e.department, in:x.in||'', out:x.out||'', hours:x.hours }); } }));
       return { cols:[C('issue','Issue','strong'),C('source','Source'),C('date','Date','date'),C('code','Code','id'),C('name','Employee'),C('department','Department'),C('in','In','mono'),C('out','Out','mono'),C('hours','Hours','num')],
         rows:R.sort((a,b)=>a.date.localeCompare(b.date)||String(a.code).localeCompare(String(b.code),undefined,{numeric:true})) }; } },
   { id:'att-open', g:'Attendance', t:'Open and forgotten check-ins',
     d:'Employees still checked in, and phone check-ins with no check-out on a past day (a check-in on the next day never closes them). Correct forgotten ones on the Attendance page before closing payroll.',
-    build:() => { const R=[]; S.attendance.forEach(a => (a.projects||[]).forEach(x => { if (!x.out && x.in) { const e=empById(a.emp_id)||{};
+    build:() => { const R=[]; S.attendance.forEach(a => (a.projects||[]).forEach(x => { if (!x.out && x.in) { const e=empOrBlank(a.emp_id);
         R.push({ state: a.date===todayStr() && !x.forgotten ? 'On site now' : 'Missing check-out — needs correction', date:a.date, code:a.emp_id, name:empName(e), department:e.department, site:x.code, sname:projName(x.code), since:x.in }); } }));
       return { cols:[C('state','Status','strong'),C('date','Date','date'),C('code','Code','id'),C('name','Employee'),C('department','Department'),C('site','Site','id'),C('sname','Site name'),C('since','Checked in','mono')],
         rows:R.sort((a,b)=>a.state.localeCompare(b.state)||a.date.localeCompare(b.date)) }; } },
@@ -1734,7 +1753,7 @@ const REPORTS = [
   { id:'hr-assignments', g:'HR', t:'Project assignments',
     d:'Which projects each employee is assigned to (they can check in only at these). Who assigned each project and when.',
     build:() => ({ cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('unit','Unit'),C('job','Job'),C('pcode','Project','mono'),C('pname','Project name'),C('by','Assigned by'),C('role','As'),C('when','When','mono')],
-      rows:S.empProjects.map(a => { const e = empById(a.emp_id) || {}; return { code:a.emp_id, name:empName(e), department:e.department, unit:e.unit, job:e.job_name,
+      rows:S.empProjects.map(a => { const e = empOrBlank(a.emp_id); return { code:a.emp_id, name:empName(e), department:e.department, unit:e.unit, job:e.job_name,
         pcode:a.project_code, pname:projName(a.project_code), by:a.assigned_by, role:a.assigned_role, when:fmtSent(a.assigned_at) }; })
         .sort((x,y) => String(x.code).localeCompare(String(y.code), undefined, { numeric:true }) || String(x.pcode).localeCompare(String(y.pcode))) }) },
   { id:'att-phone-alerts', g:'Attendance', t:'Phone sign-in attempts',
@@ -1768,7 +1787,7 @@ const REPORTS = [
   { id:'prj-log', g:'Projects & cost', t:'Project site log',
     d:'Every project line between the two dates with its check-in and check-out — who was on which site, and when. Search by project code to see one site.',
     build:() => ({ cols:[C('date','Date','date'),C('pcode','Project','id'),C('pname','Project name'),C('code','Employee','id'),C('name','Name','strong'),C('in','Check-in','mono'),C('out','Check-out','mono'),C('hours','Hours','num',true)],
-      rows:S.attendance.flatMap(a=>(a.projects||[]).map(x=>({ date:a.date, pcode:x.code, pname:projName(x.code), code:a.emp_id, name:a.emp_name, department:(empById(a.emp_id)||{}).department, in:x.in||'', out:x.out||'', hours:num(x.hours) })))
+      rows:S.attendance.flatMap(a=>(a.projects||[]).map(x=>({ date:a.date, pcode:x.code, pname:projName(x.code), code:a.emp_id, name:a.emp_name, department:(empOrBlank(a.emp_id)).department, in:x.in||'', out:x.out||'', hours:num(x.hours) })))
         .sort((a,b)=>a.date.localeCompare(b.date)||String(a.pcode).localeCompare(String(b.pcode))) }) },
 
   // ── PAYROLL ─────────────────────────────────────────────
@@ -1801,7 +1820,7 @@ const REPORTS = [
   { id:'pay-loans', g:'Payroll', t:'Loans',
     d:'All staff loans with the amount settled, the balance outstanding and this period\'s deduction.',
     build:() => ({ cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('ref','Reference','mono'),C('amt','Loan','num',true),C('months','Months','int'),C('inst','Instalment','num'),C('start','First deduction','mono'),C('settled','Settled','num',true),C('out','Outstanding','num',true),C('now','This period','num',true),C('end','Last instalment','mono'),C('pp','Postponed months'),C('status','Status')],
-      rows:S.loans.map(l=>{ const e=empById(l.emp_id)||{}; return { code:l.emp_id, name:empName(e), department:e.department, ref:l.reference, amt:num(l.loan_amount), months:num(l.periods), inst:num(l.installment),
+      rows:S.loans.map(l=>{ const e=empOrBlank(l.emp_id); return { code:l.emp_id, name:empName(e), department:e.department, ref:l.reference, amt:num(l.loan_amount), months:num(l.periods), inst:num(l.installment),
         start:l.start_period, settled:num(l.amount_settled), out:num(l.loan_amount)-num(l.amount_settled), now:loanInstalment(l,settings.period), end:loanEnd(l), pp:(l.postponed||[]).join(', '), status:l.status }; }) }) },
 
   // ── HR ──────────────────────────────────────────────────
@@ -1951,7 +1970,7 @@ $('rep-cols-btn').addEventListener('click', e => { e.stopPropagation(); const p 
 $('rep-cols-pop').addEventListener('click', e => e.stopPropagation());
 document.addEventListener('click', () => { const p = $('rep-cols-pop'); if (p) p.style.display = 'none'; });
 $('rep-cols-list').addEventListener('change', () => {
-  const hide = [...document.querySelectorAll('#rep-cols-list [data-repcol]')].filter(x => !x.checked).map(x => x.dataset.repcol);
+  const hide = [.../** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll('#rep-cols-list [data-repcol]'))].filter(x => !x.checked).map(x => x.dataset.repcol);
   if (hide.length === repData.allCols.length) { toast('Keep at least one column','warn'); return renderRepColsBtn(); }
   setRepHidden(hide);
 });
@@ -2800,6 +2819,7 @@ $('self-pay-pass').addEventListener('keydown', e => { if (e.key === 'Enter') unl
 $('self-pay-relock').addEventListener('click', lockSelfPay);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && $('self-pay-card').style.display !== 'none') lockSelfPay(); });
 
+// @ts-check — checked by TypeScript (tsconfig.json); keep it free of type errors
 // ═════════════════════════════════════════════════════════
 //  PAYROLL APPROVAL (permanent snapshot)
 // ═════════════════════════════════════════════════════════
@@ -2992,7 +3012,7 @@ function renderReporting(){
   // teams
   const mq=$('rl-mq').value.trim().toLowerCase(), teams={};
   act.forEach(e => { if (e.manager_id) (teams[e.manager_id] = teams[e.manager_id] || []).push(e); });
-  const rows = Object.entries(teams).map(([mid, L]) => ({ m: empById(mid) || { id:mid }, L }))
+  const rows = Object.entries(teams).map(([mid, L]) => ({ m: empById(mid) || /** @type {Employee} */ ({ id:mid }), L }))
     .filter(x => !mq || [x.m.id, x.m.name_en, x.m.name_ar, x.m.job_name].some(v=>String(v||'').toLowerCase().includes(mq)))
     .sort((a,b)=>b.L.length-a.L.length);
   $('rl-teams').innerHTML = rows.map(x => `<tr><td class="mono">${esc(x.m.id)}</td><td class="strong">${esc(empName(x.m))}</td><td>${esc(x.m.job_name||'')}</td><td>${esc(x.m.department||'')}</td>
@@ -3017,7 +3037,7 @@ async function assignManager(){
   b.disabled=false; renderReporting();
 }
 $('rl-none').addEventListener('change', e => { const c=e.target.closest('[data-rl]'); if(!c) return; c.checked?rlSel.add(c.dataset.rl):rlSel.delete(c.dataset.rl); renderReporting(); });
-$('rl-all').addEventListener('change', e => { document.querySelectorAll('[data-rl]').forEach(c=>{ e.target.checked?rlSel.add(c.dataset.rl):rlSel.delete(c.dataset.rl); }); renderReporting(); });
+$('rl-all').addEventListener('change', e => { document.querySelectorAll('[data-rl]').forEach(/** @param {HTMLInputElement} c */ c=>{ /** @type {HTMLInputElement} */ (e.target).checked?rlSel.add(c.dataset.rl):rlSel.delete(c.dataset.rl); }); renderReporting(); });
 ['rl-q','rl-mq'].forEach(id=>$(id).addEventListener('input', renderReporting));
 $('rl-dept').addEventListener('change', renderReporting);
 $('rl-assign').addEventListener('click', assignManager);
@@ -3079,7 +3099,7 @@ async function resetDevice(empId){
   });
   $('del-title').textContent='Please confirm'; $('del-ok').textContent='Reset phone';
 }
-document.addEventListener('click', e => { const b = e.target.closest('[data-dev-reset]'); if (b) resetDevice(b.dataset.devReset); });
+document.addEventListener('click', e => { const b = /** @type {HTMLElement | null} */ (/** @type {HTMLElement} */ (e.target).closest('[data-dev-reset]')); if (b) resetDevice(b.dataset.devReset); });
 
 // ═════════════════════════════════════════════════════════
 //  COLOUR THEMES
@@ -3101,7 +3121,7 @@ function renderThemeList(){
       <div style="font-size:12px;color:var(--muted)">${esc(t.note)}</div></button>`).join('');
 }
 function openTheme(){ renderThemeList(); openM('m-theme'); }
-document.addEventListener('click', e => { const b = e.target.closest('[data-theme-pick]'); if (b) setTheme(b.dataset.themePick); });
+document.addEventListener('click', e => { const b = /** @type {HTMLElement | null} */ (/** @type {HTMLElement} */ (e.target).closest('[data-theme-pick]')); if (b) setTheme(b.dataset.themePick); });
 
 // ═════════════════════════════════════════════════════════
 //  BULK UPLOAD — variable (monthly) additions and deductions
@@ -7302,6 +7322,7 @@ document.addEventListener('click', e => {
   toast(`“${DMY_NATIVE.get.call(bad)}” is not a real date — type day month year, e.g. 26102026`, 'warn');
 }, true);
 
+// @ts-check — checked by TypeScript (tsconfig.json); keep it free of type errors
 // ═════════════════════════════════════════════════════════
 //  REPORTS: FROM / TO DATES (26 Oct 2026) — Mohammed: "all reports must have a filter by date from date to date"
 //  · 'range' reports (attendance, vacations, permissions, phone taps, projects, penalties, joiners…) use the two dates.
@@ -7329,7 +7350,7 @@ function repRange(){
   if (!to && /\S/.test(raw(t))) return { error:'The “To” date is not a real date — type it as day month year, e.g. 20112026.' };
   const r = { from: from || REP_RANGE.from, to: to || REP_RANGE.to };
   if (r.to < r.from) return { error:'“To” is before “From”.' };
-  if ((dObj(r.to) - dObj(r.from)) / 86400000 > 400) return { error:'Please choose at most about one year (400 days) at a time.' };
+  if ((dObj(r.to).getTime() - dObj(r.from).getTime()) / 86400000 > 400) return { error:'Please choose at most about one year (400 days) at a time.' };
   return r;
 }
 function repDateBar(mode){

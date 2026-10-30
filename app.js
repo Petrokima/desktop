@@ -50,6 +50,7 @@ const PK_ERR = (function(){
 // ═════════════════════════════════════════════════════════
 //  STATE
 // ═════════════════════════════════════════════════════════
+/** @type {AppDb} — the database connection (typed: every table, column and database function is checked) */
 let sb = null;
 /** The data loaded for the current payroll cycle — rows straight from the database (types: types/globals.d.ts).
  * @type {{ employees: Employee[], projects: Project[], attendance: AttendanceRow[], elements: SalaryElement[], fixed: FixedElement[],
@@ -176,10 +177,17 @@ function parseProjInput(v){ const id = String(v||'').split(' — ')[0].trim(); r
 // Tables with a unique "id" get it as a second sort key, so batches of 1,000 never overlap or skip rows
 const TIEBREAK = new Set(['attendance','payroll_period_elements','attendance_permissions','employee_leaves','employee_penalties',
                           'employee_salary_elements','employee_loans','hr_requests','clock_events']);
+/**
+ * @template {keyof DB['Tables'] | keyof DB['Views']} T
+ * @param {T} table  a table or view of our database (checked)
+ * @param {string} [orderCol]  @param {(q: any) => any} [filterFn]  extra filters, e.g. q => q.eq('period', p)
+ * @returns {Promise<(T extends keyof DB['Tables'] ? Row<T> : DB['Views'][T & keyof DB['Views']]['Row'])[]>} every row
+ */
 async function fetchAll(table, orderCol, filterFn){
   const size = 1000;
   const page = (from, withCount) => {
-    let q = withCount ? sb.from(table).select('*', { count:'exact' }) : sb.from(table).select('*');
+    const db = /** @type {any} — table chosen by the caller; the result type is given above */ (sb);
+    let q = withCount ? db.from(table).select('*', { count:'exact' }) : db.from(table).select('*');
     if (filterFn) q = filterFn(q);
     if (orderCol) q = q.order(orderCol, { ascending:true });
     if (TIEBREAK.has(table) && orderCol !== 'id') q = q.order('id', { ascending:true });
@@ -370,7 +378,7 @@ async function disconnect(){ try { if (sb) await sb.auth.signOut(); } catch(e){}
 // ═════════════════════════════════════════════════════════
 async function loadSettings(){
   const { data } = await sb.from('settings').select('*').eq('key','payroll');
-  settings = { ...DEFAULTS, ...((data && data[0] && data[0].value) || {}) };
+  settings = { ...DEFAULTS, .../** @type {Partial<typeof settings>} — the saved settings package */ ((data && data[0] && data[0].value) || {}) };
   if(!settings.period) settings.period = thisMonth();
 }
 
@@ -423,7 +431,7 @@ async function loadAll(){
       fetchAll('employee_salary_elements','emp_id'),
       fetchAll('employee_loans','created_at'),
       loadPeriodData() ]);
-    S.employees = emps; S.projects = projs; S.elements = els; S.fixed = fx; S.loans = ln;
+    S.employees = /** @type {Employee[]} — HR officers get the safe view: the same rows without pay and bank columns */ (emps); S.projects = projs; S.elements = els; S.fixed = fx; S.loans = ln;
     LOAD_MS = Math.round(performance.now() - t0);
     buildLists(); applySettingsUI(); renderAll();
     toast(`Loaded ${S.employees.length} employees · ${S.projects.length.toLocaleString()} projects · ${S.attendance.length.toLocaleString()} attendance records in ${(LOAD_MS/1000).toFixed(1)} s`);
@@ -1485,7 +1493,8 @@ function confirmDel(msg, fn){
   $('del-ok').onclick = async () => { $('del-ok').disabled=true; try{ await fn(); closeM('m-del'); }catch(e){ toast(e.message,'err'); } $('del-ok').disabled=false; };
   openM('m-del');
 }
-async function del(table, id){ const { data, error } = await sb.from(table).delete().eq('id', id).select(); if(error) throw error; if(!(data && data.length)) throw new Error(NOPERM); }
+/** @param {keyof DB['Tables']} table — checked: must be one of our tables */
+async function del(table, id){ const { data, error } = await /** @type {any} — generic: any of our tables */ (sb).from(table).delete().eq('id', id).select(); if(error) throw error; if(!(data && data.length)) throw new Error(NOPERM); }
 
 // ═════════════════════════════════════════════════════════
 //  NAVIGATION & EVENTS
@@ -2180,6 +2189,7 @@ $('lv-save').addEventListener('click', saveLeave);
 //  EXCEPTION RULE PAGE
 // ═════════════════════════════════════════════════════════
 let exOnSel = new Set(), exOffSel = new Set();
+/** @type {'attendance_exempt' | 'project_staff'} — the yes/no employee column this screen switches (see #ex-kind) */
 let EX_FIELD = 'attendance_exempt';
 function renderExempt(){
   const act = activeEmps(), q1=$('ex-on-q').value.trim().toLowerCase();
@@ -2208,7 +2218,7 @@ async function setExempt(ids, value){
   if (!ids.length) return;
   try{
     let changed = 0;
-    await chunked(ids, async chunk => { const r = await sb.from('employees').update({ [EX_FIELD]:value }).in('id', chunk).select('id'); changed += (r.data||[]).length; return r; }, 200);
+    await chunked(ids, async chunk => { const r = await sb.from('employees').update(/** @type {DB['Tables']['employees']['Update']} */ ({ [EX_FIELD]:value })).in('id', chunk).select('id'); changed += (r.data||[]).length; return r; }, 200);
     if (!changed) throw new Error(NOPERM);
     S.employees.forEach(e => { if (ids.includes(String(e.id))) e[EX_FIELD] = value; });
     exOnSel.clear(); exOffSel.clear();
@@ -2222,7 +2232,7 @@ $('ex-on-tbl').addEventListener('click', e => { const b=/** @type {PageEl} */ (e
 $('ex-on-all').addEventListener('change', e => { document.querySelectorAll('[data-ex-on]').forEach(c=>{ /** @type {PageEl} */ (e.target).checked?exOnSel.add(c.dataset.exOn):exOnSel.delete(c.dataset.exOn); }); renderExempt(); });
 $('ex-off-all').addEventListener('change', e => { document.querySelectorAll('[data-ex-off]').forEach(c=>{ /** @type {PageEl} */ (e.target).checked?exOffSel.add(c.dataset.exOff):exOffSel.delete(c.dataset.exOff); }); renderExempt(); });
 $('ex-remove-sel').addEventListener('click', () => confirmDel(EX_FIELD==='project_staff' ? `Remove ${exOnSel.size} employee${exOnSel.size>1?'s':''} from site staff? Their fingerprint-machine punches will count again and they may check in without a project.` : `Remove ${exOnSel.size} employee${exOnSel.size>1?'s':''} from the exception rule? They will get overtime and delay deductions again.`, ()=>setExempt([...exOnSel], false)));
-$('ex-kind').addEventListener('change', () => { EX_FIELD = $('ex-kind').value; exOnSel = new Set(); exOffSel = new Set(); renderExempt(); });
+$('ex-kind').addEventListener('change', () => { EX_FIELD = /** @type {'attendance_exempt' | 'project_staff'} */ ($('ex-kind').value); exOnSel = new Set(); exOffSel = new Set(); renderExempt(); });
 $('ex-add-sel').addEventListener('click', () => setExempt([...exOffSel], true));
 ['ex-q','ex-job','ex-on-q'].forEach(id=>$(id).addEventListener('input', renderExempt));
 $('ex-dept').addEventListener('change', renderExempt);
@@ -2680,16 +2690,17 @@ async function sendSelfHr(){
   if (!det && ['Update my personal data','Loan request','Other','HR letter'].includes($('sh-type').value)) return toast('Please add the details HR will need','warn');
   await selfSend('hr_requests', { emp_id:SELF.me.emp_id, request_type:$('sh-type').value, details:det||null, status:'Pending' }, 'm-sh', 'sh-send', 'Request sent to HR');
 }
+/** @param {'attendance_permissions' | 'employee_leaves' | 'hr_requests'} table — where the request is saved */
 async function selfSend(table, rec, modal, btnId, okMsg){
   const b=$(btnId); b.disabled=true;
-  const { data, error } = await sb.from(table).insert(rec).select();
+  const { data, error } = await /** @type {any} — table chosen by the caller (checked above) */ (sb).from(table).insert(rec).select();
   b.disabled=false;
   if (error) return toast(/duplicate/i.test(error.message) ? 'You already have an open request of this kind for that date' : deadlineMsg(error.message), 'err');
   if (!(data && data.length)) return toast(NOPERM,'err');
   closeM(modal); toast(okMsg); await loadSelf();
 }
 async function selfCancel(key){
-  const [kind, id] = key.split(':'), table = { leave:'employee_leaves', perm:'attendance_permissions', req:'hr_requests' }[kind];
+  const [kind, id] = key.split(':'), table = /** @type {Record<string, 'attendance_permissions' | 'employee_leaves' | 'hr_requests'>} */ ({ leave:'employee_leaves', perm:'attendance_permissions', req:'hr_requests' })[kind];
   confirmDel('Cancel this request?', async () => {
     const { data, error } = await sb.from(table).update({ status:'Cancelled' }).eq('id', id).select();
     if (error) throw error;
@@ -4556,7 +4567,7 @@ const _renderDashboardB = renderDashboard;
 renderDashboard = function(){ const r = _renderDashboardB.apply(this, arguments); renderBirthdays(); if (ME && ['admin','hr'].includes(ME.role) && !V.loaded){ V.loaded = true; loadVoice().catch(() => {}); } return r; };
 async function renderSelfBirthday(){
   const box = $('self-bday'); if (!box) return;
-  const r = await sb.rpc('my_birthday_today').then(x => x, () => ({}));
+  const r = await sb.rpc('my_birthday_today').then(x => x, () => (/** @type {{ data?: boolean }} */ ({})));
   box.innerHTML = r && r.data ? `<div class="card" style="background:linear-gradient(135deg,#ee2624,#b4151a);color:#fff;text-align:center;padding:22px;margin-bottom:16px">
       <div style="font-size:42px">🎂</div><div style="font-size:20px;font-weight:800;margin-top:6px">Petrokima family wishes you a happy birthday 🎉</div>
       <div style="opacity:.9;margin-top:4px">عائلة بتروكيما تتمنى لك عيد ميلاد سعيد</div></div>` : '';
@@ -5115,7 +5126,7 @@ async function loadLocationData(){
   const [r, w] = await Promise.all([
     sb.from('settings').select('value').eq('key','location_rules'),
     sb.from('work_locations').select('*').order('name') ]);
-  if (r.data && r.data[0] && r.data[0].value) LOC_RULES = { ...LOC_RULES, ...r.data[0].value };
+  if (r.data && r.data[0] && r.data[0].value) LOC_RULES = { ...LOC_RULES, .../** @type {Partial<typeof LOC_RULES>} — the saved location rules */ (r.data[0].value) };
   await loadOfficeEmps();
   wlMissing = !!w.error; WORK_LOCS = w.data || [];
 }
@@ -5538,7 +5549,7 @@ async function loadHRAlerts(){
                                     typeof loadDocRequests === 'function' ? loadDocRequests().catch(()=>{}) : null ]);
   HRA.loading = false; HRA.loaded = true;
   HRA.missing = !!a.error; HRA.list = Array.isArray(a.data) ? a.data : [];
-  (r.data || []).forEach(x => { if (HR_RULES_DEF[x.key]) HR_RULES[x.key] = { ...HR_RULES_DEF[x.key], ...(x.value || {}) }; });
+  (r.data || []).forEach(x => { if (HR_RULES_DEF[x.key]) HR_RULES[x.key] = { ...HR_RULES_DEF[x.key], .../** @type {object} — the saved alert rule */ (x.value || {}) }; });
   hraBadge();
 }
 const hraOpen = () => HRA.list.filter(a => !a.done);

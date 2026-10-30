@@ -35,6 +35,12 @@ const PK_ERR = (function(){
       }
     });
   } catch(e){ return off; }
+  // a page part blocked by the browser security policy is reported too (once per kind), so a blocked feature is noticed at once
+  const seenCsp = new Set();
+  document.addEventListener('securitypolicyviolation', ev => {
+    const k = ev.violatedDirective + ' ' + bare(ev.blockedURI || 'inline'); if (seenCsp.has(k) || seenCsp.size > 20) return; seenCsp.add(k);
+    try { lib.withScope(s => { s.setTag('where', 'security-policy'); s.setLevel('warning'); lib.captureMessage('Blocked by the security policy: ' + k); }); } catch(e){}
+  });
   return {
     user(u){ try { lib.setUser(u && u.id ? { id: u.id } : null); lib.setTag('role', (u && u.role) || 'none'); } catch(e){} },
     capture(err, where){ try { lib.withScope(s => { if (where) s.setTag('where', String(where)); lib.captureException(err); }); } catch(e){} }

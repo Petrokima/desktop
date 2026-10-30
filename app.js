@@ -453,7 +453,7 @@ function buildLists(){
   const depts = [...new Set(S.employees.map(e=>e.department).filter(Boolean))].sort();
   const units = [...new Set(S.employees.map(e=>e.unit).filter(Boolean))].sort();
   const dOpts = '<option value="">All departments</option>' + depts.map(d=>`<option>${esc(d)}</option>`).join('');
-  ['emp-dept','mon-dept','pay-dept','rep-dept','ex-dept','rl-dept','loan-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
+  ['emp-dept','mon-dept','pay-dept','rep-dept','rl-dept','loan-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
   const uv=$('emp-unit').value; $('emp-unit').innerHTML='<option value="">All units</option>'+units.map(u=>`<option>${esc(u)}</option>`).join(''); $('emp-unit').value=uv;
   const mEls = S.elements.filter(e => e.input_method==='Monthly' && e.active!==false);
   const mv=$('mon-el').value;
@@ -2038,56 +2038,15 @@ function leaveDeleted(id){ S.leaves = S.leaves.filter(l => l.id !== id); afterLe
 function afterLeaveChange(){ renderLeaves(); renderAttendance(); renderPayroll(); renderDashboard(); renderReports(); }
 
 // ═════════════════════════════════════════════════════════
-//  EXCEPTION RULE PAGE
+//  EXCEPTION RULE PAGE — moved to React 30 Oct 2026 (react/src/exempt). The old code keeps only the step after a change.
 // ═════════════════════════════════════════════════════════
-let exOnSel = new Set(), exOffSel = new Set();
-/** @type {'attendance_exempt' | 'project_staff'} — the yes/no employee column this screen switches (see #ex-kind) */
-let EX_FIELD = 'attendance_exempt';
-function renderExempt(){
-  const act = activeEmps(), q1=$('ex-on-q').value.trim().toLowerCase();
-  const match = (e,q) => !q || [e.id,e.name_ar,e.name_en,e.job_name].some(v=>String(v||'').toLowerCase().includes(q));
-  const on = act.filter(e=>e[EX_FIELD]).sort((a,b)=>String(a.department).localeCompare(String(b.department))||String(a.job_name).localeCompare(String(b.job_name)));
-  const onShown = on.filter(e=>match(e,q1));
-  exOnSel = new Set([...exOnSel].filter(id=>on.some(e=>String(e.id)===id)));
-  $('ex-on-title').textContent = `${EX_FIELD==='project_staff' ? 'Site staff' : 'On the exception rule'} (${on.length})`;
-  $('ex-sub').textContent = EX_FIELD==='project_staff' ? 'Site staff must check in at a project from the phone. Their fingerprint-machine punches are kept as records only and do not count.' : 'Employees here get no delay deduction and no overtime';
-  $('ex-on-tbl').innerHTML = onShown.map(e=>`<tr><td><input type="checkbox" data-ex-on="${esc(e.id)}" ${exOnSel.has(String(e.id))?'checked':''}></td><td class="mono">${esc(e.id)}</td>
-    <td class="ar">${esc(e.name_ar)}</td><td class="strong">${esc(e.name_en)}</td><td>${esc(e.department)}</td><td>${esc(e.job_name)}</td>
-    <td><button class="btn btn-ghost btn-sm" data-ex-rm="${esc(e.id)}">Remove</button></td></tr>`).join('')
-    || '<tr><td colspan="7" class="empty">Nobody is on the exception rule</td></tr>';
-  $('ex-remove-sel').disabled = !exOnSel.size; $('ex-remove-sel').textContent = exOnSel.size ? `Remove selected (${exOnSel.size})` : 'Remove selected';
-  const q=$('ex-q').value.trim().toLowerCase(), job=$('ex-job').value.trim().toLowerCase(), d=$('ex-dept').value;
-  const off = act.filter(e=>!e[EX_FIELD] && match(e,q) && (!job || String(e.job_name||'').toLowerCase().includes(job)) && orgMatch(e,'ex'));
-  exOffSel = new Set([...exOffSel].filter(id=>act.some(e=>String(e.id)===id && !e[EX_FIELD])));
-  $('ex-off-tbl').innerHTML = off.slice(0,500).map(e=>`<tr><td><input type="checkbox" data-ex-off="${esc(e.id)}" ${exOffSel.has(String(e.id))?'checked':''}></td><td class="mono">${esc(e.id)}</td>
-    <td class="ar">${esc(e.name_ar)}</td><td class="strong">${esc(e.name_en)}</td><td>${esc(e.department)}</td><td>${esc(e.job_name)}</td></tr>`).join('')
-    || '<tr><td colspan="6" class="empty">No employees match</td></tr>';
-  $('ex-off-all').checked = off.length>0 && off.every(e=>exOffSel.has(String(e.id)));
-  $('ex-add-sel').disabled = !exOffSel.size; $('ex-add-sel').textContent = exOffSel.size ? `Add selected (${exOffSel.size})` : 'Add selected';
-  $('ex-foot').textContent = `${off.length} active employee${off.length===1?'':'s'} not ${EX_FIELD==='project_staff' ? 'marked as site staff' : 'on the rule'} match these filters${off.length>500?' (showing 500)':''} · tick the box in the header to select all shown`;
+function renderExempt(){ if (typeof PKR !== 'undefined') PKR.render(); }
+/** the React page switched a yes/no column for these employees → keep the loaded data and redraw the pages that use it
+ * @param {string[]} ids @param {'attendance_exempt' | 'project_staff'} field @param {boolean} value */
+function employeesFlagged(ids, field, value){
+  S.employees.forEach(e => { if (ids.includes(String(e.id))) e[field] = value; });
+  renderExempt(); renderEmployees(); renderAttendance(); renderPayroll(); renderDashboard(); renderReports();
 }
-async function setExempt(ids, value){
-  if (!ids.length) return;
-  try{
-    let changed = 0;
-    await chunked(ids, async chunk => { const r = await sb.from('employees').update(/** @type {DB['Tables']['employees']['Update']} */ ({ [EX_FIELD]:value })).in('id', chunk).select('id'); changed += (r.data||[]).length; return r; }, 200);
-    if (!changed) throw new Error(NOPERM);
-    S.employees.forEach(e => { if (ids.includes(String(e.id))) e[EX_FIELD] = value; });
-    exOnSel.clear(); exOffSel.clear();
-    renderExempt(); renderEmployees(); renderAttendance(); renderPayroll(); renderDashboard(); renderReports();
-    toast(`${ids.length} employee${ids.length>1?'s':''} ${value?'added to':'removed from'} ${EX_FIELD==='project_staff' ? 'site staff' : 'the exception rule'}`);
-  }catch(e){ toast(e.message,'err'); }
-}
-$('ex-on-tbl').addEventListener('change', e => { const c=/** @type {PageEl} */ (e.target).closest('[data-ex-on]'); if(!c) return; c.checked?exOnSel.add(c.dataset.exOn):exOnSel.delete(c.dataset.exOn); renderExempt(); });
-$('ex-off-tbl').addEventListener('change', e => { const c=/** @type {PageEl} */ (e.target).closest('[data-ex-off]'); if(!c) return; c.checked?exOffSel.add(c.dataset.exOff):exOffSel.delete(c.dataset.exOff); renderExempt(); });
-$('ex-on-tbl').addEventListener('click', e => { const b=/** @type {PageEl} */ (e.target).closest('[data-ex-rm]'); if(b) setExempt([b.dataset.exRm], false); });
-$('ex-on-all').addEventListener('change', e => { document.querySelectorAll('[data-ex-on]').forEach(c=>{ /** @type {PageEl} */ (e.target).checked?exOnSel.add(c.dataset.exOn):exOnSel.delete(c.dataset.exOn); }); renderExempt(); });
-$('ex-off-all').addEventListener('change', e => { document.querySelectorAll('[data-ex-off]').forEach(c=>{ /** @type {PageEl} */ (e.target).checked?exOffSel.add(c.dataset.exOff):exOffSel.delete(c.dataset.exOff); }); renderExempt(); });
-$('ex-remove-sel').addEventListener('click', () => confirmDel(EX_FIELD==='project_staff' ? `Remove ${exOnSel.size} employee${exOnSel.size>1?'s':''} from site staff? Their fingerprint-machine punches will count again and they may check in without a project.` : `Remove ${exOnSel.size} employee${exOnSel.size>1?'s':''} from the exception rule? They will get overtime and delay deductions again.`, ()=>setExempt([...exOnSel], false)));
-$('ex-kind').addEventListener('change', () => { EX_FIELD = /** @type {'attendance_exempt' | 'project_staff'} */ ($('ex-kind').value); exOnSel = new Set(); exOffSel = new Set(); renderExempt(); });
-$('ex-add-sel').addEventListener('click', () => setExempt([...exOffSel], true));
-['ex-q','ex-job','ex-on-q'].forEach(id=>$(id).addEventListener('input', renderExempt));
-$('ex-dept').addEventListener('change', renderExempt);
 
 // ═════════════════════════════════════════════════════════
 //  PENALTIES
@@ -3267,7 +3226,7 @@ $('aa-q').addEventListener('input', renderApprovals);
 //  DEPARTMENT + UNIT FILTERS — on every page that lists employees
 // ═════════════════════════════════════════════════════════
 const ORG_PAGES = { emp:()=>renderEmployees(), att:()=>renderAttendance(), pn:()=>renderPenalties(),
-  ex:()=>renderExempt(), rl:()=>renderReporting(), mon:()=>renderMonthly(), pay:()=>renderPayroll(), aa:()=>renderApprovals(),
+  rl:()=>renderReporting(), mon:()=>renderMonthly(), pay:()=>renderPayroll(), aa:()=>renderApprovals(),
   hs:()=>renderHistLines(), as:()=>renderAssign(), loan:()=>renderLoans(), rep:()=>{ if (repCur) runReport(); } };
 // does this employee match the department and unit chosen on page p?
 function orgMatch(e, p){

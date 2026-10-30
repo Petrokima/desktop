@@ -150,8 +150,8 @@ td.num,th.num{text-align:right;font-family:'Inter',system-ui,'Segoe UI',Arial,sa
 .setup-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:32px;width:100%;max-width:480px}
 /* role-based controls */
 body:not(.can-hr) :is([data-act="new-proj"],[data-act="new-hol"],
-  #p-save,#hd-save,#ex-add-sel,#ex-remove-sel,
-  [data-ex-rm],[data-del-proj],[data-del-hol]){display:none!important}
+  #p-save,#hd-save,
+  [data-del-proj],[data-del-hol]){display:none!important}
 body:not(.can-hr) :is([data-hr-handle],[data-dev-reset]){display:none!important}
 /* attendance, vacations, permissions, penalties: HR and HR officers (50) */
 body:not(.can-hr):not(.can-master) :is([data-act="new-att"],#mi-open,[data-act="new-perm"],[data-act="new-leave"],[data-act="new-pen"],
@@ -721,25 +721,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </div>
 
 <!-- EXCEPTION RULE -->
-<div class="page" id="page-exempt">
-  <div class="page-header"><div><div class="page-title">Exception rule</div><div class="page-sub" id="ex-sub">Employees here get no delay deduction and no overtime</div></div>
-    <select class="sel" id="ex-kind"><option value="attendance_exempt">No delay deduction &amp; no overtime</option><option value="project_staff">Site staff — must check in at a project</option></select></div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title" id="ex-on-title">On the exception rule</span>
-      <div class="toolbar-right"><input class="inp" id="ex-on-q" placeholder="Search…"><button class="btn btn-danger btn-sm" id="ex-remove-sel" disabled>Remove selected</button></div></div>
-    <div class="tbl-wrap" style="max-height:360px;overflow-y:auto"><table><thead><tr><th style="width:32px"><input type="checkbox" id="ex-on-all"></th><th>Code</th><th>Arabic name</th><th>English name</th><th>Department</th><th>Job</th><th></th></tr></thead><tbody id="ex-on-tbl"></tbody></table></div>
-  </div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title">Add employees to the rule</span>
-      <div class="toolbar-right">
-        <input class="inp" id="ex-q" placeholder="Name or code…">
-        <input class="inp" id="ex-job" placeholder="Job title contains… e.g. Manager" style="width:220px">
-        <select class="sel" id="ex-dept"><option value="">All departments</option></select>
-        <button class="btn btn-success btn-sm" id="ex-add-sel" disabled>Add selected</button></div></div>
-    <div class="tbl-wrap" style="max-height:460px;overflow-y:auto"><table><thead><tr><th style="width:32px"><input type="checkbox" id="ex-off-all" title="Select all shown"></th><th>Code</th><th>Arabic name</th><th>English name</th><th>Department</th><th>Job</th></tr></thead><tbody id="ex-off-tbl"></tbody></table></div>
-    <div class="foot" id="ex-foot"></div>
-  </div>
-</div>
+<div class="page" id="page-exempt"><div id="react-exempt"></div></div>
 
 <!-- PERMISSIONS -->
 <div class="page" id="page-permissions"><div id="react-permissions"></div></div>
@@ -1367,6 +1349,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=aedaf2e1daea"></script>
-<script src="react.js?v=86bab5bdf328"></script>
+<script src="app.js?v=6cd10d68a043"></script>
+<script src="react.js?v=c4672b7343d3"></script>
 </body></html>

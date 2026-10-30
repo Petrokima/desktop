@@ -51,7 +51,7 @@ const PK_ERR = (function(){
 //  STATE
 // ═════════════════════════════════════════════════════════
 /** @type {AppDb} — the database connection (typed: every table, column and database function is checked) */
-let sb = null;
+let sb = /** @type {any} — set at start-up, before anything reads from the database */ (null);
 /** The data loaded for the current payroll cycle — rows straight from the database (types: types/globals.d.ts).
  * @type {{ employees: Employee[], projects: Project[], attendance: AttendanceRow[], elements: SalaryElement[], fixed: FixedElement[],
  *          monthly: MonthlyEntry[], loans: Loan[], permissions: Permission[], leaves: Leave[], penalties: Penalty[], holidays: Holiday[],
@@ -344,7 +344,7 @@ function showFirstLogin(me, user){
     if (a === lastTempPass) return show('Choose a password different from the temporary one.');
     const btn=$('btn-first'); btn.disabled=true; btn.textContent='Saving…';
     if (!/^\d{4}$/.test(yr)) return show('Enter the year you were born (4 digits, e.g. 1988).');
-    const { data, error } = await sb.rpc('complete_first_login', { p_nid_last4:null, p_new_password:a, p_birth_year:yr });
+    const { data, error } = await sb.rpc('complete_first_login', { p_nid_last4:/** @type {any} — no ID digits asked any more (the database accepts none) */ (null), p_new_password:a, p_birth_year:yr });
     btn.disabled=false; btn.textContent='Set my password';
     if (error) return show(esc(error.message));
     if (data !== 'ok') return show(esc(data));
@@ -545,7 +545,7 @@ function missionOn(empId, date){ return missionsOn(empId, date).length > 0; }
 function missionCover(empId, date){
   const ms = missionsOn(empId, date); if (!ms.length) return null;
   if (ms.some(m => !m.time_from || !m.time_to)) return { full:true, hours:0 };
-  return { full:false, hours: Math.round(ms.reduce((s,m) => s + Math.max(0, toMin(m.time_to) - toMin(m.time_from)) / 60, 0) * 100) / 100 };
+  return { full:false, hours: Math.round(ms.reduce((s,m) => s + Math.max(0, toMin(/** @type {string} */ (m.time_to)) - toMin(/** @type {string} */ (m.time_from))) / 60, 0) * 100) / 100 };
 }
 const isWeekend = d => (settings.weekendDays||[]).includes(dObj(d).getDay());
 function approvedPerms(empId, date){ return S.permissions.filter(p => p.status==='Approved' && String(p.emp_id)===String(empId) && p.date===date); }
@@ -862,7 +862,8 @@ function nextEmpCode(ids){
   const nums = ids.filter(x=>/^\d+$/.test(x)).map(Number);
   if (nums.length) return String(Math.max(...nums) + 1);
   /** @type {{p:string, n:number, w:number} | null} */ let best=null; ids.forEach(x=>{ const m=x.match(/^(.*?)(\d+)$/); if(m){ const n=+m[2]; if(!best||n>best.n) best={p:m[1],n,w:m[2].length}; } });
-  return best ? best.p + String(best.n+1).padStart(best.w,'0') : '1';
+  const b = /** @type {{p:string, n:number, w:number} | null} */ (best);
+  return b ? b.p + String(b.n+1).padStart(b.w,'0') : '1';
 }
 function openEmp(id){
   const e = id ? empById(id) : null; editingEmp = e ? e.id : null;
@@ -890,7 +891,7 @@ function openEmp(id){
     }).join('') + `</div>`).join('');
   if (e && !e.manager_id && !e.top_of_org && e.status!=='Inactive')
     $('emp-form').insertAdjacentHTML('afterbegin','<div class="alert a-warn" style="margin-bottom:6px">This employee has no direct manager yet — set one in the Organisation section.</div>');
-  if (isOfficer()) PAY_FIELDS.forEach(k => { const f = document.querySelector(`#emp-form [data-f="${k}"]`); if (f) f.closest('.field').remove(); });
+  if (isOfficer()) PAY_FIELDS.forEach(k => { const f = document.querySelector(`#emp-form [data-f="${k}"]`); if (f) f.closest('.field')?.remove(); });
   renderEmpDevice();
   renderPackage();
   openM('m-emp');
@@ -956,7 +957,7 @@ async function saveEmp(){
   const mgrBox = /** @type {HTMLInputElement} */ (document.querySelector('#emp-form [data-f="manager_id"]'));
   if (rec.manager_id && !empById(rec.manager_id)) { mgrBox.focus(); return toast(`Manager “${rec.manager_id}” not found — pick from the suggestions`,'warn'); }
   if (rec.manager_id && editingEmp && String(rec.manager_id)===String(editingEmp)) { mgrBox.focus(); return toast('An employee cannot be their own manager','warn'); }
-  if (rec.manager_id && empById(rec.manager_id).status==='Inactive') { mgrBox.focus(); return toast('That manager is inactive — choose an active employee','warn'); }
+  if (rec.manager_id && empOrBlank(rec.manager_id).status==='Inactive') { mgrBox.focus(); return toast('That manager is inactive — choose an active employee','warn'); }
   if (!editingEmp && !rec.manager_id && !rec.top_of_org) { mgrBox.focus(); mgrBox.scrollIntoView && mgrBox.scrollIntoView({block:'center'});
     return toast('Choose the new employee’s direct manager (or tick “Top of the organisation”)','warn'); }
   if (!editingEmp && empById(rec.id)) rec.id = nextEmpCode();
@@ -972,7 +973,7 @@ async function saveEmp(){
     }
   }
   btn.disabled=false; btn.textContent='Save employee';
-  const { data, error } = res;
+  const { data, error } = /** @type {NonNullable<typeof res>} — the save above always runs at least once */ (res);
   if (error) return toast(error.message.replace(/^.*?(This would create|An employee cannot)/,'$1'),'err');
   if (!(data && data.length)) return toast(NOPERM,'err');
   const i = S.employees.findIndex(e => String(e.id)===String(rec.id));
@@ -1023,6 +1024,10 @@ function renderAttendance(){
   if (!ATT_RANGE && !$('att-from').value){ $('att-from').value = periodStart(settings.period); $('att-to').value = periodEnd(settings.period); }
 }
 
+// Time 'HH:MM' → minutes after midnight; a missing time → null.
+/** @overload @param {string} t  a filled-in time @returns {number} */
+/** @overload @param {string | null | undefined} t  a time that may be missing @returns {number | null} */
+/** @param {string | null | undefined} t */
 function toMin(t){ if(!t) return null; const [h,m]=String(t).split(':').map(Number); return h*60+m; }
 function segHours(tin, tout){
   const a=toMin(tin), b=toMin(tout); if(a===null||b===null) return 0;
@@ -1049,7 +1054,7 @@ function readSplits(){
 }
 function checkSplits(){
   const L=readSplits(), msgs=[]; let total=0;
-  L.forEach(l => { const h=segHours(l.tin,l.tout); l.row.querySelector('[data-s="hrs"]').textContent = h ? fmt(h) : '—'; total+=h; });
+  L.forEach(l => { const h=segHours(l.tin,l.tout); /** @type {PageEl} */ (l.row.querySelector('[data-s="hrs"]')).textContent = h ? fmt(h) : '—'; total+=h; });
   const timed = L.filter(l=>l.tin&&l.tout).map(l=>({...l,a:toMin(l.tin),b:toMin(l.tout)})).filter(l=>l.b>l.a).sort((x,y)=>x.a-y.a);
   L.filter(l => l.tin && !l.tout).forEach(l => msgs.push(`<span class="neg">⚠ ${esc(l.proj || 'No project')} from ${esc(l.tin)} has no check-out — enter the time the employee left, then Save. The day's hours are not counted until then.</span>`));
   for (let i=1;i<timed.length;i++) if (timed[i].a < timed[i-1].b) msgs.push(`<span class="neg">⚠ ${timed[i-1].tin}–${timed[i-1].tout} overlaps ${timed[i].tin}–${timed[i].tout}</span>`);
@@ -1395,7 +1400,7 @@ function openNewVar(){
 async function saveNewVar(){
   const code=num($('vr-code').value), en=$('vr-en').value.trim(), type=$('vr-type').value;
   if (!code || code<1) return toast('Enter a code number','warn');
-  if (elByCode(code)) return toast(`Code ${code} is already used by “${elByCode(code).name_en}”`,'warn');
+  if (elByCode(code)) return toast(`Code ${code} is already used by “${elOrBlank(code).name_en}”`,'warn');
   if (!en) return toast('Enter the English name','warn');
   if (S.elements.some(e=>String(e.name_en).trim().toLowerCase()===en.toLowerCase())) return toast('An element with this name already exists','warn');
   const rec = { code, name_en:en, name_ar:$('vr-ar').value.trim()||null, element_type:type, input_method:'Monthly', calc_method:'Amount', is_basic:false,
@@ -1676,7 +1681,7 @@ const REPORTS = [
       rows:S.attendance.map(a=>{ const e=empById(a.emp_id); if(!e) return null; const R=dayRules(a,e); if(!R.lateRaw && !R.earlyRaw) return null;
         const rate=num(e.delay_hour_pay)||num(e.hour_pay), net=R.late+R.early;
         return { date:a.date, code:a.emp_id, name:empName(e), department:e.department, in:a.check_in, out:a.check_out, worked:num(a.total_hours), late:R.lateRaw, early:R.earlyRaw, waived:R.waived, net, rate, ded:net*rate }; })
-        .filter(Boolean).sort((a,b)=>a.date.localeCompare(b.date)) }) },
+        .filter(x => x !== null).sort((a,b)=>a.date.localeCompare(b.date)) }) },
   { id:'att-perm', g:'Attendance', t:'Permission requests',
     d:'All late-arrival and early-leave permission requests between the two dates with their decision, and how many each employee has used.',
     build:() => ({ cols:[C('date','Date','date'),C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('type','Type'),C('hours','Hours','num',true),C('reason','Reason'),C('status','Status'),C('by','Decided by'),C('used','Approved this month','int')],
@@ -1729,17 +1734,17 @@ const REPORTS = [
         site:c.project_code||'', sname:c.project_code?projName(c.project_code):(c.event_type==='in'?'No project':''), acc:c.accuracy, map: mapUrl(c) || '',
         dist: c.distance_m != null ? (c.distance_m >= 1000 ? (c.distance_m/1000).toFixed(1)+' km' : c.distance_m+' m') : '',
         warn: (c.location_flags||[]).map(f => (typeof LOC_FLAG !== 'undefined' && LOC_FLAG[f] ? LOC_FLAG[f][0] : f)).join(', ') + (c.applied === false ? (c.location_flags && c.location_flags.length ? ' · ' : '') + 'kept for review: ' + (c.review_note||'') : '') }; })
-        .sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)) }) },
+        .sort((a,b)=>(String(a.date)+String(a.time)).localeCompare(String(b.date)+String(b.time))) }) },
   { id:'att-review', g:'Attendance', t:'Offline check-ins to review',
     d:'Check-ins made with no internet and sent later. The Petrokima Android app (new version) also sends the phone\'s “time since switched on” counter, which the user cannot change: the server then records the REAL time (✓ verified), and if the phone clock had been changed it shows ⚠ Phone clock was changed and tells HR. Without the counter (iPhone, older apps, or the phone restarted) the time comes from the phone clock: the server compares it with its own when the phone reconnects and corrects any difference. A tap that reached the server more than 5 minutes after its time is marked ⏳ HR to confirm: that day has no deductions or overtime until HR checks the time on the Attendance page and saves it, and the month cannot be approved before. Taps more than 72 hours old, or earlier than one already recorded, are refused and stay on the phone — HR records those manually.',
     build:() => ({ cols:[C('state','Status','strong'),C('date','Date','date'),C('time','Time recorded','mono'),C('claimed','Phone showed','mono'),C('recv','Sent (Cairo time)','mono'),C('delay','Hours until sent','num'),C('code','Code','id'),C('name','Employee'),C('ev','Event'),C('site','Site','id'),C('map','Location','link')],
       rows:S.clocks.filter(c=>c.offline).map(c=>{ const e=empOrBlank(c.emp_id), corr=/corrected/.test(c.time_method||''), delay = c.received_at ? (new Date(c.received_at).getTime()-new Date(c.at).getTime())/3600000 : null;
         const tz = String(e.entity||'').toLowerCase().includes('saudi') ? 'Asia/Riyadh' : 'Africa/Cairo', changed = /clock was changed/.test(c.time_method || ''), verified = /counter \(verified\)/.test(c.time_method || '');
         return { state: changed ? '⚠ Phone clock was changed — real time recorded' : /^Offline — sent/.test(c.review_note || '') ? ((c.location_flags||[]).includes('phone_restarted') ? '⏳ HR to confirm (phone restarted)' : '⏳ HR to confirm the time') : verified ? '✓ Real time verified' : corr ? '⚠ Phone clock was wrong' : 'OK', date:c.local_date, time:c.local_time,
-          claimed: (c.phone_said_at || c.client_at) ? new Date(c.phone_said_at || c.client_at).toLocaleString('en-GB',{ timeZone: tz, hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short' }) : '',
+          claimed: (c.phone_said_at || c.client_at) ? new Date(/** @type {string} */ (c.phone_said_at || c.client_at)).toLocaleString('en-GB',{ timeZone: tz, hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short' }) : '',
           recv: c.received_at ? new Date(c.received_at).toLocaleString('en-GB',{ timeZone: tz, hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short' }) : '', delay: delay==null ? '' : Math.round(delay*100)/100,
           code:c.emp_id, name:empName(e), ev:c.event_type==='in'?'Check in':'Check out', site:c.project_code||'(no project)', map:mapUrl(c)||'' }; })
-        .sort((a,b)=>Number(/^(OK|✓)/.test(a.state))-Number(/^(OK|✓)/.test(b.state)) || (a.date+a.time).localeCompare(b.date+b.time)) }) },
+        .sort((a,b)=>Number(/^(OK|✓)/.test(a.state))-Number(/^(OK|✓)/.test(b.state)) || (String(a.date)+String(a.time)).localeCompare(String(b.date)+String(b.time))) }) },
 
   { id:'att-fix', g:'Attendance', t:'Missing punches to correct',
     d:'Days with only one fingerprint-machine punch, days over 16 hours, offline phone taps sent late (time to confirm), and phone check-ins with no check-out on a past day. They carry no deductions or overtime until HR opens the record on the Attendance page, checks the times and saves. The month cannot be approved while any remain.',
@@ -1905,11 +1910,12 @@ function openReport(id){
 }
 function runReport(){
   if (!repCur) return;
-  const r=REPORTS.find(x=>x.id===repCur), mode=repDatesMode(r);
+  const r=REPORTS.find(x=>x.id===repCur); if (!r) return;   // the remembered report no longer exists
+  const mode=repDatesMode(r);
   repDateBar(mode);
   const msg = t => { $('rep-head').innerHTML=''; $('rep-foot').innerHTML=''; $('rep-body').innerHTML=`<tr><td class="empty">${t}</td></tr>`; $('rep-note').textContent=''; repData=null; };
   const rg = mode==='range' ? repRange() : null;
-  if (mode==='range' && rg.error) return msg(esc(rg.error));
+  if (rg && rg.error) return msg(esc(rg.error));
   const D = mode==='range' ? repRangeData(rg) : null;
   if (D && D.wait) return msg(esc(D.wait));
   let data; try{ data=repWithData(D, () => r.build({ from:rg?rg.from:periodStart(settings.period), to:rg?rg.to:periodEnd(settings.period), group:$('rep-group').value||'department', view:$('rep-mode').value||'emp' })); }
@@ -1941,7 +1947,7 @@ function runReport(){
 }
 function exportReport(){
   if (!repData || !repData.rows.length) return toast('Nothing to export','warn');
-  const r=REPORTS.find(x=>x.id===repCur);
+  const r=REPORTS.find(x=>x.id===repCur); if (!r) return;
   const q=v=>{ let s=String(v??''); if (/^[=+@\t\r]/.test(s) || /^-[^\d.]/.test(s)) s="'"+s;   // review fix: never let a cell run as an Excel formula
     return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
   const val=(c,v)=>{ if(v===null||v===undefined) return '';
@@ -7302,7 +7308,7 @@ function domStatusFilter(tbodyId){
 //  unchanged ('' while the date is incomplete or impossible). The 📅 icon at the right opens the calendar.
 //  Boxes added later (windows, forms drawn by code) are converted automatically.
 // ═════════════════════════════════════════════════════════
-const DMY_NATIVE = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+const DMY_NATIVE = /** @type {{ get: () => string, set: (v: string) => void }} — always present on input fields */ (Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value'));
 function dmyIso(y, m, d){
   y = +y; m = +m; d = +d;
   if (y < 1900 || y > 2100 || m < 1 || m > 12 || d < 1) return null;

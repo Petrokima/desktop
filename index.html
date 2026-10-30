@@ -170,7 +170,6 @@ body:not(.can-pay) :is(#pk-add,[data-del-fixed]){display:none!important}
 .lpp-chip button{border:0;background:none;cursor:pointer;color:inherit;padding:0 2px;font-size:12px}
 body:not(.can-var) :is(#mon-save,#mon-add-btn,#mon-pick,#mon-bulk,#mp-attended,#mp-fill,#mp-fill-go,[data-act="new-var"],[data-mon-add],[data-mon-rm]){display:none!important}
 body:not(.can-pay) #pay-publish{display:none!important}
-body:not(.can-pay) :is(#cc-save,#cc-reset){display:none!important}
 body:not(.can-hr) .nav-item:is([data-page="news"],[data-page="voice"]){display:none!important}
 body:not(.can-hr):not(.can-pay):not(.can-master) .nav-item[data-page="bulk"]{display:none!important}
 body:not(.can-hr):not(.can-master) :is([data-act="new-emp"],#emp-save){display:none!important}   /* HR officers edit master data too (49) */
@@ -515,48 +514,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div class="page" id="page-history"><div id="react-history"></div></div>
 
 <!-- NET ↔ GROSS CALCULATOR -->
-<div class="page" id="page-calc">
-  <div class="page-header"><div><div class="page-title">Net ↔ Gross calculator</div>
-    <div class="page-sub">Egyptian salaries: wage tax, social insurance and the martyrs' families fund. A tool for offers and negotiations — it does not change the payroll.</div></div></div>
-  <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
-    <div class="card" style="flex:1;min-width:320px;max-width:460px;padding:20px">
-      <div class="toolbar-title" style="margin-bottom:12px">1 · What do you know?</div>
-      <div class="btn-group" style="margin-bottom:14px"><button class="btn btn-sm btn-primary" id="cc-g2n">Gross → Net</button><button class="btn btn-sm btn-ghost" id="cc-n2g">Net → Gross</button></div>
-      <div class="field"><label id="cc-amt-l">Monthly gross salary (EGP)</label><input class="inp" id="cc-amt" type="number" min="0" step="0.01" placeholder="e.g. 10000" style="font-size:20px"></div>
-      <div class="field" style="margin-top:10px"><label><input type="checkbox" id="cc-ins" checked> Covered by social insurance</label></div>
-      <div class="field" id="cc-insw-box"><label>Insurance wage (أجر الاشتراك) — leave empty to use the gross</label><input class="inp" id="cc-insw" type="number" min="0" step="0.01" placeholder="same as gross (kept within the limits)"></div>
-      <div class="field"><label>Tax-exempt allowances per month (optional)</label><input class="inp" id="cc-ex" type="number" min="0" step="0.01" placeholder="0"></div>
-      <div id="cc-rates-note" style="font-size:12px;color:var(--muted);margin-top:10px;line-height:1.6"></div>
-    </div>
-    <div class="card" style="flex:1.4;min-width:340px;padding:20px">
-      <div class="toolbar-title" style="margin-bottom:12px">2 · Result (per month)</div>
-      <div class="tbl-wrap"><table><tbody id="cc-out"></tbody></table></div>
-      <div class="toolbar-title" style="margin:18px 0 8px">How the yearly tax is worked out</div>
-      <div class="tbl-wrap"><table><thead><tr><th>Annual taxable income</th><th class="num">Rate</th><th class="num">Tax</th></tr></thead><tbody id="cc-br"></tbody></table></div>
-    </div>
-  </div>
-  <div class="card" style="padding:20px">
-    <div class="toolbar"><span class="toolbar-title">Rates used</span><div class="toolbar-right"><button class="btn btn-ghost btn-sm" id="cc-reset">Back to 2026 defaults</button><button class="btn btn-primary btn-sm" id="cc-save">Save rates</button></div></div>
-    <div class="grid3" style="padding:0 0 6px">
-      <div class="field"><label>Tax year</label><input class="inp" id="cr-year" type="number"></div>
-      <div class="field"><label>Personal exemption (EGP / year)</label><input class="inp" id="cr-exemption" type="number"></div>
-      <div class="field"><label>Martyrs' families fund (% of gross)</label><input class="inp" id="cr-martyrs" type="number" step="0.01"></div>
-      <div class="field"><label>Social insurance — employee %</label><input class="inp" id="cr-siEmp" type="number" step="0.01"></div>
-      <div class="field"><label>Social insurance — employer %</label><input class="inp" id="cr-siEr" type="number" step="0.01"></div>
-      <div class="field"><label>Insurance wage limits (EGP / month)</label><div style="display:flex;gap:8px"><input class="inp" id="cr-siMin" type="number" placeholder="min"><input class="inp" id="cr-siMax" type="number" placeholder="max"></div></div>
-      <div class="field full"><label>Tax brackets — one per line: upper limit, rate % (last line: “above”, rate)</label><textarea class="inp" id="cr-brackets" rows="7" style="font-family:monospace"></textarea></div>
-      <div class="field full"><label>Higher incomes lose lower brackets — one per line: above this annual income, start from bracket number (2 = the second line)</label><textarea class="inp" id="cr-skip" rows="5" style="font-family:monospace"></textarea></div>
-    </div>
-    <div style="font-size:12px;color:var(--muted)">2026 defaults: Andersen Egypt tax table (January 2026); insurance wage 2,700–16,700 from the National Organization for Social Insurance (from 1 January 2026). Only Finance and the administrator can save changes.</div>
-  </div>
-
-  <div class="card" style="padding:20px" id="st-card">
-    <div class="toolbar"><span class="toolbar-title">📂 Wage-tax settlement — check &amp; planning</span>
-      <div class="toolbar-right"><input type="file" id="st-file" accept=".xlsx,.xls" style="max-width:260px"><select class="sel" id="st-sheet" style="display:none"></select></div></div>
-    <div style="font-size:12px;color:var(--muted);margin:-4px 0 10px">Upload the monthly settlement workbook (تسويات كسب العمل — one sheet per month). Every employee's tax is recalculated with the rates above and compared with the sheet. Choose one month, or “All months” for the year-to-date reconciliation. Internal analysis only — nothing is saved.</div>
-    <div id="st-out"></div>
-  </div>
-</div>
+<div class="page" id="page-calc"><div id="react-calc"></div></div>
 
 <!-- ANNOUNCEMENTS -->
 <div class="page" id="page-news"><div id="react-news"></div></div>   <!-- drawn by React: react/src/news -->
@@ -1198,6 +1156,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=1565fcbf487e"></script>
-<script src="react.js?v=741bb8770942"></script>
+<script src="app.js?v=05585b524ca0"></script>
+<script src="react.js?v=e446f81c39a3"></script>
 </body></html>

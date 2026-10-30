@@ -4022,7 +4022,7 @@ async function createLogins(){
   const withLogin = new Set(USERS.map(u=>String(u.emp_id||'')).filter(Boolean));
   const waiting = only ? 1 : S.employees.filter(e=>e.status!=='Inactive' && !withLogin.has(String(e.id))).length;
   const target = only ? `employee ${only}` : `${waiting} active employee${waiting===1?'':'s'} without a login`;
-  confirmDel(`Create logins for ${target}? They will sign in with their employee code and ${temp ? 'the temporary password you typed' : 'Petro@ + the last 4 digits of their national ID (employees without a national ID are skipped)'}, then must choose their own password. Logins are created in batches of 25 — keep this window open until it finishes.`, async () => {
+  confirmDel(`Create logins for ${target}? New logins start switched OFF: tick “Active” for an employee when you give him his login. They will sign in with their employee code and ${temp ? 'the temporary password you typed' : 'Petro@ + the last 4 digits of their national ID (employees without a national ID are skipped)'}, then must choose their own password. Logins are created in batches of 25 — keep this window open until it finishes.`, async () => {
     const b=$('us-create'); b.disabled=true; let total=0, rounds=0;
     try{
       while (rounds++ < 200){
@@ -4039,7 +4039,7 @@ async function createLogins(){
     b.disabled=false; b.textContent='Create employee logins'; $('us-only').value='';
     await loadUsers();
     const left = only ? 0 : S.employees.filter(e=>e.status!=='Inactive' && !new Set(USERS.map(u=>String(u.emp_id||''))).has(String(e.id))).length;
-    toast(total ? `Created ${total} login${total>1?'s':''}${left?` · ${left} could not be created (a login with that code already exists)`:''}` : 'Nothing to create — they already have logins', left ? 'warn' : 'ok');
+    toast(total ? `Created ${total} login${total>1?'s':''} — switched OFF until you tick “Active” when you hand the login to the employee${left?` · ${left} could not be created (a login with that code already exists)`:''}` : 'Nothing to create — they already have logins', left ? 'warn' : 'ok');
   });
   $('del-title').textContent='Please confirm'; $('del-ok').textContent='Create'; $('del-ok').className='btn btn-success';
 }

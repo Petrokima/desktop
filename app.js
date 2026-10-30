@@ -465,7 +465,7 @@ function buildLists(){
 const PAGE_RENDER = { dashboard:()=>renderDashboard(), employees:()=>renderEmployees(), attendance:()=>renderAttendance(), projects:()=>renderProjects(),
   monthly:()=>renderMonthly(), loans:()=>renderLoans(), payroll:()=>renderPayroll(), reports:()=>renderReports(), permissions:()=>renderPermissions(),
   leaves:()=>renderLeaves(), exempt:()=>renderExempt(), penalties:()=>renderPenalties(), holidays:()=>renderHolidays(), hrreq:()=>renderHrRequests(),
-  reporting:()=>renderReporting(), history:()=>renderHistory(), parrules:()=>renderParRules(), approvals:()=>renderApprovals(), assign:()=>renderAssign(), bulk:()=>renderBulk(), calc:()=>renderCalc(), news:()=>renderNewsPage(), voice:()=>renderVoicePage() };
+  reporting:()=>renderReporting(), history:()=>renderHistory(), parrules:()=>renderParRules(), approvals:()=>renderApprovals(), assign:()=>renderAssign(), bulk:()=>renderBulk(), calc:()=>renderCalc(), news:()=>renderNewsPage() };
 let DIRTY = new Set(), LOAD_MS = 0;
 function currentPage(){ const p = document.querySelector('.page.active'); return p ? p.id.replace('page-','') : 'dashboard'; }
 function renderPageIfNeeded(name){ if (DIRTY.has(name) && PAGE_RENDER[name]) { DIRTY.delete(name); PAGE_RENDER[name](); } }
@@ -3575,9 +3575,7 @@ function calcRatesSaved(stored){ settings.calcRates = stored; renderCalc(); DIRT
 // ═════════════════════════════════════════════════════════
 //  ANNOUNCEMENTS · EMPLOYEE VOICE · BIRTHDAYS (desktop)
 // ═════════════════════════════════════════════════════════
-/** @type {{ news: Row<'announcements'>[], reads: Row<'announcement_reads'>[], fb: Row<'feedback'>[], hire: Row<'hiring_requests'>[],
- *   train: Row<'training_requests'>[], act: Row<'manager_actions'>[], sal?: Row<'salary_change_requests'>[] }}} — Employee voice: news, feedback and manager requests */
-const V = { news:[], reads:[], fb:[], hire:[], train:[], act:[] };
+const V = { loaded: false };   // the dashboard loads the Employee voice badge once
 const vDate = ts => ts ? new Date(ts).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '';
 const vChip = s => `<span class="chip ${({'Waiting for board':'c-orange','Waiting for HR':'c-blue',Approved:'c-green',Cancelled:'c-grey',New:'c-orange','In review':'c-blue','In progress':'c-blue',Closed:'c-green',Done:'c-green',Rejected:'c-red'})[s]||'c-grey'}">${esc(s)}</span>`;
 const vName = id => { const e = empById(id); return e ? `${empName(e)} (${id})` : id; };
@@ -3606,91 +3604,25 @@ showSelf = async function(){ const r = await _showSelfB.apply(this, arguments); 
 // ── announcements — the page is React now (react/src/news, 30 Oct 2026); it loads when opened ──
 function renderNewsPage(){ if (typeof PKR !== 'undefined') PKR.render(); }
 
-// ── employee voice ──
+// ── employee voice — the page and its window are React now (react/src/voice, 30 Oct 2026); kept here: the menu badge ──
+// (loaded once with the dashboard for admin / HR, and again after every answer through the bridge voiceChanged)
 async function loadVoice(){
-  const [f, h, t, m] = await Promise.all([sb.rpc('feedback_inbox'), sb.from('hiring_requests').select('*').order('created_at', { ascending:false }),
-    sb.from('training_requests').select('*').order('created_at', { ascending:false }), sb.from('manager_actions').select('*').order('created_at', { ascending:false })]);
-  V.fb = f.data || []; V.hire = h.data || []; V.train = t.data || []; V.act = m.data || [];
-  const open = V.fb.filter(x => x.status !== 'Closed').length + V.hire.filter(x => x.status === 'New').length + V.train.filter(x => x.status === 'New').length + V.act.filter(x => x.status === 'Waiting for HR').length;
-  const b = $('voice-badge'); if (b){ b.textContent = open; b.style.display = open ? '' : 'none'; }
+  const [f, h, t, m] = await Promise.all([sb.rpc('feedback_inbox'), sb.from('hiring_requests').select('status'),
+    sb.from('training_requests').select('status'), sb.from('manager_actions').select('status')]);
+  const open = (f.data || []).filter(x => x.status !== 'Closed').length + (h.data || []).filter(x => x.status === 'New').length
+    + (t.data || []).filter(x => x.status === 'New').length + (m.data || []).filter(x => x.status === 'Waiting for HR').length;
+  const b = $('voice-badge'); if (b){ b.textContent = String(open); b.style.display = open ? '' : 'none'; }
 }
-async function renderVoicePage(){
-  await loadVoice();
-  const k = $('vo-kind').value, st = $('vo-st').value;
-  const fb = V.fb.filter(x => (!k || x.kind === k) && (!st || (st === 'open' ? x.status !== 'Closed' : x.status === 'Closed')));
-  $('vo-fb').innerHTML = fb.map(x => `<tr data-vo="fb:${esc(x.id)}" style="cursor:pointer"><td class="mono">${esc(vDate(x.created_at))}</td><td>${x.kind==='complaint' ? '⚠️ Complaint' : '💡 Suggestion'}</td>
-      <td>${x.anonymous ? '🕶 <i>Anonymous</i>' : esc(x.emp_name ? `${x.emp_name} (${x.emp_id})` : vName(x.emp_id))}</td><td class="strong" style="white-space:normal">${esc(x.subject)}</td><td style="white-space:normal;max-width:320px">${esc(x.body)}</td>
-      <td>${vChip(x.status)}</td><td style="white-space:normal;max-width:240px">${esc(x.reply || '')}${x.replied_by ? `<div style="font-size:11px;color:var(--muted)">— ${esc(x.replied_by)}</div>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">Nothing here</td></tr>';
-  $('vo-hire').innerHTML = V.hire.map(x => `<tr data-vo="hire:${esc(x.id)}" style="cursor:pointer"><td class="mono">${esc(vDate(x.created_at))}</td><td>${esc(vName(x.manager_emp))}</td><td class="num">${x.headcount}</td>
-      <td class="strong">${esc(x.job_name)}</td><td style="white-space:normal;max-width:340px">${esc(x.job_description)}${x.notes ? `<div style="font-size:12px;color:var(--muted)">${esc(x.notes)}</div>` : ''}</td>
-      <td class="mono">${esc(x.needed_by || '')}</td><td>${vChip(x.status)}</td><td style="white-space:nowrap;font-size:12px">HR ${x.hr_closed ? '✔' : '—'} · Manager ${x.mgr_closed ? '✔' : '—'}</td><td style="white-space:normal">${esc(x.hr_note || '')}${x.close_note ? `<div style="font-size:11px;color:var(--muted)">${esc(x.close_note)}</div>` : ''}</td></tr>`).join('') || '<tr><td colspan="9" class="empty">No requests</td></tr>';
-  $('vo-act').innerHTML = V.act.map(x => `<tr data-vo="act:${esc(x.id)}" style="cursor:pointer${x.status === 'Waiting for HR' ? ';background:rgba(224,123,57,.08)' : ''}"><td class="mono">${esc(vDate(x.created_at))}</td>
-      <td>${x.kind === 'penalty' ? '⚖️ Penalty' : '💰 ' + esc(x.element_name || 'Incentive')}</td><td>${esc(x.emp_name ? `${x.emp_name} (${x.emp_id})` : vName(x.emp_id))}</td>
-      <td class="num">${fmt(x.quantity)} ${x.action_type === 'Amount' ? 'EGP' : x.action_type === 'Days' ? 'day(s)' : 'hour(s)'}${x.amount != null && x.action_type !== 'Amount' ? `<div style="font-size:11px;color:var(--muted)">= ${fmt(x.amount)} EGP</div>` : ''}</td><td class="mono">${esc(x.apply_period)}</td>
-      <td style="white-space:normal;max-width:300px">${esc(x.reason)}</td><td>${esc(x.manager_name || vName(x.manager_emp))}</td>
-      <td style="white-space:normal;font-size:12px">${x.board_by ? `${esc(x.board_by)}${x.board_note ? ': ' + esc(x.board_note) : ''}` : ''}</td><td>${vChip(x.status)}</td></tr>`).join('') || '<tr><td colspan="9" class="empty">No requests</td></tr>';
-  $('vo-train').innerHTML = V.train.map(x => `<tr data-vo="train:${esc(x.id)}" style="cursor:pointer"><td class="mono">${esc(vDate(x.created_at))}</td><td>${esc(vName(x.manager_emp))}</td>
-      <td style="white-space:normal;max-width:260px">${(x.emp_ids || []).map(id => esc(vName(id))).join(', ')}</td><td class="strong">${esc(x.topic)}</td><td style="white-space:normal;max-width:300px">${esc(x.details || '')}</td>
-      <td class="mono">${esc(x.preferred_date || '')}</td><td>${vChip(x.status)}</td><td style="white-space:normal">${esc(x.hr_note || '')}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">No requests</td></tr>';
+/** after an answer in the React window: the badge, and the board member's dashboard card when it is shown */
+async function voiceChanged(){
+  await loadVoice().catch(() => {});
+  if (typeof isBoardViewer === 'function' && isBoardViewer() && await loadBoardRequests(true)) renderBoardRequests();
 }
-let VO_CUR = null;
-document.addEventListener('click', e => {
-  const r = /** @type {PageEl} */ (e.target).closest('[data-vo]'); if (!r) return;
-  const [kind, id] = /** @type {string} */ (r.dataset.vo).split(':'), x = /** @type {any} — a complaint, hiring, training or manager request (see kind) */ ((kind === 'fb' ? V.fb : kind === 'hire' ? V.hire : kind === 'act' ? V.act : V.train).find(y => y.id === id)); if (!x) return;
-  VO_CUR = { kind, x };
-  $('mv-close').style.display = kind === 'hire' && x.status !== 'Closed' && !x.hr_closed ? '' : 'none';
-  $('mv-reject').style.display = 'none'; $('mv-save').style.display = ''; $('mv-st').closest('.field').style.display = '';
-  if (kind === 'act'){
-    $('mv-title').textContent = `${x.kind === 'penalty' ? '⚖️ Penalty' : '💰 ' + (x.element_name || 'Incentive')} — ${x.emp_name || x.emp_id}`;
-    $('mv-info').textContent = `Requested by: ${x.manager_name || x.manager_emp} · ${vDate(x.created_at)}\n${fmt(x.quantity)} ${x.action_type === 'Amount' ? 'EGP' : x.action_type === 'Days' ? 'day(s) of pay' : 'hour(s) of pay'} · payroll month ${x.apply_period}${x.incident_date ? ' · incident ' + x.incident_date : ''}\nReason: ${x.reason}\n\nBoard member: ${x.board_by ? x.board_by + (x.board_note ? ' — ' + x.board_note : '') : 'not yet'}\nStatus: ${x.status}`;
-    $('mv-st').closest('.field').style.display = 'none'; $('mv-note-l').textContent = 'HR note'; $('mv-note').value = x.hr_note || '';
-    const can = x.status === 'Waiting for HR'; $('mv-save').style.display = can ? '' : 'none'; $('mv-reject').style.display = can ? '' : 'none';
-    $('mv-save').textContent = can ? '✔ Approve & record' : 'Save'; openM('m-voice'); return;
-  }
-  $('mv-save').textContent = 'Save';
-  $('mv-title').textContent = kind === 'fb' ? `${x.kind === 'complaint' ? '⚠️ Complaint' : '💡 Suggestion'} — ${x.subject}` : kind === 'hire' ? `👥 ${x.headcount} × ${x.job_name}` : `🎓 ${x.topic}`;
-  $('mv-info').textContent = kind === 'fb' ? `From: ${x.anonymous ? '🕶 Anonymous (the employee chose not to show the name)' : x.emp_name ? x.emp_name + ' (' + x.emp_id + ')' : vName(x.emp_id)} · ${vDate(x.created_at)}\n\n${x.body}`
-    : kind === 'hire' ? `Manager: ${vName(x.manager_emp)} · ${vDate(x.created_at)}\nJob description: ${x.job_description}${x.needed_by ? '\nNeeded by: ' + x.needed_by : ''}${x.notes ? '\nNotes: ' + x.notes : ''}`
-    : `Manager: ${vName(x.manager_emp)} · ${vDate(x.created_at)}\nEmployees: ${(x.emp_ids || []).map(vName).join(', ')}${x.details ? '\nDetails: ' + x.details : ''}${x.preferred_date ? '\nPreferred date: ' + x.preferred_date : ''}`;
-  const sts = kind === 'fb' ? ['New','In review','Closed'] : kind === 'hire' ? (x.status === 'Closed' ? ['Closed'] : ['New','In progress']) : ['New','In progress','Done','Rejected'];
-  $('mv-st').innerHTML = sts.map(s => `<option ${s === x.status ? 'selected' : ''}>${s}</option>`).join('');
-  $('mv-note-l').textContent = kind === 'fb' ? 'Reply (the employee sees it in the app)' : 'HR note (the manager sees it in the app)';
-  $('mv-note').value = (kind === 'fb' ? x.reply : x.hr_note) || '';
-  openM('m-voice');
-});
-$('mv-save').addEventListener('click', async () => {
-  if (!VO_CUR) return; const { kind, x } = VO_CUR;
-  if (kind === 'act') return decideAct(true);
-  if (kind === 'fb'){
-    const { error } = await sb.rpc('answer_feedback', { p_id:x.id, p_status:$('mv-st').value, p_reply:$('mv-note').value.trim() || null });
-    if (error) return toast(error.message, 'err');
-  } else {
-    const table = kind === 'hire' ? 'hiring_requests' : 'training_requests';
-    const { data, error } = await sb.from(table).update({ status:$('mv-st').value, hr_note:$('mv-note').value.trim() || null }).eq('id', x.id).select();
-    if (error || !(data && data.length)) return toast(error ? error.message : NOPERM, 'err');
-  }
-  closeM('m-voice'); toast('Saved — visible in the app'); renderVoicePage();
-});
-['vo-kind','vo-st'].forEach(id => $(id).addEventListener('change', renderVoicePage));
-
-async function decideAct(ok){
-  const { x } = VO_CUR;
-  const { data, error } = await sb.rpc('decide_manager_action', { p_id:x.id, p_approve:ok, p_note:$('mv-note').value.trim() || null });
-  if (error) return toast(error.message, 'err');
-  closeM('m-voice'); toast(data || 'Saved'); renderVoicePage();
-}
-$('mv-reject').addEventListener('click', () => decideAct(false));
-$('mv-close').addEventListener('click', async () => {
-  const { x } = VO_CUR;
-  const { data, error } = await sb.rpc('close_hiring_request', { p_id:x.id, p_note:$('mv-note').value.trim() || null });
-  if (error) return toast(error.message, 'err');
-  closeM('m-voice'); toast(data === 'Closed' ? 'Closed — both HR and the manager agreed' : 'You agreed to close — waiting for the manager to confirm'); renderVoicePage();
-});
 
 // ═════════════════════════════════════════════════════════
 //  BASIC SALARY CHANGES — only after the board member approves
 // ═════════════════════════════════════════════════════════
-let SR_CUR = null; V.sal = [];
+let SR_CUR = null;
 function currentBasic(empId, onDate){
   const rows = (S.fixed || []).filter(r => String(r.emp_id) === String(empId) && (elOrBlank(r.element_code)).is_basic
     && r.effective_from <= onDate && (!r.effective_to || r.effective_to >= onDate)).sort((a,b) => String(b.effective_from).localeCompare(String(a.effective_from)));
@@ -3730,23 +3662,6 @@ document.addEventListener('click', e => { const b = /** @type {PageEl} */ (e.tar
 const _openEmpSal = openEmp;
 // @ts-expect-error — openEmp is deliberately extended here (the new version wraps the earlier one)
 openEmp = function(id){ const r = _openEmpSal.apply(this, arguments); renderSalaryPending(id); return r; };
-// list on the Employee voice page
-const _loadVoiceSal = loadVoice;
-// @ts-expect-error — loadVoice is deliberately extended here (the new version wraps the earlier one)
-loadVoice = async function(){ await _loadVoiceSal.apply(this, arguments); const r = await sb.from('salary_change_requests').select('*').order('created_at', { ascending:false }); V.sal = r.data || []; };
-const _renderVoiceSal = renderVoicePage;
-// @ts-expect-error — renderVoicePage is deliberately extended here (the new version wraps the earlier one)
-renderVoicePage = async function(){ await _renderVoiceSal.apply(this, arguments);
-  $('vo-sal').innerHTML = (V.sal || []).map(x => `<tr><td class="mono">${esc(vDate(x.created_at))}</td><td>${esc(x.emp_name ? `${x.emp_name} (${x.emp_id})` : vName(x.emp_id))}</td>
-      <td class="num">${x.current_amount == null ? '—' : fmt(x.current_amount)}</td><td class="num strong">${fmt(x.new_amount)}</td><td class="mono">${esc(x.effective_from)}</td>
-      <td style="white-space:normal;max-width:280px">${esc(x.reason)}</td><td>${esc(x.requested_by || '')}</td>
-      <td style="white-space:normal;font-size:12px">${x.board_by ? esc(x.board_by) + (x.board_note ? ': ' + esc(x.board_note) : '') : ''}</td><td>${vChip(x.status)}</td>
-      <td>${x.status === 'Waiting for board' ? `<button class="btn btn-ghost btn-sm" data-sal-cancel="${esc(x.id)}">Cancel</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="10" class="empty">No requests</td></tr>';
-};
-document.addEventListener('click', async e => { const b = /** @type {PageEl} */ (e.target).closest('[data-sal-cancel]'); if (!b) return;
-  const { error } = await sb.rpc('cancel_salary_change', { p_id: /** @type {string} */ (b.dataset.salCancel) }); if (error) return toast(error.message, 'err');
-  toast('Request cancelled'); renderVoicePage(); });
-
 // ═════════════════════════════════════════════════════════
 //  RESIGNATION · RE-EMPLOYMENT · EMPLOYMENT HISTORY · BLACKLIST (employee window)
 // ═════════════════════════════════════════════════════════
@@ -4961,8 +4876,6 @@ async function loadBoardRequests(force){
       sb.from('hiring_requests').select('*').in('status', ['New', 'In progress']).order('created_at', { ascending: false }),
       sb.from('training_requests').select('*').in('status', ['New', 'In progress']).order('created_at', { ascending: false }),
       sb.from('manager_actions').select('*').in('status', ['Waiting for board', 'Waiting for HR']).order('created_at', { ascending: false })]);
-    const merge = (arr, rows) => { const ids = new Set(rows.map(r => r.id)); return [...rows, ...arr.filter(r => !ids.has(r.id))]; };
-    V.hire = merge(V.hire, h.data || []); V.train = merge(V.train, t.data || []); V.act = merge(V.act, m.data || []);   // the row click reuses V
     BRD.hire = h.data || []; BRD.train = t.data || []; BRD.act = m.data || []; BRD.at = Date.now();
     return true;
   } finally { BRD.busy = false; }
@@ -5011,6 +4924,13 @@ renderDashboard = function(){
   else { const b = $('dash-board'); if (b) b.innerHTML = ''; }
   return r;
 };
+// a row opens the Employee voice window (React since 30 Oct 2026 — react/src/voice) for that case
+document.addEventListener('click', e => {
+  const r = /** @type {PageEl} */ (e.target).closest('#dash-board [data-vo]'); if (!r) return;
+  const [kind, id] = /** @type {string} */ (r.dataset.vo).split(':');
+  const row = (kind === 'hire' ? BRD.hire : kind === 'act' ? BRD.act : BRD.train).find(x => String(x.id) === id);
+  if (row && typeof PKR !== 'undefined') PKR.openVoice(kind, row);
+});
 
 // ═════════════════════════════════════════════════════════
 //  OUTSIDE MISSIONS — HR final approval page (66, 22 Oct 2026)
@@ -5151,54 +5071,6 @@ loadSelf = async function(){ try { await loadSelfMissions(); } catch (e) { conso
 const _renderSelfMis = renderSelf;
 // @ts-expect-error — renderSelf is deliberately extended here (the new version wraps the earlier one)
 renderSelf = function(){ const r = _renderSelfMis.apply(this, arguments); try { if (SD.emp) renderSelfMissions(); } catch (e) { console.warn(e); } return r; };
-
-// ═════════════════════════════════════════════════════════
-//  EMPLOYEE VOICE — one "Show: Open / Closed / All cases" filter for every section (22 Oct 2026)
-//  Nothing was ever deleted: closed complaints were only hidden by the old "Open" filter of the first table, and the other
-//  tables showed everything mixed. Now every section follows the same filter and its title shows "n open · n closed".
-//  Choice remembered in localStorage pk_voice_show.
-// ═════════════════════════════════════════════════════════
-const VO_OPEN = {
-  fb:    s => s === 'New' || s === 'In review',
-  act:   s => s === 'Waiting for board' || s === 'Waiting for HR',
-  sal:   s => s === 'Waiting for board',
-  hire:  s => s === 'New' || s === 'In progress',
-  train: s => s === 'New' || s === 'In progress'
-};
-(function(){ try { const v = localStorage.getItem('pk_voice_show'); if (v !== null && $('vo-st')) $('vo-st').value = v; } catch(e){} })();
-$('vo-st').addEventListener('change', () => { try { localStorage.setItem('pk_voice_show', $('vo-st').value); } catch(e){} });
-
-function voiceFilterSection(kind, tbodyId, list, cols){
-  const tb = $(tbodyId); if (!tb) return;
-  const show = $('vo-st').value, isOpen = VO_OPEN[kind];
-  const nOpen = list.filter(x => isOpen(x.status)).length, nClosed = list.length - nOpen;
-  const rows = [...tb.querySelectorAll('tr')].filter(r => !r.querySelector('td.empty'));
-  let shown = 0;
-  rows.forEach((r, i) => {
-    let x = null;
-    if (r.dataset.vo) { const id = r.dataset.vo.split(':').slice(1).join(':'); x = list.find(y => String(y.id) === id); }
-    else x = list[i];                                     // basic-salary rows have no data-vo: same order as the list
-    const ok = !x || !show || (show === 'open' ? isOpen(x.status) : !isOpen(x.status));
-    r.style.display = ok ? '' : 'none'; if (ok) shown++;
-  });
-  tb.querySelectorAll('tr.vo-none').forEach(r => r.remove());
-  if (rows.length && !shown) tb.insertAdjacentHTML('beforeend', `<tr class="vo-none"><td colspan="${cols}" class="empty">${show === 'open' ? 'No open cases — choose “Closed cases” or “All cases” above to see the history' : 'No closed cases yet'}</td></tr>`);
-  const card = tb.closest('.card'), title = card && card.querySelector('.toolbar-title');
-  if (title) { let c = title.querySelector('.vo-count'); if (!c) { c = document.createElement('span'); c.className = 'vo-count'; c.style.cssText = 'font-size:12px;font-weight:400;color:var(--muted);margin-left:8px'; title.appendChild(c); }
-    c.textContent = `${nOpen} open · ${nClosed} closed`; }
-}
-const _renderVoiceShow = renderVoicePage;
-// @ts-expect-error — renderVoicePage is deliberately extended here (the new version wraps the earlier one)
-renderVoicePage = async function(){
-  const r = await _renderVoiceShow.apply(this, arguments);
-  const k = $('vo-kind').value;
-  voiceFilterSection('fb', 'vo-fb', (V.fb || []).filter(x => !k || x.kind === k), 7);
-  voiceFilterSection('act', 'vo-act', V.act || [], 9);
-  voiceFilterSection('sal', 'vo-sal', V.sal || [], 10);
-  voiceFilterSection('hire', 'vo-hire', V.hire || [], 9);
-  voiceFilterSection('train', 'vo-train', V.train || [], 8);
-  return r;
-};
 
 // ═════════════════════════════════════════════════════════
 //  REPORT "Returns after check-out and undone check-outs" (22 Oct 2026, with 71-undo-checkout.sql)
@@ -5652,7 +5524,7 @@ function domStatusFilter(tbodyId){
   obs.observe(tb, { childList: true });
   apply();
 }
-['self-list', 'smis-tbl', 'self-treq-tbl', 'self-team-tbl', 'vo-fb', 'vo-act', 'vo-sal', 'vo-hire', 'vo-train'].forEach(domStatusFilter);
+['self-list', 'smis-tbl', 'self-treq-tbl', 'self-team-tbl'].forEach(domStatusFilter);   // Employee voice: React (own status boxes)
 
 // ═════════════════════════════════════════════════════════
 //  DATES TYPED AS DAY-MONTH-YEAR (26 Oct 2026) — Mohammed: "type dates like 26102026, 01012026"

@@ -522,22 +522,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div class="page" id="page-news"><div id="react-news"></div></div>   <!-- drawn by React: react/src/news -->
 
 <!-- EMPLOYEE VOICE -->
-<div class="page" id="page-voice">
-  <div class="page-header"><div><div class="page-title">Employee voice</div>
-    <div class="page-sub">Complaints and suggestions (also seen by the board member) · requests from managers for new employees and for training. Click a row to answer. Closed cases are kept — choose “Closed cases” or “All cases” to see them.</div></div>
-    <div class="toolbar-right"><label style="font-size:12px;color:var(--muted);margin-right:6px">Show</label><select class="sel" id="vo-st"><option value="open">Open cases</option><option value="closed">Closed cases</option><option value="">All cases</option></select></div></div>
-  <div class="card"><div class="toolbar"><span class="toolbar-title">⚠️💡 Complaints & suggestions</span>
-      <div class="toolbar-right"><select class="sel" id="vo-kind"><option value="">All</option><option value="complaint">Complaints</option><option value="suggestion">Suggestions</option></select></div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Employee</th><th>Subject</th><th>Details</th><th>Status</th><th>Reply</th></tr></thead><tbody id="vo-fb"></tbody></table></div></div>
-  <div class="card"><div class="toolbar"><span class="toolbar-title">⚖️💰 Penalties & variable elements requested by managers</span><span style="font-size:12px;color:var(--muted)">Manager → board member → HR (final). On HR approval it is recorded automatically — days and hours are converted with the employee's daily / hourly pay.</span></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Employee</th><th class="num">Quantity</th><th>Payroll month</th><th>Reason</th><th>Requested by</th><th>Board member</th><th>Status</th></tr></thead><tbody id="vo-act"></tbody></table></div></div>
-  <div class="card"><div class="toolbar"><span class="toolbar-title">💼 Basic salary changes</span><span style="font-size:12px;color:var(--muted)">Applied only after the board member approves.</span></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Employee</th><th class="num">Current</th><th class="num">New</th><th>From</th><th>Reason</th><th>Requested by</th><th>Board member</th><th>Status</th><th></th></tr></thead><tbody id="vo-sal"></tbody></table></div></div>
-  <div class="card"><div class="toolbar"><span class="toolbar-title">👥 Requests for new employees</span><span style="font-size:12px;color:var(--muted)">Closed only when both HR and the manager agree.</span></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Manager</th><th class="num">Number</th><th>Job name</th><th>Job description</th><th>Needed by</th><th>Status</th><th>Closing</th><th>HR note</th></tr></thead><tbody id="vo-hire"></tbody></table></div></div>
-  <div class="card"><div class="toolbar"><span class="toolbar-title">🎓 Training requests</span></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Manager</th><th>Employees</th><th>Topic</th><th>Details</th><th>Preferred date</th><th>Status</th><th>HR note</th></tr></thead><tbody id="vo-train"></tbody></table></div></div>
-</div>
+<div class="page" id="page-voice"><div id="react-voice"></div></div>   <!-- drawn by React: react/src/voice -->
 
 <div id="nav-backdrop"></div>
 <!-- MODAL: RE-EMPLOY / BLACKLIST / PAST PERIOD -->
@@ -562,15 +547,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="modal-foot"><button class="btn btn-ghost" data-close="m-salreq">Cancel</button><button class="btn btn-primary" id="sr-go">Send to the board member</button></div>
 </div></div>
 
-<!-- MODAL: ANSWER -->
-<div class="overlay" id="m-voice"><div class="modal" style="max-width:620px">
-  <div class="modal-head"><div class="modal-title" id="mv-title"></div><button class="x" data-close="m-voice">×</button></div>
-  <div id="mv-info" style="font-size:13px;line-height:1.6;margin-bottom:12px;white-space:pre-wrap"></div>
-  <div class="field"><label>Status</label><select class="sel" id="mv-st"></select></div>
-  <div class="field"><label id="mv-note-l">Reply</label><textarea class="inp" id="mv-note" rows="4"></textarea></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-voice">Cancel</button><button class="btn btn-ghost" id="mv-close" style="display:none">✔ Agree to close</button>
-    <button class="btn btn-danger" id="mv-reject" style="display:none">✖ Reject</button><button class="btn btn-primary" id="mv-save">Save</button></div>
-</div></div>
 
 <!-- BULK UPLOAD -->
 <div class="page" id="page-bulk">
@@ -1117,6 +1093,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=25b014a1ff52"></script>
-<script src="react.js?v=98a4f21f26a0"></script>
+<script src="app.js?v=af118fcc6a9a"></script>
+<script src="react.js?v=e8851d244e9e"></script>
 </body></html>

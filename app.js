@@ -910,7 +910,7 @@ function renderPackage(){
     const state = old ? '<span class="chip c-grey">Ended</span>' : r.effective_from > pe ? `<span class="chip c-blue">Starts ${esc(r.effective_from)}</span>` : fixedActive(r,p) ? '<span class="chip c-green">Yes</span>' : '<span class="chip c-grey">No</span>';
     return `<tr${old?' style="opacity:.6"':''}><td class="mono">${r.element_code}</td><td class="strong">${esc(el.name_en||'?')}</td><td>${el.element_type==='Deduction'?'<span class="neg">Deduction</span>':'<span class="pos">Addition</span>'}</td>
       <td class="num">${fmt(r.amount)}${el.calc_method==='PercentOfBasic'?' %':''}</td><td class="mono">${esc(r.effective_from)}</td><td class="mono">${esc(r.effective_to||'—')}</td>
-      <td>${state}</td><td><button class="icon-btn" data-del-fixed="${r.id}" title="Remove">🗑</button></td></tr>`; };
+      <td>${state}</td><td><button class="icon-btn" data-del-fixed="${r.id}" title="Close (a reason is required)">⊘</button></td></tr>`; };
   const head = `<thead><tr><th>Code</th><th>Element</th><th>Type</th><th class="num">Amount</th><th>From</th><th>To</th><th>In period</th><th></th></tr></thead>`;
   box.innerHTML = `<div class="tbl-wrap"><table>${head}<tbody>
     ${current.map(r => row(r, false)).join('') || '<tr><td colspan="8" class="empty" style="padding:18px">No current fixed elements</td></tr>'}
@@ -1016,7 +1016,7 @@ function renderAttendance(){
     ${(()=>{ const r=dayRules(a, empById(a.emp_id)); if (r.exempt) return `<td class="num">—</td><td class="num" colspan="2" style="text-align:center"><span class="chip c-blue">Exception</span></td>`;
       const cellD=(net,raw)=> net ? `<span class="neg">${fmt(net)}</span>` : (raw ? `<span class="chip c-green" title="${fmt(raw)} h waived by approved permission">waived</span>` : '—');
       return `<td class="num">${r.ot?`<span style="color:var(--warn)">+${fmt(r.ot)}</span>`:'—'}</td><td class="num">${cellD(r.late,r.lateRaw)}</td><td class="num">${cellD(r.early,r.earlyRaw)}</td>`; })()}
-    <td>${chip(a.status)}</td><td><button class="icon-btn" data-del-att="${a.id}">🗑</button></td></tr>`).join('')
+    <td>${chip(a.status)}</td><td><button class="icon-btn" data-del-att="${a.id}" title="Close (a reason is required)">⊘</button></td></tr>`).join('')
     || '<tr><td colspan="12" class="empty">No attendance records for this selection</td></tr>';
   const rangeTxt = ATT_RANGE ? `${ATT_RANGE.from} → ${ATT_RANGE.to}` : 'Payroll cycle ' + periodLabel(settings.period);
   $('att-foot').textContent = `${attDayFilter ? 'Day '+attDayFilter : rangeTxt}: ${list.length.toLocaleString()} records${list.length>500?' (showing latest 500 — pick a day or search to narrow)':''}.`;
@@ -1235,7 +1235,7 @@ async function saveMonthly(){
   const btn=$('mon-save'); btn.disabled=true; btn.textContent='Saving…';
   try{
     // replace each changed employee's lines for this element and period
-    await chunked(emps, ids => sb.from('payroll_period_elements').delete().eq('element_code',code).eq('period',settings.period).in('emp_id',ids), 200);
+    await closeRecords('payroll_period_elements', emps.map(id => ({ element_code: code, period: settings.period, emp_id: String(id) })), 'Changed on the Monthly Entries page (old line replaced)', true);
     if (rows.length) await chunked(rows, r => sb.from('payroll_period_elements').insert(r));
     S.monthly = await fetchAll('payroll_period_elements','emp_id', q=>q.eq('period',settings.period));
     resetMonthly(); renderMonthly(); renderPayroll(); renderDashboard();
@@ -1413,8 +1413,31 @@ function confirmDel(msg, fn){
   $('del-ok').onclick = async () => { $('del-ok').disabled=true; try{ await fn(); closeM('m-del'); }catch(e){ toast(e.message,'err'); } $('del-ok').disabled=false; };
   openM('m-del');
 }
-/** @param {keyof DB['Tables']} table — checked: must be one of our tables */
-async function del(table, id){ const { data, error } = await /** @type {any} — generic: any of our tables */ (sb).from(table).delete().eq('id', id).select(); if(error) throw error; if(!(data && data.length)) throw new Error(NOPERM); }
+// ── Records are never deleted (database file 100, Mohammed 30 Oct 2026): they are CANCELLED (vacations, permissions, penalties,
+//    loans, HR requests, allowance approvals — the row stays, marked Cancelled) or CLOSED (everything else — the row is kept in the
+//    register of closed records, then leaves the list). Always with a reason.
+/** @param {keyof DB['Tables']} table @param {Record<string, string | number>[]} keys @param {string} reason @param {boolean} [replacing] */
+async function closeRecords(table, keys, reason, replacing){
+  const { data, error } = await sb.rpc('close_records', { p_tbl: table, p_keys: keys, p_reason: reason, p_replacing: !!replacing });
+  if (error) throw new Error(closeError(error.message));
+  return data;
+}
+/** the database's own explanation without its code word, e.g. "NOT_CLOSED: Nothing was…" → "Nothing was…" @param {string} m */
+const closeError = m => String(m).replace(/^.*?\b(NO_DELETE|CLOSE_REASON|NOT_CLOSED|CANCEL_REASON|CANCELLED|CLOSE_KEYS|CLOSE_TABLE): ?/, '');
+/** the "write the reason" window: title, what will happen, button text, then action(reason) — closes itself when the action worked
+ * @param {string} title @param {string} msg @param {string} ok @param {(reason: string) => Promise<void>} action */
+function askReason(title, msg, ok, action){
+  $('cls-title').textContent = title; $('cls-msg').textContent = msg; $('cls-ok').textContent = ok;
+  $('cls-reason').value = ''; $('cls-miss').style.display = 'none';
+  $('cls-ok').onclick = async () => {
+    const reason = $('cls-reason').value.trim();
+    if (reason.length < 3) { $('cls-miss').style.display = ''; return; }
+    $('cls-ok').disabled = true;
+    try { await action(reason); closeM('m-close'); } catch (e) { toast(e.message, 'err'); }
+    $('cls-ok').disabled = false;
+  };
+  openM('m-close'); setTimeout(() => $('cls-reason').focus(), 50);
+}
 
 // ═════════════════════════════════════════════════════════
 //  NAVIGATION & EVENTS
@@ -1454,9 +1477,9 @@ document.addEventListener('click', async ev => {
   const sl = t.closest('[data-slip]'); if (sl) return openSlip(sl.dataset.slip);
   if (t.closest('[data-rm-split]')){ t.closest('.split')?.remove(); return checkSplits(); }
   const df = t.closest('[data-del-fixed]');
-  if (df){ const id=df.dataset.delFixed; return confirmDel('Remove this salary element from the employee?', async()=>{ await del('employee_salary_elements',id); S.fixed=S.fixed.filter(r=>r.id!==id); renderPackage(); renderPayroll(); renderDashboard(); toast('Element removed'); }); }
+  if (df){ const id=/** @type {string} */ (df.dataset.delFixed); return askReason('Close salary element', 'Close this salary element for the employee? It is kept in the register of closed records with your reason.', 'Close element', async reason=>{ await closeRecords('employee_salary_elements', [{ id }], reason); S.fixed=S.fixed.filter(r=>r.id!==id); renderPackage(); renderPayroll(); renderDashboard(); toast('Element closed'); }); }
   const da = t.closest('[data-del-att]');
-  if (da){ const id=da.dataset.delAtt; return confirmDel('Delete this attendance record?', async()=>{ await del('attendance',id); S.attendance=S.attendance.filter(r=>r.id!==id); if (ATT_RANGE) ATT_RANGE.rows=ATT_RANGE.rows.filter(r=>r.id!==id); renderAttendance(); renderDashboard(); renderPayroll(); renderReports(); toast('Deleted'); }); }
+  if (da){ const id=/** @type {string} */ (da.dataset.delAtt); return askReason('Close attendance day', 'Close this attendance day? It leaves the list and is kept in the register of closed records with your reason.', 'Close day', async reason=>{ await closeRecords('attendance', [{ id }], reason); S.attendance=S.attendance.filter(r=>r.id!==id); if (ATT_RANGE) ATT_RANGE.rows=ATT_RANGE.rows.filter(r=>r.id!==id); renderAttendance(); renderDashboard(); renderPayroll(); renderReports(); toast('Attendance day closed'); }); }
   const ae = t.closest('[data-att-edit]'); if (ae && !t.closest('[data-del-att]')) { const r=attRows().find(x=>String(x.id)===ae.dataset.attEdit); if(r) return openAtt(r); }
 });
 
@@ -2469,13 +2492,11 @@ function renderEmpDevice(){
 }
 async function resetDevice(empId){
   const e = empById(empId);
-  confirmDel(`Reset the registered phone of ${empName(e)} (${empId})? They will be able to sign in on a new phone, and the old phone will stop working for them.`, async () => {
-    const { data, error } = await sb.from('employee_devices').delete().eq('emp_id', empId).select();
-    if (error) throw error; if (!(data && data.length)) throw new Error(NOPERM);
+  askReason('Reset phone', `Reset the registered phone of ${empName(e)} (${empId})? They will be able to sign in on a new phone, and the old phone will stop working for them. The old phone stays on record.`, 'Reset phone', async reason => {
+    await closeRecords('employee_devices', [{ emp_id: String(empId) }], reason);
     S.devices = S.devices.filter(x => String(x.emp_id)!==String(empId)); renderEmpDevice(); renderReports();
     toast(`${empName(e)} can now register a new phone`);
   });
-  $('del-title').textContent='Please confirm'; $('del-ok').textContent='Reset phone';
 }
 document.addEventListener('click', e => { const b = /** @type {HTMLElement | null} */ (/** @type {HTMLElement} */ (e.target).closest('[data-dev-reset]')); if (b) resetDevice(b.dataset.devReset); });
 
@@ -2611,7 +2632,7 @@ async function doBulkImport(){
   try {
     for (const [elc, rows] of Object.entries(byEl)){
       const emps = [...new Set(rows.map(r=>r.code))];
-      await chunked(emps, ids => sb.from('payroll_period_elements').delete().eq('element_code', num(elc)).eq('period', settings.period).in('emp_id', ids), 200);
+      await closeRecords('payroll_period_elements', emps.map(id => ({ element_code: num(elc), period: settings.period, emp_id: String(id) })), 'Replaced by the monthly entries upload', true);
       await chunked(rows.map(r => ({ emp_id:r.code, element_code:num(elc), period:settings.period, amount:r.amount, project_code:r.proj||null })),
                     chunk => sb.from('payroll_period_elements').insert(chunk), 500);
     }
@@ -2755,7 +2776,7 @@ async function miImport(){
     const write = MI.days.filter(d => d.result==='new' || d.result==='replace');
     b.textContent = `Writing ${write.length.toLocaleString()} attendance days…`;
     const oldIds = write.filter(d => d.result==='replace').map(d => d.existing.id);
-    if (oldIds.length) await chunked(oldIds, ids => sb.from('attendance').delete().in('id', ids), 200);
+    if (oldIds.length) await chunked(oldIds, ids => closeRecords('attendance', ids.map(id => ({ id: String(id) })), 'Replaced by the fingerprint-machine import', true), 200);
     const recs = write.map(d => ({ emp_id:d.pin, emp_name: empName(d.emp), date:d.date, status:'Present',
       check_in: miHM(d.first), check_out: d.missing ? null : miHM(d.last), total_hours: d.missing ? 0 : d.hours, ot_hours: 0, source:'Machine',
       notes: d.missing ? 'Fingerprint machine: only one punch — add the missing time' : d.review ? 'Fingerprint machine: over 16 hours — check' : null,
@@ -2767,7 +2788,8 @@ async function miImport(){
     b.textContent = `Combining ${combos.length} days with phone check-ins…`;
     for (const d of combos){ const { data, error } = await sb.from('attendance').update(miCombine(d.existing, d, proj)).eq('id', d.existing.id).select(); if (error) throw error; if (!(data && data.length)) throw new Error(NOPERM); }
     // site staff: their machine punches do not count
-    for (const d of MI.days.filter(x => x.result==='site-remove')){ const { error } = await sb.from('attendance').delete().eq('id', d.existing.id); if (error) throw error; }
+    const siteRm = MI.days.filter(x => x.result==='site-remove').map(d => ({ id: String(d.existing.id) }));
+    if (siteRm.length) await closeRecords('attendance', siteRm, 'Site staff: fingerprint-machine punches do not count (import)', true);
     for (const d of MI.days.filter(x => x.result==='site-restore')){ const { data, error } = await sb.from('attendance').update(miPhoneOnly(d.existing)).eq('id', d.existing.id).select(); if (error) throw error; if (!(data && data.length)) throw new Error(NOPERM); }
     closeM('m-mi');
     await loadPeriodData(); loader(false); renderAll();
@@ -2982,16 +3004,20 @@ async function openTeamProj(empId){
   tprojEmp = empId; const m = (SD.myTeam||[]).find(x => x.id === empId) || /** @type {FnResult<'my_team'>[number]} */ ({ id: empId });
   const { data, error } = await sb.rpc('team_projects', { p_emp: empId }); if (error) return toast(error.message, 'err');
   $('tproj-title').textContent = `📌 ${m.name_en || m.name_ar || empId} — ${(data||[]).length ? 'can check in only at these projects' : 'no projects: any project'}`;
-  $('tproj-tbl').innerHTML = (data||[]).map(p => `<tr><td class="mono">${esc(p.id)}</td><td>${esc(p.name||'')}</td><td>${esc(p.assigned_by||'')}</td><td><button class="icon-btn" data-tproj-rm="${esc(p.id)}" title="Remove">🗑</button></td></tr>`).join('')
+  $('tproj-tbl').innerHTML = (data||[]).map(p => `<tr><td class="mono">${esc(p.id)}</td><td>${esc(p.name||'')}</td><td>${esc(p.assigned_by||'')}</td><td><button class="icon-btn" data-tproj-rm="${esc(p.id)}" title="Close (a reason is required)">⊘</button></td></tr>`).join('')
     || '<tr><td colspan="4" class="empty">No projects yet</td></tr>';
   $('tproj-tbl').dataset.have = JSON.stringify((data||[]).map(p => p.id));
   $('tproj-q').value=''; $('tproj-res').innerHTML=''; openM('m-tproj');
 }
 async function teamProjChangeDesk(code, add){
-  const res = add ? await sb.from('employee_projects').insert({ emp_id: tprojEmp, project_code: code }).select()
-                  : await sb.from('employee_projects').delete().eq('emp_id', tprojEmp).eq('project_code', code).select();
+  if (!add) return askReason('Remove project', `Remove project ${code} from this employee? The assignment is kept on record with your reason.`, 'Remove', async reason => {
+    await closeRecords('employee_projects', [{ emp_id: String(tprojEmp), project_code: code }], reason);
+    toast('Project removed');
+    const r = await sb.rpc('my_team'); if (SD) SD.myTeam = r.data || SD.myTeam; renderSelf(); openTeamProj(/** @type {string} */ (tprojEmp));
+  });
+  const res = await sb.from('employee_projects').insert({ emp_id: tprojEmp, project_code: code }).select();
   if (res.error) return toast(res.error.message, 'err'); if (!(res.data && res.data.length)) return toast(NOPERM, 'err');
-  toast(add ? 'Project added' : 'Project removed');
+  toast('Project added');
   const r = await sb.rpc('my_team'); if (SD) SD.myTeam = r.data || SD.myTeam; renderSelf(); openTeamProj(tprojEmp);
 }
 $('tproj-q').addEventListener('input', () => { clearTimeout(tprojT); tprojT = setTimeout(async () => {
@@ -3090,8 +3116,8 @@ function projectCostTotals(detail){
 }
 async function publishProjectCosts(period, detail, quiet){
   const rows = projectCostTotals(detail).map(x => ({ ...x, period, published_by:(ME && (ME.full_name || ME.email)) || 'unknown' }));
-  const del = await sb.from('project_costs').delete().eq('period', period);
-  if (del.error) return toast('Project costs not published: ' + del.error.message, 'err');
+  try { await closeRecords('project_costs', [{ period }], 'Replaced by publishing the project costs again', true); }
+  catch (e) { return toast('Project costs not published: ' + e.message, 'err'); }
   if (!rows.length) return quiet ? null : toast('No project costs to publish for ' + periodLabel(period), 'warn');
   const { data, error } = await sb.from('project_costs').insert(rows).select('project_code');
   if (error) return toast('Project costs not published: ' + error.message, 'err');
@@ -4102,7 +4128,7 @@ function renderOffices(){
       <td><input class="inp" style="width:80px" type="number" min="50" max="5000" step="50" data-w="rad" value="${w.radius_m}"></td>
       <td><input type="checkbox" data-w="active" ${w.active ? 'checked' : ''}></td>
       <td>${w.id === 'new' ? '' : `<button class="btn btn-ghost btn-sm" data-w-emps title="Employees who check in and out at this office">👥 ${(n => n + (n === 1 ? ' employee' : ' employees'))(OFFICE_EMPS.filter(x => x.location_id === w.id).length)}</button>`}</td>
-      <td style="white-space:nowrap"><button class="btn btn-primary btn-sm" data-w-save>Save</button> <a class="btn btn-ghost btn-sm" href="https://www.google.com/maps?q=${w.lat},${w.lng}" target="_blank" rel="noopener">map ↗</a> <button class="btn btn-ghost btn-sm" data-w-del>Delete</button></td></tr>`).join('')
+      <td style="white-space:nowrap"><button class="btn btn-primary btn-sm" data-w-save>Save</button> <a class="btn btn-ghost btn-sm" href="https://www.google.com/maps?q=${w.lat},${w.lng}" target="_blank" rel="noopener">map ↗</a> <button class="btn btn-ghost btn-sm" data-w-del title="Close (a reason is required)">⊘ Close</button></td></tr>`).join('')
     || '<tr><td colspan="7" class="empty">No offices yet — click + Add office</td></tr>';
 }
 $('wl-tbl').addEventListener('input', e => {
@@ -4112,9 +4138,9 @@ $('wl-tbl').addEventListener('input', e => {
 $('wl-tbl').addEventListener('click', async e => {
   const tr = /** @type {PageEl} */ (e.target).closest('tr[data-wl]'); if (!tr) return; const id = /** @type {string} */ (tr.dataset.wl);
   if (/** @type {PageEl} */ (e.target).closest('[data-w-del]')) {
-    confirmDel('Delete this office? Check-ins without a project will no longer be compared with it.', async () => {
-      const { data, error } = await sb.from('work_locations').delete().eq('id', id).select('id'); if (error) throw error; if (!(data && data.length)) throw new Error(NOPERM);
-      WORK_LOCS = WORK_LOCS.filter(w => w.id !== id); renderOffices(); toast('Office deleted'); });
+    askReason('Close office', 'Close this office? Check-ins will no longer be compared with it. It is kept in the register of closed records with your reason.', 'Close office', async reason => {
+      await closeRecords('work_locations', [{ id }], reason);
+      WORK_LOCS = WORK_LOCS.filter(w => w.id !== id); renderOffices(); toast('Office closed'); });
     return;
   }
   if (/** @type {PageEl} */ (e.target).closest('[data-w-emps]')) return openOfficeEmps(id);
@@ -4224,10 +4250,11 @@ $('wle-dept-add').addEventListener('click', () => {
 $('wle-q').addEventListener('input', renderOfficeEmps);
 $('wle-tbl').addEventListener('click', async e => {
   const b = /** @type {PageEl} */ (e.target).closest('[data-wle-rm]'); if (!b) return;
-  const id = /** @type {string} */ (b.dataset.wleRm);
-  const { data, error } = await sb.from('employee_work_locations').delete().eq('emp_id', id).eq('location_id', WLE.id).select();
-  if (error) return toast(error.message, 'err'); if (!(data && data.length)) return toast(NOPERM, 'err');
-  OFFICE_EMPS = OFFICE_EMPS.filter(x => !(x.emp_id === id && x.location_id === WLE.id)); renderOfficeEmps(); toast('Removed');
+  const id = /** @type {string} */ (b.dataset.wleRm), loc = WLE.id;
+  askReason('Remove from office', `Remove employee ${id} from this office? The link is kept on record with your reason.`, 'Remove', async reason => {
+    await closeRecords('employee_work_locations', [{ emp_id: id, location_id: String(loc) }], reason);
+    OFFICE_EMPS = OFFICE_EMPS.filter(x => !(x.emp_id === id && x.location_id === loc)); renderOfficeEmps(); toast('Removed');
+  });
 });
 
 // ═════════════════════════════════════════════════════════
@@ -4647,7 +4674,7 @@ async function renderCerts(id){
       <td class="mono">${esc(c.issue_date || '')}</td>
       <td class="mono">${c.expiry_date ? esc(c.expiry_date) + (c.expiry_date < today ? ' <span class="chip c-red">expired</span>' : c.expiry_date <= soon ? ' <span class="chip c-orange">soon</span>' : '') : '<span style="color:var(--muted)">no expiry</span>'}</td>
       <td>${c.file_path ? `<a href="#" data-cert-file="${esc(c.file_path)}">📎 open</a>` : '—'}</td>
-      <td style="white-space:nowrap">${canEditMaster() ? `<button class="icon-btn" data-cert-edit="${c.id}" title="Edit">✎</button><button class="icon-btn" data-cert-del="${c.id}" title="Remove">🗑</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
+      <td style="white-space:nowrap">${canEditMaster() ? `<button class="icon-btn" data-cert-edit="${c.id}" title="Edit">✎</button><button class="icon-btn" data-cert-del="${c.id}" title="Close (a reason is required)">⊘</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
     : '<span style="color:var(--muted)">No certificates recorded.</span>')
     + (canEditMaster() ? `<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" id="cert-add">＋ Add certificate</button></div>` : '');
 }
@@ -4666,8 +4693,9 @@ document.addEventListener('click', async e => {
   const ed = /** @type {PageEl} */ (e.target).closest('[data-cert-edit]'); if (ed) return openCert(CERTS.find(c => c.id === ed.dataset.certEdit));
   const dl = /** @type {PageEl} */ (e.target).closest('[data-cert-del]');
   if (dl){ const c = CERTS.find(x => x.id === dl.dataset.certDel); if (!c) return;
-    return confirmDel(`Remove the certificate “${c.name}”?`, async () => { await del('employee_certificates', c.id); if (c.file_path) await sb.storage.from('certificates').remove([c.file_path]);
-      toast('Certificate removed'); renderCerts(editingEmp); loadHRAlerts().then(hraBadge); }); }
+    return askReason('Close certificate', `Close the certificate “${c.name}”? It and its scan are kept on record with your reason.`, 'Close certificate', async reason => {
+      await closeRecords('employee_certificates', [{ id: c.id }], reason);
+      toast('Certificate closed'); renderCerts(editingEmp); loadHRAlerts().then(hraBadge); }); }
   const f = /** @type {PageEl} */ (e.target).closest('[data-cert-file]');
   if (f){ e.preventDefault(); const { data, error } = await sb.storage.from('certificates').createSignedUrl(/** @type {string} */ (f.dataset.certFile), 600);
     if (error || !data) return toast(error ? error.message : 'Could not open the file', 'err'); window.open(data.signedUrl, '_blank'); }

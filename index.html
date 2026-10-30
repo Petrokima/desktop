@@ -171,7 +171,6 @@ body:not(.can-pay):not(.can-hr) :is([data-act="new-loan"],#l-save,[data-del-loan
 .lpp-chip{display:inline-flex;align-items:center;gap:4px;margin:3px 4px 0 0;font-size:11px}
 .lpp-chip button{border:0;background:none;cursor:pointer;color:inherit;padding:0 2px;font-size:12px}
 body:not(.can-var) :is(#mon-save,#mon-add-btn,#mon-pick,#mon-bulk,#mp-attended,#mp-fill,#mp-fill-go,[data-act="new-var"],[data-mon-add],[data-mon-rm]){display:none!important}
-body:not(.can-hr):not(.can-pay) :is(#par-new,[data-par-edit],[data-par-del]){display:none!important}
 body:not(.can-pay) #pay-publish{display:none!important}
 body:not(.can-pay) :is(#cc-save,#cc-reset){display:none!important}
 body:not(.can-hr) .nav-item:is([data-page="news"],[data-page="voice"]){display:none!important}
@@ -644,18 +643,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div class="page" id="page-assign"><div id="react-assign"></div></div>
 
 <!-- PROJECT ALLOWANCE RULES -->
-<div class="page" id="page-parrules">
-  <div class="page-header"><div><div class="page-title">Project allowance rules</div>
-    <div class="page-sub">Automatic Project Allowance: each day an employee is recorded at a project (phone, fingerprint machine or hand entry), the matching rule adds its daily amount to their payroll</div></div>
-    <button class="btn btn-primary" id="par-new">+ New rule</button></div>
-  <div id="par-missing"></div>
-  <div class="alert a-info" style="line-height:1.7">Which rule applies: <b>1.</b> this employee at this project · <b>2.</b> this employee at any project · <b>3.</b> this job title at this project · <b>4.</b> this job title at any project.
-    One allowance per day — if someone works at two projects on the same day, the project where they spent most hours counts. Days with “No project” earn nothing.
-    Amounts appear on the payslip as <b>Project Allowance — automatic</b> and are charged to the project in labour costing. Manual amounts on Monthly Entries are added on top.</div>
-  <div class="card"><div class="toolbar"><span class="toolbar-title">Rules</span><div class="toolbar-right"><select class="sel" id="par-status" title="Filter by status"><option value="">All statuses</option></select><input class="inp" id="par-q" placeholder="Search…"></div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Applies to</th><th>Project</th><th class="num">Amount per day</th><th>This payroll cycle</th><th>Status</th><th>Notes</th><th></th></tr></thead><tbody id="par-tbl"></tbody></table></div>
-    <div class="foot" id="par-foot"></div></div>
-</div>
+<div class="page" id="page-parrules"><div id="react-parrules"></div></div>
 
 <!-- ALLOWANCE APPROVALS -->
 <div class="page" id="page-approvals">
@@ -1200,21 +1188,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </div></div>
 
 <!-- MODAL: PROJECT ALLOWANCE RULE -->
-<div class="overlay" id="m-par"><div class="modal" style="max-width:560px">
-  <div class="modal-head"><div class="modal-title" id="par-title">New project allowance rule</div><button class="x" data-close="m-par">×</button></div>
-  <div class="grid2">
-    <div class="field"><label>Applies to</label><select id="par-type"><option value="employee">A specific employee</option><option value="job">Everyone with a job title</option></select></div>
-    <div class="field" id="par-emp-f"><label>Employee</label><input id="par-emp" list="dl-emp" placeholder="Type code or name…"></div>
-    <div class="field" id="par-job-f" style="display:none"><label>Job title</label><input id="par-job" list="dl-jobs" placeholder="e.g. Technician"></div>
-    <div class="field"><label>Project (leave empty = any project)</label><input id="par-proj" list="dl-proj" placeholder="Any project"></div>
-    <div class="field"><label>Amount per day (EGP)</label><input id="par-amt" type="number" step="0.01" min="0"></div>
-    <div class="field"><label>Status</label><select id="par-active"><option value="true">Active</option><option value="false">Paused</option></select></div>
-    <div class="field full"><label>Notes (optional)</label><input id="par-notes" placeholder="e.g. site hardship — approved by Projects Director"></div>
-  </div>
-  <div id="par-hint" style="font-size:12px;color:var(--muted);margin-top:10px"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-par">Cancel</button><button class="btn btn-primary" id="par-save">Save rule</button></div>
-</div></div>
-
 <!-- MODAL: PHONE SIGN-IN ATTEMPTS -->
 <div class="overlay" id="m-phal"><div class="modal" style="max-width:860px">
   <div class="modal-head"><div class="modal-title">🚨 Phone sign-in attempts to review</div><button class="x" data-close="m-phal">×</button></div>
@@ -1303,6 +1276,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=5bc3d02717d8"></script>
-<script src="react.js?v=6d6e0896885f"></script>
+<script src="app.js?v=5fa3af5cf7dd"></script>
+<script src="react.js?v=c34b0ba0d1b9"></script>
 </body></html>

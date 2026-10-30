@@ -2979,80 +2979,20 @@ $('att-cur').addEventListener('click', backToCycle);
 // ═════════════════════════════════════════════════════════
 //  PROJECT ALLOWANCE RULES
 // ═════════════════════════════════════════════════════════
-let parEditing = null;
 function parRuleUse(){         // per rule: employees and amount in this payroll cycle
   const use = {};
   S.employees.filter(e => onPayroll(e, settings.period)).forEach(e => autoAllowance(e).forEach(x => {
     const u = use[x.rule] = use[x.rule] || { emps:new Set(), days:0, amount:0 }; u.emps.add(e.id); u.days += x.days; u.amount += x.amount; }));
   return use;
 }
-function renderParRules(){
-  $('par-missing').innerHTML = parTableMissing ? '<div class="alert a-warn">The rules table does not exist yet. Run <b>project-allowance.sql</b>, then click ⟳ Refresh.</div>' : '';
-  const q = $('par-q').value.trim().toLowerCase(), use = currentRun() ? {} : parRuleUse();
-  const who = r => r.applies_to==='employee' ? `👤 ${esc(empName(empById(r.emp_id)) || r.emp_id)} <span class="mono" style="color:var(--muted)">${esc(r.emp_id)}</span>` : `🧰 All “${esc(r.job_name)}”`;
-  const parSt = r => r.active===false ? 'Paused' : 'Active';
-  const base = S.parRules.filter(r => !q || [r.emp_id, empName(empById(r.emp_id)), r.job_name, r.project_code, projName(r.project_code), r.notes].some(v => String(v||'').toLowerCase().includes(q)))
-    .sort((a,b) => (a.applies_to===b.applies_to ? 0 : a.applies_to==='employee' ? -1 : 1) || String(a.project_code||'~').localeCompare(String(b.project_code||'~')));
-  const st = stFill('par-status', base.map(parSt));
-  const list = base.filter(r => !st || parSt(r)===st);
-  $('par-tbl').innerHTML = list.map(r => { const u = use[r.id];
-    return `<tr${r.active===false?' style="opacity:.55"':''}><td>${who(r)}</td><td>${r.project_code ? esc(projLabel(r.project_code)) : '<span class="chip c-blue">Any project</span>'}</td>
-      <td class="num strong">${fmt(r.amount_per_day)}</td>
-      <td>${currentRun() ? '<span style="color:var(--muted)">approved month</span>' : u ? `${u.emps.size} employee${u.emps.size>1?'s':''} · ${u.days} day${u.days>1?'s':''} · <b>${fmt(u.amount)}</b>` : '<span style="color:var(--muted)">—</span>'}</td>
-      <td>${r.active===false ? '<span class="chip c-grey">Paused</span>' : '<span class="chip c-green">Active</span>'}</td><td style="white-space:normal">${esc(r.notes||'')}</td>
-      <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" data-par-edit="${r.id}">Edit</button> <button class="icon-btn" data-par-del="${r.id}" title="Delete">🗑</button></td></tr>`; }).join('')
-    || `<tr><td colspan="7" class="empty">${S.parRules.length ? 'No rules for this selection' : 'No rules yet — click “+ New rule”.'}</td></tr>`;
-  const tot = Object.values(use).reduce((s,u) => s + u.amount, 0);
-  const paid = S.allowAppr.filter(a => a.status==='Approved').reduce((s,a) => s + num(a.amount), 0);
-  $('par-foot').innerHTML = `${S.parRules.length} rule${S.parRules.length===1?'':'s'}${currentRun() ? '' : ` · calculated this cycle: <b>${fmt(tot)}</b> EGP · approved by manager and HR (paid): <b>${fmt(paid)}</b> EGP — <a href="#" data-nav="approvals" style="color:var(--link)">go to approvals</a>`}`;
-}
-function parShowType(){ const emp = $('par-type').value==='employee'; $('par-emp-f').style.display = emp ? '' : 'none'; $('par-job-f').style.display = emp ? 'none' : ''; parHint(); }
-function parHint(){
-  const type=$('par-type').value, amt=num($('par-amt').value), proj=parseProjInput($('par-proj').value);
-  let n=0; if (type==='job'){ const j=$('par-job').value.trim().toLowerCase(); n = activeEmps().filter(e=>String(e.job_name||'').trim().toLowerCase()===j).length; }
-  $('par-hint').textContent = type==='job' ? `${n} active employee${n===1?'':'s'} currently have this job title.` : '';
-  if (amt) $('par-hint').textContent += ` Each qualifying day adds ${fmt(amt)} EGP${proj ? ' at ' + projLabel(proj) : ' at any project'}.`;
-}
-function openParRule(id){
-  const r = id ? S.parRules.find(x => x.id===id) : null; parEditing = r ? r.id : null;
-  $('par-title').textContent = r ? 'Edit project allowance rule' : 'New project allowance rule';
-  $('par-type').value = r ? r.applies_to : 'employee';
-  $('par-emp').value = r && r.emp_id ? `${r.emp_id} — ${empName(empById(r.emp_id))}` : '';
-  $('par-job').value = r ? (r.job_name||'') : ''; $('par-proj').value = r && r.project_code ? projLabel(r.project_code) : '';
-  $('par-amt').value = r ? r.amount_per_day : ''; $('par-active').value = r && r.active===false ? 'false' : 'true'; $('par-notes').value = r ? (r.notes||'') : '';
-  parShowType(); openM('m-par');
-}
-async function saveParRule(){
-  const type=$('par-type').value, amt=num($('par-amt').value), ptxt=$('par-proj').value.trim(), proj = ptxt ? parseProjInput(ptxt) : null;
-  const empId = type==='employee' ? parseEmpInput($('par-emp').value) : null, job = type==='job' ? $('par-job').value.trim() : null;
-  if (type==='employee' && !empById(empId)) return toast('Pick the employee from the suggestions','warn');
-  if (type==='job' && !job) return toast('Enter the job title','warn');
-  if (ptxt && !proj) return toast('Pick the project from the suggestions, or leave it empty for any project','warn');
-  if (!(amt > 0)) return toast('Enter the amount per day','warn');
-  const same = S.parRules.find(x => x.id !== parEditing && x.applies_to===type && String(x.emp_id||'')===String(empId||'')
-                && String(x.job_name||'').trim().toLowerCase()===String(job||'').trim().toLowerCase() && (x.project_code||'')===(proj||''));
-  if (same) return toast(`A rule for ${type==='employee' ? empName(empById(empId)) : '“'+job+'”'} at ${proj ? projLabel(proj) : 'any project'} already exists (${fmt(same.amount_per_day)} a day) — edit that one instead`,'warn');
-  const rec = { applies_to:type, emp_id:empId, job_name:job, project_code:proj, amount_per_day:amt, active: $('par-active').value==='true',
-                notes: $('par-notes').value.trim() || null, ...(parEditing ? {} : { created_by: (ME && (ME.full_name||ME.email)) || null }) };
-  const res = parEditing ? await sb.from('project_allowance_rules').update(rec).eq('id', parEditing).select() : await sb.from('project_allowance_rules').insert(rec).select();
-  if (res.error) return toast(/duplicate|idx_par_unique/i.test(res.error.message) ? 'A rule for the same employee/job and project already exists — edit that one instead' : res.error.message, 'err');
-  if (!(res.data && res.data.length)) return toast(NOPERM,'err');
-  S.parRules = S.parRules.filter(x => x.id !== res.data[0].id).concat(res.data);
-  closeM('m-par'); renderParRules(); DIRTY.add('payroll'); DIRTY.add('reports'); renderDashboard();
-  toast(parEditing ? 'Rule updated' : 'Rule added — the payroll now includes it');
-}
-$('par-new').addEventListener('click', () => openParRule(null));
-$('par-save').addEventListener('click', saveParRule);
-$('par-type').addEventListener('change', parShowType);
-['par-job','par-amt','par-proj'].forEach(id => $(id).addEventListener('input', parHint));
-$('par-q').addEventListener('input', renderParRules);
-$('par-tbl').addEventListener('click', e => {
-  const ed = /** @type {PageEl} */ (e.target).closest('[data-par-edit]'); if (ed) return openParRule(ed.dataset.parEdit);
-  const dl = /** @type {PageEl} */ (e.target).closest('[data-par-del]');
-  if (dl) { const id = /** @type {string} */ (dl.dataset.parDel); confirmDel('Delete this rule? The automatic allowance it gives will disappear from payrolls that are not yet approved.', async () => {
-    const { data, error } = await sb.from('project_allowance_rules').delete().eq('id', id).select(); if (error) throw error; if (!(data && data.length)) throw new Error(NOPERM);
-    S.parRules = S.parRules.filter(x => x.id !== id); renderParRules(); DIRTY.add('payroll'); DIRTY.add('reports'); toast('Rule deleted'); }); }
-});
+// The page moved to React 30 Oct 2026 (react/src/parrules). The old code keeps parRuleUse (above, used through the bridge) and the
+// step after a change.
+function renderParRules(){ if (typeof PKR !== 'undefined') PKR.render(); }
+/** @param {AllowanceRule} row */
+function allowanceRuleSaved(row){ S.parRules = S.parRules.filter(x => x.id !== row.id).concat([row]); afterAllowanceRuleChange(); }
+/** @param {string} id */
+function allowanceRuleDeleted(id){ S.parRules = S.parRules.filter(x => x.id !== id); afterAllowanceRuleChange(); }
+function afterAllowanceRuleChange(){ renderParRules(); DIRTY.add('payroll'); DIRTY.add('reports'); renderDashboard(); }
 
 // ═════════════════════════════════════════════════════════
 //  ALLOWANCE APPROVALS — direct manager first, then HR; paid only when both approved
@@ -6245,7 +6185,7 @@ function stFill(id, vals){
   return keep;
 }
 /** @type {[string, () => void][]} */ ([['att-status', () => renderAttendance()],
- ['par-status', () => renderParRules()], ['loan-status', () => renderLoans()]])   // loan-dept / loan-unit: part19 ORG_PAGES
+ ['loan-status', () => renderLoans()]])   // loan-dept / loan-unit: part19 ORG_PAGES
   .forEach(([id, fn]) => { const el = $(id); if (el) el.addEventListener('change', fn); });
 if ($('loan-q')) $('loan-q').addEventListener('input', () => renderLoans());
 

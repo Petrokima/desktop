@@ -650,23 +650,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </div>
 
 <!-- ANNOUNCEMENTS -->
-<div class="page" id="page-news">
-  <div class="page-header"><div><div class="page-title">Announcements & decisions</div>
-    <div class="page-sub">Published to the employees' phone app (📢 tab). You can attach one file — PDF, image, Word or Excel, up to 20 MB.</div></div></div>
-  <div class="card" style="padding:20px">
-    <div class="toolbar-title" style="margin-bottom:12px">New announcement</div>
-    <div class="grid3">
-      <div class="field"><label>Type</label><select class="sel" id="an-kind"><option value="announcement">📢 Announcement</option><option value="decision">📜 Administrative decision</option></select></div>
-      <div class="field"><label>Who should see it</label><select class="sel" id="an-dept"></select></div>
-      <div class="field"><label>Attachment (optional)</label><input type="file" id="an-file"></div>
-      <div class="field full"><label>Title *</label><input class="inp" id="an-title" maxlength="150"></div>
-      <div class="field full"><label>Text</label><textarea class="inp" id="an-body" rows="5"></textarea></div>
-    </div>
-    <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" id="an-go">📢 Publish</button></div>
-  </div>
-  <div class="card"><div class="toolbar"><span class="toolbar-title">Published</span></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Title</th><th>For</th><th>Attachment</th><th class="num">Read by</th><th></th></tr></thead><tbody id="an-tbl"></tbody></table></div></div>
-</div>
+<div class="page" id="page-news"><div id="react-news"></div></div>   <!-- drawn by React: react/src/news -->
 
 <!-- EMPLOYEE VOICE -->
 <div class="page" id="page-voice">
@@ -1577,6 +1561,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=0488067082d1"></script>
-<script src="react.js?v=98122615a658"></script>
+<script src="app.js?v=647b7b5761fe"></script>
+<script src="react.js?v=497add7cf462"></script>
 </body></html>

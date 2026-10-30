@@ -3835,6 +3835,7 @@ const todayISO = () => new Date().toISOString().slice(0,10);
 (function addExcelButtons(){
   document.querySelectorAll('.page').forEach(pg => {
     if (pg.id === 'page-reports' || pg.id === 'page-dashboard') return;
+    if (pg.querySelector('[id^="react-"]')) return;          // React pages draw their own ⬇ Excel (react/src/shared/ExcelButton)
     const head = pg.querySelector('.page-header'); if (!head || head.querySelector('[data-xl]')) return;
     const b = document.createElement('button'); b.className = 'btn btn-ghost'; b.dataset.xl = '1'; b.textContent = '⬇ Excel'; b.title = 'Download what this page shows (with the current filters) as an Excel file';
     const grp = head.querySelector('.btn-group'); if (grp) grp.insertBefore(b, grp.firstChild); else head.appendChild(b);
@@ -4543,49 +4544,8 @@ const _showSelfB = showSelf;
 // @ts-expect-error — showSelf is deliberately extended here (the new version wraps the earlier one)
 showSelf = async function(){ const r = await _showSelfB.apply(this, arguments); renderSelfBirthday(); return r; };
 
-// ── announcements ──
-async function loadNews(){
-  const [a, r] = await Promise.all([sb.from('announcements').select('*').order('created_at', { ascending:false }), fetchAll('announcement_reads', 'ann_id')]);
-  V.news = a.data || []; V.reads = r || [];
-}
-async function renderNewsPage(){
-  const depts = [...new Set((S.employees || []).filter(e => e.status !== 'Inactive').map(e => e.department).filter(Boolean))].sort();
-  const keep = $('an-dept').value; $('an-dept').innerHTML = '<option value="">Everyone</option>' + depts.map(d => `<option ${d===keep?'selected':''}>${esc(d)}</option>`).join('');
-  await loadNews();
-  const active = (S.employees || []).filter(e => e.status !== 'Inactive');
-  $('an-tbl').innerHTML = V.news.map(a => { const aud = a.department ? active.filter(e => e.department === a.department).length : active.length, rd = V.reads.filter(x => x.ann_id === a.id).length;
-    return `<tr><td class="mono">${esc(vDate(a.created_at))}</td><td>${a.kind==='decision' ? '📜 Decision' : '📢 Announcement'}</td><td class="strong" style="white-space:normal">${esc(a.title)}</td>
-      <td>${esc(a.department || 'Everyone')}</td><td>${a.attachment_path ? `<a href="#" data-an-att="${esc(a.attachment_path)}" style="color:var(--link)">📎 ${esc(a.attachment_name || 'file')}</a>` : ''}</td>
-      <td class="num">${rd} / ${aud}</td><td><button class="btn btn-ghost btn-sm" data-an-del="${esc(a.id)}">🗑</button></td></tr>`; }).join('') || '<tr><td colspan="7" class="empty">Nothing published yet</td></tr>';
-}
-async function publishNews(){
-  const title = $('an-title').value.trim(); if (!title) return toast('Write a title','warn');
-  const f = $('an-file').files[0]; if (f && f.size > 20 * 1024 * 1024) return toast('The attachment is larger than 20 MB','warn');
-  const b = $('an-go'); b.disabled = true; b.textContent = 'Publishing…';
-  try {
-    let path = null, name = null;
-    if (f){
-      name = f.name; path = `${new Date().getFullYear()}/${(crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36))}-${f.name.replace(/[^A-Za-z0-9._-]+/g, '_')}`;
-      const up = await sb.storage.from('announcements').upload(path, f, { contentType: f.type || 'application/octet-stream', upsert:false });
-      if (up.error) throw new Error('Attachment not uploaded: ' + up.error.message);
-    }
-    const { data, error } = await sb.from('announcements').insert({ kind:$('an-kind').value, title, body:$('an-body').value.trim(), department:$('an-dept').value || null,
-      attachment_path:path, attachment_name:name, created_by:(ME && (ME.full_name || ME.email)) || 'HR' }).select();
-    if (error || !(data && data.length)){ if (path) await sb.storage.from('announcements').remove([path]); throw new Error(error ? error.message : NOPERM); }
-    ['an-title','an-body'].forEach(i => $(i).value = ''); $('an-file').value = '';
-    toast(`Published to ${$('an-dept').value || 'everyone'} — it appears in the 📢 tab of the phone app`); renderNewsPage();
-  } catch(e){ toast(e.message, 'err'); }
-  b.disabled = false; b.textContent = '📢 Publish';
-}
-document.addEventListener('click', async e => {
-  const at = /** @type {PageEl} */ (e.target).closest('[data-an-att]'); if (at){ e.preventDefault(); const { data, error } = await sb.storage.from('announcements').createSignedUrl(/** @type {string} */ (at.dataset.anAtt), 600); if (error) return toast(error.message,'err'); window.open(data.signedUrl, '_blank'); return; }
-  const del = /** @type {PageEl} */ (e.target).closest('[data-an-del]'); if (del){ const a = V.news.find(x => x.id === del.dataset.anDel); if (!a) return;
-    confirmDel(`Delete “${a.title}”? Employees will no longer see it.`, async () => {
-      const { error } = await sb.from('announcements').delete().eq('id', a.id); if (error) throw error;
-      if (a.attachment_path) await sb.storage.from('announcements').remove([a.attachment_path]);
-      toast('Announcement deleted'); renderNewsPage(); }); }
-});
-$('an-go').addEventListener('click', publishNews);
+// ── announcements — the page is React now (react/src/news, 30 Oct 2026); it loads when opened ──
+function renderNewsPage(){ if (typeof PKR !== 'undefined') PKR.render(); }
 
 // ── employee voice ──
 async function loadVoice(){
@@ -7189,7 +7149,7 @@ function domStatusFilter(tbodyId){
 // ═════════════════════════════════════════════════════════
 //  DATES TYPED AS DAY-MONTH-YEAR (26 Oct 2026) — Mohammed: "type dates like 26102026, 01012026"
 //  Every <input type="date"> of the desktop app becomes a text box that accepts
-//    26102026 · 26/10/2026 · 26-10-2026 · 26.10.2026 · 261026 (→ 2026) · 2026-10-26 (pasted)
+//    26102026 · 26/10/2026 · 26-10-2026 · 26.10.2026 · 261026 (→ 2026) · 2026-10-26 (pasted) · 0 + Tab = today
 //  and shows 26/10/2026. Its .value still reads and writes yyyy-mm-dd, so every screen keeps working
 //  unchanged ('' while the date is incomplete or impossible). The 📅 icon at the right opens the calendar.
 //  Boxes added later (windows, forms drawn by code) are converted automatically.
@@ -7257,7 +7217,12 @@ document.addEventListener('input', e => {
 // leaving the box: tidy it or mark it red
 document.addEventListener('blur', e => {
   const el = /** @type {PageEl} */ (e.target); if (!el || !el.dataset || el.dataset.dmy !== '1') return;
-  const raw = DMY_NATIVE.get.call(el), p = dmyParse(raw);
+  const raw = DMY_NATIVE.get.call(el);
+  if (raw.trim() === '0') {                                   // "0" + Tab = today (Mohammed, 30 Oct 2026)
+    const t = new Date(), iso = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+    el.value = iso; el.classList.remove('dmy-bad'); el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); return;
+  }
+  const p = dmyParse(raw);
   if (p) { DMY_NATIVE.set.call(el, dmyShow(p)); el.classList.remove('dmy-bad'); }
   else el.classList.toggle('dmy-bad', p === null);
 }, true);

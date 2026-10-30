@@ -453,7 +453,7 @@ function buildLists(){
   const depts = [...new Set(S.employees.map(e=>e.department).filter(Boolean))].sort();
   const units = [...new Set(S.employees.map(e=>e.unit).filter(Boolean))].sort();
   const dOpts = '<option value="">All departments</option>' + depts.map(d=>`<option>${esc(d)}</option>`).join('');
-  ['emp-dept','mon-dept','pay-dept','rep-dept','lv-dept','ex-dept','rl-dept','loan-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
+  ['emp-dept','mon-dept','pay-dept','rep-dept','ex-dept','rl-dept','loan-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
   const uv=$('emp-unit').value; $('emp-unit').innerHTML='<option value="">All units</option>'+units.map(u=>`<option>${esc(u)}</option>`).join(''); $('emp-unit').value=uv;
   const mEls = S.elements.filter(e => e.input_method==='Monthly' && e.active!==false);
   const mv=$('mon-el').value;
@@ -1507,7 +1507,6 @@ document.addEventListener('click', async ev => {
   if (act){ const a = act.dataset.act;
     if (a==='new-emp') return openEmp(null);
     if (a==='new-att') return openAtt(null);
-    if (a==='new-leave') return openLeave(null);
     if (a==='new-pen') return openPen(null);
     if (a==='myprofile') return showSelf(ME, { email: ME.email });
     if (a==='new-var') return openNewVar();
@@ -2025,86 +2024,18 @@ function annualTaken(empId, exceptId){
 // ═════════════════════════════════════════════════════════
 //  VACATIONS PAGE
 // ═════════════════════════════════════════════════════════
-function renderLeaves(){
-  $('lv-missing').innerHTML = leaveTableMissing ? '<div class="alert a-warn">The vacations table does not exist yet. Run <b>vacations-and-exceptions.sql</b> in the database SQL Editor, then click ⟳ Refresh.</div>' : '';
-  const scope=$('lv-scope').value, t=$('lv-type').value, d=$('lv-dept').value, q=$('lv-q').value.trim().toLowerCase();
-  const ps=periodStart(settings.period), pe=periodEnd(settings.period);
-  const base = S.leaves.filter(l => { const e=empOrBlank(l.emp_id);
-      return (scope==='year' || (l.date_from<=pe && l.date_to>=ps)) && (!t || l.leave_type===t) && orgMatch(e,'lv') &&
-             (!q || [l.emp_id, e.name_en, e.name_ar].some(v=>String(v||'').toLowerCase().includes(q))); });
-  const st = stFill('lv-stf', base.map(l => l.status));
-  const list = base.filter(l => !st || l.status===st)
-    .sort((a,b)=>String(b.date_from).localeCompare(String(a.date_from)));
-  const inP = S.leaves.filter(l=>l.status==='Approved').reduce((s,l)=>s+leaveDaysIn(l,ps,pe),0);
-  $('lv-sub').textContent = `${S.leaves.filter(l=>l.status==='Approved').length} approved vacations in ${settings.period.slice(0,4)} · ${fmt(inP)} leave days in ${settings.period} · weekends: ${(settings.weekendDays||[]).map(i=>DAYS[i]).join(', ')||'none'}`;
-  $('lv-tbl').innerHTML = list.map(l => { const e=empOrBlank(l.emp_id), ip=leaveDaysIn(l,ps,pe);
-    const tc = {Annual:'c-blue',Casual:'c-blue',Sick:'c-orange',Unpaid:'c-red','Other paid':'c-grey'}[l.leave_type]||'c-grey';
-    return `<tr class="click" data-leave="${l.id}"><td class="strong">${esc(empName(e)||l.emp_id)} <span class="mono" style="color:var(--muted)">${esc(l.emp_id)}</span></td>
-      <td>${esc(e.department)}</td><td><span class="chip ${tc}">${esc(l.leave_type)}</span></td><td class="mono">${esc(l.date_from)}</td><td class="mono">${esc(l.date_to)}</td>
-      <td class="num">${fmt(l.days)}</td><td class="num">${ip?fmt(ip):'—'}</td><td style="white-space:normal;min-width:120px">${esc(l.reason||'')}</td>
-      <td>${chip(l.status)}${mgrStep(l)}</td><td>${esc(l.decided_by||l.entered_by||'')}${l.source==='Self-service'?' <span class="chip c-blue">employee request</span>':''}</td>
-      <td style="white-space:nowrap">${readyForHR(l)?`<button class="btn btn-success btn-sm" data-lv-approve="${l.id}">Approve</button> <button class="btn btn-ghost btn-sm" data-lv-reject="${l.id}">Reject</button> `:''}<button class="icon-btn" data-del-leave="${l.id}" title="Delete">🗑</button></td></tr>`; }).join('')
-    || '<tr><td colspan="11" class="empty">No vacations for this selection</td></tr>';
-  $('lv-foot').textContent = `${list.length} vacation${list.length===1?'':'s'} shown · click a row to edit`;
+// The page and its window are React now (react/src/vacations, 30 Oct 2026). Kept here: the leave helpers above (payroll,
+// attendance, reports and self-service use them) and what a saved / decided / deleted vacation changes in the rest of the app.
+function renderLeaves(){ if (typeof PKR !== 'undefined') PKR.render(); }
+/** a vacation saved, edited or decided in the React page (kept only when it touches the loaded year) @param {Leave} row */
+function leaveSaved(row){
+  S.leaves = S.leaves.filter(x => x.id !== row.id);
+  const y = settings.period.slice(0,4); if (row.date_from <= `${y}-12-31` && row.date_to >= `${y}-01-01`) S.leaves.push(row);
+  afterLeaveChange();
 }
-let editingLeave = null;
-function leaveHint(){
-  const emp=parseEmpInput($('lv-emp').value), e=empById(emp), f=$('lv-from').value, t=$('lv-to').value, type=$('lv-t').value;
-  const out=[];
-  if (f && t && t < f) out.push('<span class="neg">“To” is before “From”.</span>');
-  if (f && t && t >= f){ const cal=Math.round((dObj(t).getTime()-dObj(f).getTime())/86400000)+1, wd=workdays(f,t);
-    out.push(`${cal} calendar day${cal>1?'s':''}, ${wd} working day${wd===1?'':'s'} (weekends excluded).`); }
-  if (e && (type==='Annual' || (type==='Casual' && settings.casualCountsAnnual!=='no'))){
-    const ent=annualEntitlement(e), taken=annualTaken(emp, editingLeave), req=num($('lv-days').value), left=ent-taken-req;
-    out.push(`Annual balance ${settings.period.slice(0,4)}: entitlement ${fmt(ent)} · taken ${fmt(taken)} · this request ${fmt(req)} → <b class="${left<0?'neg':'pos'}">${fmt(left)} remaining</b>${left<0?' — exceeds the balance':''}`);
-  }
-  if (type==='Unpaid' && e) out.push(`Unpaid: deducts ${fmt(num(e.daily_pay)||0)} (daily pay) per day in the payroll period it falls in.`);
-  if (e && f && t) { const clash=S.leaves.find(l=>l.id!==editingLeave && l.status==='Approved' && String(l.emp_id)===emp && l.date_from<=t && l.date_to>=f);
-    if (clash) out.push(`<span class="neg">Overlaps an approved ${esc(clash.leave_type)} leave ${clash.date_from} → ${clash.date_to}.</span>`); }
-  $('lv-hint').innerHTML = out.join('<br>');
-}
-function recalcLeaveDays(){ const f=$('lv-from').value, t=$('lv-to').value; if (f && t && t>=f) $('lv-days').value = workdays(f,t); leaveHint(); }
-function openLeave(l){
-  if (leaveTableMissing) return toast('Run vacations-and-exceptions.sql first','warn');
-  editingLeave = l ? l.id : null; $('lv-m-title').textContent = l ? 'Edit vacation' : 'Add vacation';
-  const e = l ? empById(l.emp_id) : null;
-  $('lv-emp').value = l ? `${l.emp_id} — ${empName(e)}` : '';
-  $('lv-t').value = l ? l.leave_type : 'Annual'; $('lv-status').value = l ? l.status : 'Approved';
-  $('lv-from').value = l ? l.date_from : todayStr(); $('lv-to').value = l ? l.date_to : todayStr();
-  $('lv-days').value = l ? l.days : workdays(todayStr(), todayStr());
-  $('lv-by').value = l ? (l.entered_by||'') : (localStorage.getItem('approver')||''); $('lv-reason').value = l ? (l.reason||'') : '';
-  leaveHint(); openM('m-leave'); if(!l) setTimeout(()=>$('lv-emp').focus(),50);
-}
-async function saveLeave(){
-  const emp=parseEmpInput($('lv-emp').value); if(!emp) return toast('Pick an employee from the list','warn');
-  const f=$('lv-from').value, t=$('lv-to').value; if(!f||!t) return toast('From and To dates are required','warn');
-  if (t < f) return toast('“To” cannot be before “From”','warn');
-  const days=num($('lv-days').value); if (days<=0) return toast('Leave days must be more than zero','warn');
-  const by=$('lv-by').value.trim(); if (by) localStorage.setItem('approver', by);
-  const rec={ emp_id:emp, leave_type:$('lv-t').value, date_from:f, date_to:t, days, status:$('lv-status').value, reason:$('lv-reason').value.trim()||null, entered_by:by||null, source:'Desktop' };
-  const btn=$('lv-save'); btn.disabled=true;
-  const res = editingLeave ? await sb.from('employee_leaves').update(rec).eq('id',editingLeave).select()
-                           : await sb.from('employee_leaves').insert(rec).select();
-  btn.disabled=false;
-  if (res.error) return toast(res.error.message.replace(/^.*?(Overlaps)/,'$1'),'err');
-  if (!(res.data && res.data.length)) return toast(NOPERM,'err'); const saved=res.data[0]; S.leaves = S.leaves.filter(x=>x.id!==saved.id);
-  const y=settings.period.slice(0,4); if (saved.date_from<=`${y}-12-31` && saved.date_to>=`${y}-01-01`) S.leaves.push(saved);
-  closeM('m-leave'); afterLeaveChange(); toast(editingLeave ? 'Vacation updated' : 'Vacation added');
-}
+/** @param {string} id */
+function leaveDeleted(id){ S.leaves = S.leaves.filter(l => l.id !== id); afterLeaveChange(); }
 function afterLeaveChange(){ renderLeaves(); renderAttendance(); renderPayroll(); renderDashboard(); renderReports(); }
-
-$('lv-tbl').addEventListener('click', e => {
-  const ap=/** @type {PageEl} */ (e.target).closest('[data-lv-approve]'), rj=/** @type {PageEl} */ (e.target).closest('[data-lv-reject]');
-  if (ap || rj) return decideLeave(/** @type {PageEl} */ (ap||rj).dataset[ap?'lvApprove':'lvReject'], ap ? 'Approved' : 'Rejected');
-  const x=/** @type {PageEl} */ (e.target).closest('[data-del-leave]');
-  if (x){ const id=x.dataset.delLeave; return confirmDel('Delete this vacation?', async()=>{ await del('employee_leaves',id); S.leaves=S.leaves.filter(l=>l.id!==id); afterLeaveChange(); toast('Deleted'); }); }
-  const r=/** @type {PageEl} */ (e.target).closest('[data-leave]'); if (r){ const l=S.leaves.find(x=>x.id===r.dataset.leave); if(l) openLeave(l); }
-});
-['lv-scope','lv-type','lv-dept'].forEach(id=>$(id).addEventListener('change', renderLeaves));
-$('lv-q').addEventListener('input', renderLeaves);
-['lv-from','lv-to'].forEach(id=>$(id).addEventListener('change', recalcLeaveDays));
-['lv-emp','lv-t','lv-days'].forEach(id=>$(id).addEventListener('input', leaveHint));
-$('lv-save').addEventListener('click', saveLeave);
 
 // ═════════════════════════════════════════════════════════
 //  EXCEPTION RULE PAGE
@@ -2456,19 +2387,6 @@ $('sh-send').addEventListener('click', sendSelfHr);
 // ═════════════════════════════════════════════════════════
 //  HR SIDE: vacation decisions, HR requests page, badges
 // ═════════════════════════════════════════════════════════
-async function decideLeave(id, status){
-  const l = S.leaves.find(x=>x.id===id); if (!l) return;
-  const e = empById(l.emp_id), by = localStorage.getItem('approver') || (ME && ME.full_name) || 'HR';
-  const go = async () => {
-    const { data, error } = await sb.from('employee_leaves').update({ status, decided_by:by, decided_at:new Date().toISOString() }).eq('id', id).select();
-    if (error) throw new Error(error.message.replace(/^.*?(Overlaps|You cannot)/,'$1'));
-    if (!(data && data.length)) throw new Error(NOPERM);
-    S.leaves = S.leaves.map(x => x.id===id ? data[0] : x); afterLeaveChange();
-    toast(`${empName(e)}: ${l.leave_type} leave ${status.toLowerCase()}`);
-  };
-  confirmDel(`${status==='Approved'?'Approve':'Reject'} ${empName(e)}'s ${l.leave_type} leave ${l.date_from} → ${l.date_to} (${fmt(l.days)} day${num(l.days)===1?'':'s'})?`, go);
-  $('del-title').textContent='Please confirm'; $('del-ok').textContent = status==='Approved' ? 'Approve' : 'Reject'; $('del-ok').className = status==='Approved' ? 'btn btn-success' : 'btn btn-danger';
-}
 // HR requests page: React now (react/src/hrreq, 30 Oct 2026). It draws from S.hrreq; the Handle window saves and calls this.
 function renderHrRequests(){ if (typeof PKR !== 'undefined') PKR.render(); }
 /** a request HR just handled (React Handle window) → the list, the dashboard and the menu badge @param {HrRequest} row */
@@ -3348,7 +3266,7 @@ $('aa-q').addEventListener('input', renderApprovals);
 // ═════════════════════════════════════════════════════════
 //  DEPARTMENT + UNIT FILTERS — on every page that lists employees
 // ═════════════════════════════════════════════════════════
-const ORG_PAGES = { emp:()=>renderEmployees(), att:()=>renderAttendance(), lv:()=>renderLeaves(), pn:()=>renderPenalties(),
+const ORG_PAGES = { emp:()=>renderEmployees(), att:()=>renderAttendance(), pn:()=>renderPenalties(),
   ex:()=>renderExempt(), rl:()=>renderReporting(), mon:()=>renderMonthly(), pay:()=>renderPayroll(), aa:()=>renderApprovals(),
   hs:()=>renderHistLines(), as:()=>renderAssign(), loan:()=>renderLoans(), rep:()=>{ if (repCur) runReport(); } };
 // does this employee match the department and unit chosen on page p?
@@ -5240,35 +5158,7 @@ function lbText(b, reqDays, type, alreadyIn){
     out.push(`Emergency leave ${y}: ${fmt(b.emergency_cap)} days allowed · <b class="${el < 0 ? 'neg' : 'pos'}">${fmt(el)} left</b> after this request${el < 0 ? ' — over the emergency limit' : ''}`); }
   return out;
 }
-// @ts-expect-error — leaveHint is deliberately extended here (the new version wraps the earlier one)
-leaveHint = function(){
-  const emp = parseEmpInput($('lv-emp').value), e = empById(emp), f = $('lv-from').value, t = $('lv-to').value, type = $('lv-t').value, out = [];
-  if (f && t && t < f) out.push('<span class="neg">“To” is before “From”.</span>');
-  if (f && t && t >= f){ const cal = Math.round((dObj(t).getTime() - dObj(f).getTime()) / 86400000) + 1, wd = workdays(f, t);
-    out.push(`${cal} calendar day${cal > 1 ? 's' : ''}, ${wd} working day${wd === 1 ? '' : 's'} (weekends excluded).`); }
-  if (e && (type === 'Annual' || type === 'Casual')){
-    const y = (f || todayStr()).slice(0, 4), b = LB.get(`${emp}|${y}`);
-    if (b === undefined){ out.push('<span style="color:var(--muted)">Annual balance: loading…</span>'); getLB(emp, y).then(() => leaveHint()); }
-    else if (b === null) out.push('<span style="color:var(--muted)">Annual balance not available (database update 47 not run yet).</span>');
-    else {
-      const self = editingLeave && S.leaves.find(l => l.id === editingLeave && l.status === 'Approved');
-      const inYear = l => leaveDaysIn(l, `${y}-01-01`, `${y}-12-31`);
-      const addAnnual = self && lbTypes().includes(self.leave_type) ? inYear(self) : 0, addEm = self && self.leave_type === 'Casual' ? inYear(self) : 0;
-      const req = num($('lv-days').value);
-      if (type === 'Annual' || lbTypes().includes('Casual')) out.push(...lbText(b, req, type, addAnnual).slice(0, 1));
-      if (type === 'Casual') out.push(lbText(b, req, 'Casual', addEm)[1]);
-      if (f && b.eligible_from && f < b.eligible_from && !b.early_ok)
-        out.push(`<span style="color:var(--warn)">⚠ Before ${esc(b.eligible_from)} — within the first ${num(HR_RULES.leave_rules.wait_months) || 6} months of service. The employee cannot request this himself; as HR you may still enter it.</span>`);
-    }
-  }
-  if (type === 'Unpaid' && e) out.push(`Unpaid: deducts ${fmt(num(e.daily_pay) || 0)} (daily pay) per day in the payroll period it falls in.`);
-  if (e && f && t){ const clash = S.leaves.find(l => l.id !== editingLeave && l.status === 'Approved' && String(l.emp_id) === emp && l.date_from <= t && l.date_to >= f);
-    if (clash) out.push(`<span class="neg">Overlaps an approved ${esc(clash.leave_type)} leave ${clash.date_from} → ${clash.date_to}.</span>`); }
-  $('lv-hint').innerHTML = out.join('<br>');
-};
-const _openLeave26 = openLeave;
-// @ts-expect-error — openLeave is deliberately extended here (the new version wraps the earlier one)
-openLeave = function(){ LB.clear(); LB_ALL.year = null; return _openLeave26.apply(this, arguments); };
+// (the vacation window's balance hint is React now — react/src/vacations/LeaveDialog; lbText above stays for self-service)
 
 // employee self-service: own balance
 // @ts-expect-error — slHint is deliberately extended here (the new version wraps the earlier one)
@@ -5424,7 +5314,6 @@ const _saveEmp26 = saveEmp;
 // @ts-expect-error — saveEmp is deliberately extended here (the new version wraps the earlier one)
 saveEmp = async function(){ const r = await _saveEmp26.apply(this, arguments); LB.clear(); if (canHRA()) loadHRAlerts().then(hraBadge); return r; };
 // the original hint functions were attached directly — attach the new ones too (they run last and replace the text)
-['lv-emp','lv-t','lv-days'].forEach(id => $(id).addEventListener('input', () => leaveHint()));
 ['sl-type','sl-days'].forEach(id => $(id).addEventListener('input', () => slHint()));
 
 // ═════════════════════════════════════════════════════════
@@ -5506,12 +5395,6 @@ penHint = function(){
     if (same.length) out.push(`Already ${same.length} approved penalt${same.length === 1 ? 'y' : 'ies'} for this employee in ${per}: ${same.map(penLabel).join(', ')}.`); }
   $('pn-hint').innerHTML = out.join('<br>');
 };
-// the vacation hint: no "deducts … daily pay" figure for officers
-const _leaveHint27 = leaveHint;
-// @ts-expect-error — leaveHint is deliberately extended here (the new version wraps the earlier one)
-leaveHint = function(){ const r = _leaveHint27.apply(this, arguments);
-  if (isOfficer()) $('lv-hint').innerHTML = $('lv-hint').innerHTML.replace(/Unpaid: deducts [^<]*?per day in the payroll period it falls in\./, 'Unpaid: deducted in the payroll at the employee\'s daily pay.');
-  return r; };
 ['pn-emp','pn-qty','pn-type','pn-period'].forEach(id => $(id).addEventListener('input', () => penHint()));
 
 // ── employee window: show the contract end as soon as the start is typed (the database applies the same rule on Save)
@@ -6512,7 +6395,7 @@ function stFill(id, vals){
   sel.classList.toggle('st-on', !!keep);
   return keep;
 }
-/** @type {[string, () => void][]} */ ([['lv-stf', () => renderLeaves()], ['att-status', () => renderAttendance()],
+/** @type {[string, () => void][]} */ ([['att-status', () => renderAttendance()],
  ['par-status', () => renderParRules()], ['loan-status', () => renderLoans()]])   // loan-dept / loan-unit: part19 ORG_PAGES
   .forEach(([id, fn]) => { const el = $(id); if (el) el.addEventListener('change', fn); });
 if ($('loan-q')) $('loan-q').addEventListener('input', () => renderLoans());

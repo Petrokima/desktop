@@ -504,22 +504,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </div>
 
 <!-- VACATIONS -->
-<div class="page" id="page-leaves">
-  <div class="page-header"><div><div class="page-title">Vacations</div><div class="page-sub" id="lv-sub"></div></div>
-    <button class="btn btn-primary" data-act="new-leave">+ Add vacation</button></div>
-  <div id="lv-missing"></div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title">Leave register</span>
-      <div class="toolbar-right">
-        <select class="sel" id="lv-scope"><option value="period">Overlapping this period</option><option value="year">Whole year</option></select>
-        <select class="sel" id="lv-type"><option value="">All types</option><option>Annual</option><option>Casual</option><option>Sick</option><option>Unpaid</option><option>Other paid</option></select>
-        <select class="sel" id="lv-stf" title="Filter by status"><option value="">All statuses</option></select>
-        <select class="sel" id="lv-dept"><option value="">All departments</option></select>
-        <input class="inp" id="lv-q" placeholder="Search employee…"></div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Department</th><th>Type</th><th>From</th><th>To</th><th class="num">Days</th><th class="num">In period</th><th>Reason</th><th>Status</th><th>Entered by</th><th></th></tr></thead><tbody id="lv-tbl"></tbody></table></div>
-    <div class="foot" id="lv-foot"></div>
-  </div>
-</div>
+<div class="page" id="page-leaves"><div id="react-leaves"></div></div>
 
 <!-- HR REQUESTS -->
 <div class="page" id="page-coreq"><div id="react-coreq"></div></div>
@@ -1152,22 +1137,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div id="slip-body"></div>
 </div></div>
 
-<!-- MODAL: LEAVE -->
-<div class="overlay" id="m-leave"><div class="modal">
-  <div class="modal-head"><div class="modal-title" id="lv-m-title">Add vacation</div><button class="x" data-close="m-leave">×</button></div>
-  <div class="grid2">
-    <div class="field full"><label>Employee</label><input id="lv-emp" list="dl-emp" placeholder="Start typing…"></div>
-    <div class="field"><label>Type</label><select id="lv-t"><option>Annual</option><option>Casual</option><option>Sick</option><option>Unpaid</option><option>Other paid</option></select></div>
-    <div class="field"><label>Status</label><select id="lv-status"><option>Approved</option><option>Pending</option><option>Rejected</option><option>Cancelled</option></select></div>
-    <div class="field"><label>From</label><input type="date" id="lv-from"></div>
-    <div class="field"><label>To</label><input type="date" id="lv-to"></div>
-    <div class="field"><label>Leave days (calculated — edit for half days or holidays)</label><input type="number" step="0.5" min="0" id="lv-days"></div>
-    <div class="field"><label>Entered by</label><input id="lv-by"></div>
-    <div class="field full"><label>Reason / notes</label><input id="lv-reason"></div>
-  </div>
-  <div id="lv-hint" style="font-size:12px;margin-top:10px;line-height:1.6"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-leave">Cancel</button><button class="btn btn-primary" id="lv-save">Save vacation</button></div>
-</div></div>
 
 <!-- MODAL: PENALTY -->
 <div class="overlay" id="m-pen"><div class="modal">
@@ -1398,6 +1367,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=3d9702cd720d"></script>
-<script src="react.js?v=e994a410cc4a"></script>
+<script src="app.js?v=aedaf2e1daea"></script>
+<script src="react.js?v=86bab5bdf328"></script>
 </body></html>

@@ -344,7 +344,7 @@ function showFirstLogin(me, user){
     if (a === lastTempPass) return show('Choose a password different from the temporary one.');
     const btn=$('btn-first'); btn.disabled=true; btn.textContent='Saving…';
     if (!/^\d{4}$/.test(yr)) return show('Enter the year you were born (4 digits, e.g. 1988).');
-    const { data, error } = await sb.rpc('complete_first_login', { p_nid_last4:/** @type {any} — no ID digits asked any more (the database accepts none) */ (null), p_new_password:a, p_birth_year:yr });
+    const { data, error } = await sb.rpc('complete_first_login', { p_nid_last4:null, p_new_password:a, p_birth_year:yr });
     btn.disabled=false; btn.textContent='Set my password';
     if (error) return show(esc(error.message));
     if (data !== 'ok') return show(esc(data));
@@ -1542,7 +1542,7 @@ document.addEventListener('click', async ev => {
   }
   const er = t.closest('[data-emp]'); if (er) return openEmp(er.dataset.emp);
   const sl = t.closest('[data-slip]'); if (sl) return openSlip(sl.dataset.slip);
-  if (t.closest('[data-rm-split]')){ t.closest('.split').remove(); return checkSplits(); }
+  if (t.closest('[data-rm-split]')){ t.closest('.split')?.remove(); return checkSplits(); }
   const df = t.closest('[data-del-fixed]');
   if (df){ const id=df.dataset.delFixed; return confirmDel('Remove this salary element from the employee?', async()=>{ await del('employee_salary_elements',id); S.fixed=S.fixed.filter(r=>r.id!==id); renderPackage(); renderPayroll(); renderDashboard(); toast('Element removed'); }); }
   const da = t.closest('[data-del-att]');
@@ -2180,7 +2180,7 @@ function afterLeaveChange(){ renderLeaves(); renderAttendance(); renderPayroll()
 
 $('lv-tbl').addEventListener('click', e => {
   const ap=/** @type {PageEl} */ (e.target).closest('[data-lv-approve]'), rj=/** @type {PageEl} */ (e.target).closest('[data-lv-reject]');
-  if (ap || rj) return decideLeave((ap||rj).dataset[ap?'lvApprove':'lvReject'], ap ? 'Approved' : 'Rejected');
+  if (ap || rj) return decideLeave(/** @type {PageEl} */ (ap||rj).dataset[ap?'lvApprove':'lvReject'], ap ? 'Approved' : 'Rejected');
   const x=/** @type {PageEl} */ (e.target).closest('[data-del-leave]');
   if (x){ const id=x.dataset.delLeave; return confirmDel('Delete this vacation?', async()=>{ await del('employee_leaves',id); S.leaves=S.leaves.filter(l=>l.id!==id); afterLeaveChange(); toast('Deleted'); }); }
   const r=/** @type {PageEl} */ (e.target).closest('[data-leave]'); if (r){ const l=S.leaves.find(x=>x.id===r.dataset.leave); if(l) openLeave(l); }
@@ -2249,7 +2249,7 @@ $('ex-dept').addEventListener('change', renderExempt);
 function penaltyValue(x, emp, dailyRate, hourRate){
   emp = emp || empById(x.emp_id); if (!emp) return x.penalty_type==='Amount' ? num(x.quantity) : 0;
   const R = (dailyRate===undefined || hourRate===undefined) ? empRates(emp) : null;
-  const d = dailyRate ?? R.daily, h = hourRate ?? R.hourly;
+  const d = dailyRate ?? /** @type {NonNullable<typeof R>} */ (R).daily, h = hourRate ?? /** @type {NonNullable<typeof R>} */ (R).hourly;
   if (x.penalty_type==='Hours') return num(x.quantity) * h;
   if (x.penalty_type==='Days')  return num(x.quantity) * d;
   return num(x.quantity);
@@ -2445,7 +2445,7 @@ async function createLogins(){
   $('del-title').textContent='Please confirm'; $('del-ok').textContent='Create'; $('del-ok').className='btn btn-success';
 }
 async function resetUser(tr){
-  const u=USERS.find(x=>x.id===tr.dataset.uid), temp=$('us-temp').value;
+  const u=USERS.find(x=>x.id===tr.dataset.uid), temp=$('us-temp').value; if (!u) return;   // the login is no longer in the list
   if (temp && temp.length < 8) { $('us-temp').focus(); return toast('A typed temporary password must be at least 8 characters — or leave the box empty','warn'); }
   confirmDel(`Reset ${u.email}? ${temp ? 'Their password becomes the one you typed.' : 'Their password goes back to the standard first password (HR procedure).'} They must choose a new password at next sign-in.`, async () => {
     const { error } = await sb.rpc('admin_reset_password', { p_user:u.id, p_temp: temp || null });
@@ -2501,7 +2501,7 @@ async function saveUser(tr){
 $('us-tbl').addEventListener('click', e => { const b=/** @type {PageEl} */ (e.target).closest('[data-u-save]'); if(b) return saveUser(b.closest('tr'));
   const r=/** @type {PageEl} */ (e.target).closest('[data-u-reset]'); if(r) return resetUser(r.closest('tr'));
   const rn=/** @type {PageEl} */ (e.target).closest('[data-u-random]'); if(rn) return randomUser(rn.closest('tr'));
-  const rp=/** @type {PageEl} */ (e.target).closest('[data-u-reps]'); if(rp) return openReps(rp.closest('tr').dataset.uid); });
+  const rp=/** @type {PageEl} */ (e.target).closest('[data-u-reps]'); if(rp) return openReps(/** @type {PageEl} */ (rp.closest('tr')).dataset.uid); });
 // ── which reports each HR user may open (admin only) ──
 let repsUser = null;
 function openReps(uid){
@@ -2517,7 +2517,7 @@ function openReps(uid){
   openM('m-reps');
 }
 async function saveReps(){
-  const ids = [...document.querySelectorAll('[data-rp]:checked')].map(c => c.dataset.rp);
+  const ids = [...document.querySelectorAll('[data-rp]:checked')].map(c => /** @type {string} */ (c.dataset.rp));
   const { data, error } = await sb.from('app_users').update({ allowed_reports: ids }).eq('id', repsUser.id).select();
   if (error) return toast(error.message,'err'); if (!(data && data.length)) return toast(NOPERM,'err');
   closeM('m-reps'); toast(`${repsUser.full_name || repsUser.email} can now open ${ids.length} report${ids.length===1?'':'s'}`); loadUsers();
@@ -2532,13 +2532,13 @@ $('us-refresh').addEventListener('click', loadUsers);
 $('btn-login').addEventListener('click', doLogin);
 ['li-email','li-pass'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); }));
 $('pw-save').addEventListener('click', changePassword);
-document.querySelector('[data-page="users"]').addEventListener('click', loadUsers);
+document.querySelector('[data-page="users"]')?.addEventListener('click', loadUsers);
 
 // the "Project cost reports" permission (works for any user, including an employee account)
 document.addEventListener('change', async e => {
   const c = /** @type {PageEl} */ (e.target).closest('[data-u-acct]'); if (!c) return;
   const u = USERS.find(x => x.id === c.dataset.uAcct);
-  const { data, error } = await sb.from('app_users').update({ acct_reports: c.checked }).eq('id', c.dataset.uAcct).select('id');
+  const { data, error } = await sb.from('app_users').update({ acct_reports: c.checked }).eq('id', /** @type {string} */ (c.dataset.uAcct)).select('id');
   if (error || !(data && data.length)){ c.checked = !c.checked; return toast(error ? error.message : NOPERM, 'err'); }
   ACCT_FLAGS[c.dataset.uAcct] = c.checked;
   toast(`${(u && (u.full_name || u.email)) || 'User'} ${c.checked ? 'can now open Project costs (totals per project, no names)' : 'can no longer open Project costs'}`);
@@ -3552,7 +3552,7 @@ $('par-q').addEventListener('input', renderParRules);
 $('par-tbl').addEventListener('click', e => {
   const ed = /** @type {PageEl} */ (e.target).closest('[data-par-edit]'); if (ed) return openParRule(ed.dataset.parEdit);
   const dl = /** @type {PageEl} */ (e.target).closest('[data-par-del]');
-  if (dl) { const id = dl.dataset.parDel; confirmDel('Delete this rule? The automatic allowance it gives will disappear from payrolls that are not yet approved.', async () => {
+  if (dl) { const id = /** @type {string} */ (dl.dataset.parDel); confirmDel('Delete this rule? The automatic allowance it gives will disappear from payrolls that are not yet approved.', async () => {
     const { data, error } = await sb.from('project_allowance_rules').delete().eq('id', id).select(); if (error) throw error; if (!(data && data.length)) throw new Error(NOPERM);
     S.parRules = S.parRules.filter(x => x.id !== id); renderParRules(); DIRTY.add('payroll'); DIRTY.add('reports'); toast('Rule deleted'); }); }
 });
@@ -3968,8 +3968,8 @@ $('pc-xlsx').addEventListener('click', async () => {
 (function sidebarToggle(){
   // split each menu item into its icon and its name, so the name can be hidden
   document.querySelectorAll('.sidebar .nav-item').forEach(it => {
-    const tn = [...it.childNodes].find(n => n.nodeType === 3 && n.textContent.trim()); if (!tn) return;
-    const m = tn.textContent.trim().match(/^(\S+)\s+([\s\S]+)$/); if (!m) return;
+    const tn = [...it.childNodes].find(n => n.nodeType === 3 && String(n.textContent).trim()); if (!tn) return;
+    const m = String(tn.textContent).trim().match(/^(\S+)\s+([\s\S]+)$/); if (!m) return;
     const ico = document.createElement('span'); ico.className = 'nav-ico'; ico.textContent = m[1];
     const txt = document.createElement('span'); txt.className = 'nav-txt'; txt.textContent = m[2];
     it.insertBefore(ico, tn); it.insertBefore(txt, tn); it.removeChild(tn);
@@ -4155,7 +4155,7 @@ const BU_TYPES = {
   holidays: { t:'Public holidays', roles:['admin','hr'], d:'One row per day off.',
     cols: () => [['date','Date','date',true],['name','Holiday name','text',true]],
     check(v){ const d = buDate(v.date); if (!d) return err('Date is not valid'); if (!buTxt(v.name)) return err('Name is required');
-      if (isHoliday(d)) return skip(`${d} is already a holiday (${holidayOn(d).name})`); return ok('new', `${d} · ${buTxt(v.name)}`, { rec:{ date:d, name:buTxt(v.name) } }); },
+      if (isHoliday(d)) return skip(`${d} is already a holiday (${(holidayOn(d) || /** @type {Holiday} */ ({})).name})`); return ok('new', `${d} · ${buTxt(v.name)}`, { rec:{ date:d, name:buTxt(v.name) } }); },
     async save(x){ return sb.from('public_holidays').insert(x.data.rec).select('id'); } },
 
   projects: { t:'Projects', roles:['admin','hr'], d:'New code = new project · existing code = update the filled-in columns.',
@@ -4181,7 +4181,7 @@ const BU_TYPES = {
   reporting: { t:'Reporting lines (direct managers)', roles:['admin','hr','hr_officer'], d:'Sets each employee\'s direct manager. Circular reporting lines are refused.',
     cols: () => [['emp','Employee code','emp',true],['mgr','Direct manager code','emp',true]],
     check(v){ const emp = buEmp(v.emp), mgr = buEmp(v.mgr); if (!emp) return err(`Employee code “${buTxt(v.emp)}” not found`); if (!mgr) return err(`Manager code “${buTxt(v.mgr)}” not found`);
-      if (emp === mgr) return err('An employee cannot be his own manager'); if (String(empById(emp).manager_id||'') === mgr) return skip('Already reports to this manager');
+      if (emp === mgr) return err('An employee cannot be his own manager'); if (String(empOrBlank(emp).manager_id||'') === mgr) return skip('Already reports to this manager');
       return ok('update', `${empName(empById(emp))} → ${empName(empById(mgr))}`, { id:emp, rec:{ manager_id:mgr, top_of_org:false } }); },
     async save(x){ return sb.from('employees').update(x.data.rec).eq('id', x.data.id).select('id'); } },
 
@@ -4493,7 +4493,7 @@ function stTax(gross, ins, months){                         // tax for the perio
   return { annual, tax: annualTax(annual, R).tax * (months || 1) / 12 };
 }
 $('st-file').addEventListener('change', async e => {
-  const f = /** @type {PageEl} */ (e.target).files[0]; if (!f) return;
+  const f = /** @type {PageEl} */ (e.target).files?.[0]; if (!f) return;
   $('st-out').innerHTML = '<div class="empty">Reading the workbook…</div>';
   try {
     await loadSheetJs();
@@ -4631,7 +4631,7 @@ async function publishNews(){
   b.disabled = false; b.textContent = '📢 Publish';
 }
 document.addEventListener('click', async e => {
-  const at = /** @type {PageEl} */ (e.target).closest('[data-an-att]'); if (at){ e.preventDefault(); const { data, error } = await sb.storage.from('announcements').createSignedUrl(at.dataset.anAtt, 600); if (error) return toast(error.message,'err'); window.open(data.signedUrl, '_blank'); return; }
+  const at = /** @type {PageEl} */ (e.target).closest('[data-an-att]'); if (at){ e.preventDefault(); const { data, error } = await sb.storage.from('announcements').createSignedUrl(/** @type {string} */ (at.dataset.anAtt), 600); if (error) return toast(error.message,'err'); window.open(data.signedUrl, '_blank'); return; }
   const del = /** @type {PageEl} */ (e.target).closest('[data-an-del]'); if (del){ const a = V.news.find(x => x.id === del.dataset.anDel); if (!a) return;
     confirmDel(`Delete “${a.title}”? Employees will no longer see it.`, async () => {
       const { error } = await sb.from('announcements').delete().eq('id', a.id); if (error) throw error;
@@ -4670,7 +4670,7 @@ async function renderVoicePage(){
 let VO_CUR = null;
 document.addEventListener('click', e => {
   const r = /** @type {PageEl} */ (e.target).closest('[data-vo]'); if (!r) return;
-  const [kind, id] = r.dataset.vo.split(':'), x = /** @type {any} — a complaint, hiring, training or manager request (see kind) */ ((kind === 'fb' ? V.fb : kind === 'hire' ? V.hire : kind === 'act' ? V.act : V.train).find(y => y.id === id)); if (!x) return;
+  const [kind, id] = /** @type {string} */ (r.dataset.vo).split(':'), x = /** @type {any} — a complaint, hiring, training or manager request (see kind) */ ((kind === 'fb' ? V.fb : kind === 'hire' ? V.hire : kind === 'act' ? V.act : V.train).find(y => y.id === id)); if (!x) return;
   VO_CUR = { kind, x };
   $('mv-close').style.display = kind === 'hire' && x.status !== 'Closed' && !x.hr_closed ? '' : 'none';
   $('mv-reject').style.display = 'none'; $('mv-save').style.display = ''; $('mv-st').closest('.field').style.display = '';
@@ -4771,14 +4771,14 @@ loadVoice = async function(){ await _loadVoiceSal.apply(this, arguments); const 
 const _renderVoiceSal = renderVoicePage;
 // @ts-expect-error — renderVoicePage is deliberately extended here (the new version wraps the earlier one)
 renderVoicePage = async function(){ await _renderVoiceSal.apply(this, arguments);
-  $('vo-sal').innerHTML = V.sal.map(x => `<tr><td class="mono">${esc(vDate(x.created_at))}</td><td>${esc(x.emp_name ? `${x.emp_name} (${x.emp_id})` : vName(x.emp_id))}</td>
+  $('vo-sal').innerHTML = (V.sal || []).map(x => `<tr><td class="mono">${esc(vDate(x.created_at))}</td><td>${esc(x.emp_name ? `${x.emp_name} (${x.emp_id})` : vName(x.emp_id))}</td>
       <td class="num">${x.current_amount == null ? '—' : fmt(x.current_amount)}</td><td class="num strong">${fmt(x.new_amount)}</td><td class="mono">${esc(x.effective_from)}</td>
       <td style="white-space:normal;max-width:280px">${esc(x.reason)}</td><td>${esc(x.requested_by || '')}</td>
       <td style="white-space:normal;font-size:12px">${x.board_by ? esc(x.board_by) + (x.board_note ? ': ' + esc(x.board_note) : '') : ''}</td><td>${vChip(x.status)}</td>
       <td>${x.status === 'Waiting for board' ? `<button class="btn btn-ghost btn-sm" data-sal-cancel="${esc(x.id)}">Cancel</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="10" class="empty">No requests</td></tr>';
 };
 document.addEventListener('click', async e => { const b = /** @type {PageEl} */ (e.target).closest('[data-sal-cancel]'); if (!b) return;
-  const { error } = await sb.rpc('cancel_salary_change', { p_id: b.dataset.salCancel }); if (error) return toast(error.message, 'err');
+  const { error } = await sb.rpc('cancel_salary_change', { p_id: /** @type {string} */ (b.dataset.salCancel) }); if (error) return toast(error.message, 'err');
   toast('Request cancelled'); renderVoicePage(); });
 
 // ═════════════════════════════════════════════════════════
@@ -4788,11 +4788,11 @@ const ff = k => document.querySelector(`#emp-form [data-f="${k}"]`);
 // resignation date and Inactive go together
 document.addEventListener('change', e => {
   const f = /** @type {PageEl} */ (e.target).closest('#emp-form [data-f]'); if (!f) return;
-  if (f.dataset.f === 'resignation_date' && f.value && ff('status') && ff('status').value !== 'Inactive'){
-    ff('status').value = 'Inactive'; toast('Status set to Inactive — a resignation date always goes with Inactive');
+  if (f.dataset.f === 'resignation_date' && f.value && ff('status') && /** @type {PageEl} */ (ff('status')).value !== 'Inactive'){
+    /** @type {PageEl} */ (ff('status')).value = 'Inactive'; toast('Status set to Inactive — a resignation date always goes with Inactive');
   }
-  if (f.dataset.f === 'status' && f.value === 'Inactive' && ff('resignation_date') && !ff('resignation_date').value){
-    ff('resignation_date').focus(); toast('Enter the resignation date — it is required when making an employee Inactive', 'warn');
+  if (f.dataset.f === 'status' && f.value === 'Inactive' && ff('resignation_date') && !/** @type {PageEl} */ (ff('resignation_date')).value){
+    /** @type {PageEl} */ (ff('resignation_date')).focus(); toast('Enter the resignation date — it is required when making an employee Inactive', 'warn');
   }
 });
 const _saveEmpLife = saveEmp;
@@ -5045,7 +5045,7 @@ $('tfa-off').addEventListener('click', () => {
 });
 $('us-tbl').addEventListener('click', e => {
   const b = /** @type {PageEl} */ (e.target).closest('[data-u-mfa]'); if (!b) return;
-  const u = USERS.find(x => x.id === b.closest('tr').dataset.uid); if (!u) return;
+  const u = USERS.find(x => x.id === b.closest('tr')?.dataset.uid); if (!u) return;
   confirmDel(`Reset two-step sign-in for ${u.full_name || u.email}? Use this when they lost or changed their phone. At their next sign-in they scan a new QR code.`,
     async () => { const { error } = await sb.rpc('admin_reset_mfa', { p_user:u.id }); if (error) throw error; toast('Two-step sign-in reset'); loadTwoStepAdmin(); });
   $('del-title').textContent = 'Please confirm'; $('del-ok').textContent = 'Reset'; $('del-ok').className = 'btn btn-danger';
@@ -5117,8 +5117,8 @@ $('au-load').addEventListener('click', loadAudit);
 $('au-area').addEventListener('change', loadAudit);
 $('au-emp').addEventListener('change', loadAudit);
 $('au-q').addEventListener('input', renderAudit);
-document.querySelector('[data-page="audit"]').addEventListener('click', loadAudit);
-document.querySelector('[data-page="users"]').addEventListener('click', () => setTimeout(loadTwoStepAdmin, 400));
+document.querySelector('[data-page="audit"]')?.addEventListener('click', loadAudit);
+document.querySelector('[data-page="users"]')?.addEventListener('click', () => setTimeout(loadTwoStepAdmin, 400));
 $('us-refresh').addEventListener('click', () => setTimeout(loadTwoStepAdmin, 400));
 
 // ═════════════════════════════════════════════════════════
@@ -5188,7 +5188,7 @@ $('lw-kind').addEventListener('change', renderLocWarnings);
 $('lw-q').addEventListener('input', renderLocWarnings);
 $('lw-tbl').addEventListener('click', e => { const b = /** @type {PageEl} */ (e.target).closest('[data-loc-pin]'); if (!b) return;
   const c = S.clocks.find(x => String(x.id) === b.dataset.locPin); if (!c) return;
-  confirmDel(`Use this check-in (${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}) as the map point of site ${c.project_code} — ${projName(c.project_code)}? Only do this if you are sure the employee was really at the site.`,
+  confirmDel(`Use this check-in (${Number(c.lat).toFixed(5)}, ${Number(c.lng).toFixed(5)}) as the map point of site ${c.project_code} — ${projName(c.project_code)}? Only do this if you are sure the employee was really at the site.`,
     async () => { await saveSite(c.project_code, c.lat, c.lng, null); toast('Site map point saved'); renderSites(); });
   $('del-title').textContent = 'Please confirm'; $('del-ok').textContent = 'Use this point'; $('del-ok').className = 'btn btn-primary';
 });
@@ -5230,10 +5230,10 @@ $('ls-q').addEventListener('input', renderSites);
 $('ls-tbl').addEventListener('input', e => {         // pasting "30.04, 31.23" into Latitude fills both boxes
   const i = /** @type {PageEl} */ (e.target).closest('[data-s="lat"]'); if (!i || !/[ ,]/.test(i.value.trim())) return;
   const ll = parseLatLng(i.value); if (!ll) return;
-  i.value = String(ll.lat); i.closest('tr').querySelector('[data-s="lng"]').value = String(ll.lng);
+  i.value = String(ll.lat); /** @type {PageEl} */ (i.closest('tr')?.querySelector('[data-s="lng"]')).value = String(ll.lng);
 });
 $('ls-tbl').addEventListener('click', async e => {
-  const tr = /** @type {PageEl} */ (e.target).closest('tr[data-site]'); if (!tr) return; const code = tr.dataset.site;
+  const tr = /** @type {PageEl} */ (e.target).closest('tr[data-site]'); if (!tr) return; const code = /** @type {string} */ (tr.dataset.site);
   if (/** @type {PageEl} */ (e.target).closest('[data-s-clear]')) {
     try { const { data, error } = await sb.from('projects').update({ site_lat:null, site_lng:null, site_radius_m:null }).eq('id', code).select('id');
       if (error) throw error; if (!(data && data.length)) throw new Error(NOPERM);
@@ -5242,10 +5242,10 @@ $('ls-tbl').addEventListener('click', async e => {
     return;
   }
   if (!/** @type {PageEl} */ (e.target).closest('[data-s-save]')) return;
-  /** @type {string | number} */ let lat = tr.querySelector('[data-s="lat"]').value.trim();
-  /** @type {string | number} */ let lng = tr.querySelector('[data-s="lng"]').value.trim();
+  /** @type {string | number} */ let lat = /** @type {PageEl} */ (tr.querySelector('[data-s="lat"]')).value.trim();
+  /** @type {string | number} */ let lng = /** @type {PageEl} */ (tr.querySelector('[data-s="lng"]')).value.trim();
   const ll = parseLatLng(lat + (lng ? ',' + lng : '')); if (ll) { lat = ll.lat; lng = ll.lng; } else { lat = Number(lat); lng = Number(lng); }
-  const radTxt = tr.querySelector('[data-s="rad"]').value.trim(), rad = radTxt === '' ? null : Math.round(Number(radTxt));
+  const radTxt = /** @type {PageEl} */ (tr.querySelector('[data-s="rad"]')).value.trim(), rad = radTxt === '' ? null : Math.round(Number(radTxt));
   if (!validLatLng(lat, lng)) return toast('Enter a valid latitude and longitude (e.g. 30.04442 and 31.23571)', 'warn');
   if (rad !== null && !(rad >= 50 && rad <= 5000)) return toast('Radius must be between 50 and 5,000 metres', 'warn');
   try { await saveSite(code, lat, lng, rad); toast(`Site ${code} saved`); renderSites(); } catch (err) { toast(err.message, 'err'); }
@@ -5282,10 +5282,10 @@ function renderOffices(){
 }
 $('wl-tbl').addEventListener('input', e => {
   const i = /** @type {PageEl} */ (e.target).closest('[data-w="lat"]'); if (!i || !/[ ,]/.test(i.value.trim())) return;
-  const ll = parseLatLng(i.value); if (!ll) return; i.value = String(ll.lat); i.closest('tr').querySelector('[data-w="lng"]').value = String(ll.lng);
+  const ll = parseLatLng(i.value); if (!ll) return; i.value = String(ll.lat); /** @type {PageEl} */ (i.closest('tr')?.querySelector('[data-w="lng"]')).value = String(ll.lng);
 });
 $('wl-tbl').addEventListener('click', async e => {
-  const tr = /** @type {PageEl} */ (e.target).closest('tr[data-wl]'); if (!tr) return; const id = tr.dataset.wl;
+  const tr = /** @type {PageEl} */ (e.target).closest('tr[data-wl]'); if (!tr) return; const id = /** @type {string} */ (tr.dataset.wl);
   if (/** @type {PageEl} */ (e.target).closest('[data-w-del]')) {
     confirmDel('Delete this office? Check-ins without a project will no longer be compared with it.', async () => {
       const { data, error } = await sb.from('work_locations').delete().eq('id', id).select('id'); if (error) throw error; if (!(data && data.length)) throw new Error(NOPERM);
@@ -5294,7 +5294,7 @@ $('wl-tbl').addEventListener('click', async e => {
   }
   if (/** @type {PageEl} */ (e.target).closest('[data-w-emps]')) return openOfficeEmps(id);
   if (!/** @type {PageEl} */ (e.target).closest('[data-w-save]')) return;
-  const g = k => tr.querySelector(`[data-w="${k}"]`);
+  const g = k => /** @type {PageEl} — every office row has these fields */ (tr.querySelector(`[data-w="${k}"]`));
   const row = { name: g('name').value.trim(), lat: Number(g('lat').value), lng: Number(g('lng').value), radius_m: Math.round(Number(g('rad').value)), active: g('active').checked };
   if (!row.name) return toast('Give the office a name', 'warn');
   if (!validLatLng(row.lat, row.lng)) return toast('Enter a valid latitude and longitude', 'warn');
@@ -5399,7 +5399,7 @@ $('wle-dept-add').addEventListener('click', () => {
 $('wle-q').addEventListener('input', renderOfficeEmps);
 $('wle-tbl').addEventListener('click', async e => {
   const b = /** @type {PageEl} */ (e.target).closest('[data-wle-rm]'); if (!b) return;
-  const id = b.dataset.wleRm;
+  const id = /** @type {string} */ (b.dataset.wleRm);
   const { data, error } = await sb.from('employee_work_locations').delete().eq('emp_id', id).eq('location_id', WLE.id).select();
   if (error) return toast(error.message, 'err'); if (!(data && data.length)) return toast(NOPERM, 'err');
   OFFICE_EMPS = OFFICE_EMPS.filter(x => !(x.emp_id === id && x.location_id === WLE.id)); renderOfficeEmps(); toast('Removed');
@@ -5417,6 +5417,7 @@ const calAdd = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); re
 const calWeekStart = d => calAdd(d, -((d.getDay() - CAL_START + 7) % 7));
 
 function makeAttCalendar(p, opts){
+  /** @type {{ view: string, anchor: Date, emp: Employee | null, rows: AttendanceRow[], leaves: Leave[], loading: boolean, token: number, who?: any[] }} */
   const st = { view: 'month', anchor: new Date(), emp: null, rows: [], leaves: [], loading: false, token: 0 };
   const range = () => {
     if (st.view === 'week') { const a = calWeekStart(st.anchor); return [a, calAdd(a, 6)]; }
@@ -5473,7 +5474,7 @@ function makeAttCalendar(p, opts){
     return icons.length ? { icons: icons.join(''), tip: tip.join('\n') } : null;
   }
   function cell(ds, inMonth, big){
-    const d = calDate(ds), today = calISO(new Date()), x = dayInfo(ds), emp = st.emp || {};
+    const d = calDate(ds), today = calISO(new Date()), x = dayInfo(ds), emp = st.emp || /** @type {Employee} */ ({});
     const weekend = (settings.weekendDays || []).includes(d.getDay()), hol = typeof holidayOn === 'function' ? holidayOn(ds) : null;
     const before = emp.employment_date && ds < emp.employment_date, after = emp.resignation_date && ds > emp.resignation_date;
     let body = '';
@@ -5505,7 +5506,7 @@ function makeAttCalendar(p, opts){
     const days = []; for (let d = new Date(a); d <= b; d = calAdd(d, 1)) if (big || d.getMonth() === month) days.push(calISO(d));
     const info = days.map(dayInfo), worked = info.filter(x => x.hours > 0 || x.in), noOut = info.filter(x => x.noOut).length;
     const total = info.reduce((s, x) => s + x.hours, 0), lvDays = info.filter(x => x.leave && /approved/i.test(x.leave.status || '')).length;
-    const today = calISO(new Date()), emp = st.emp || {};
+    const today = calISO(new Date()), emp = st.emp || /** @type {Employee} */ ({});
     const missing = days.filter((ds, i) => !info[i].rows.length && !info[i].leave && ds < today && isWorkday(ds)
                                      && !(emp.employment_date && ds < emp.employment_date) && !(emp.resignation_date && ds > emp.resignation_date)).length;
     $(p+'-sum').innerHTML = `<b>${worked.length}</b> day${worked.length === 1 ? '' : 's'} worked · <b>${esc(fmtHM(total))}</b> in total`
@@ -5545,7 +5546,7 @@ $('att-tab-cal').addEventListener('click', () => attTab(true));
 const SELF_CAL = makeAttCalendar('sc', {
   getEmp: () => (typeof SD !== 'undefined' && SD && SD.emp) || null,
   emptyText: 'Your employee record could not be found. Please contact HR.' });
-document.querySelector('[data-spage="att"]').addEventListener('click', () => SELF_CAL.load());
+document.querySelector('[data-spage="att"]')?.addEventListener('click', () => SELF_CAL.load());
 
 // ═════════════════════════════════════════════════════════
 //  HR ALERTS · ANNUAL LEAVE BALANCE · CERTIFICATES   (database: 47-leave-entitlement-hr-alerts.sql)
@@ -5647,7 +5648,7 @@ document.addEventListener('click', e => {
   const em = /** @type {PageEl} */ (e.target).closest('[data-hra-emp]'); if (em){ e.preventDefault(); return openEmp(em.dataset.hraEmp); }
   const b = /** @type {PageEl} */ (e.target).closest('[data-hra-act]'); if (!b) return;
   const a = hraFind(b.dataset.k); if (!a) return;
-  const act = b.dataset.hraAct, nm = `<b>${esc(a.name_en || a.name_ar || a.emp_id)}</b> (${esc(a.emp_id)})`;
+  const act = /** @type {string} */ (b.dataset.hraAct), nm = `<b>${esc(a.name_en || a.name_ar || a.emp_id)}</b> (${esc(a.emp_id)})`;
   HRA_PICK = { a, act };
   const info = {
     renew: `${nm}'s contract ends on <b>${esc(a.due)}</b>. Renewing sets the new contract <b>${esc(addDaysISO(a.due, 1))} → ${esc(addYearISO(a.due))}</b> (one year, ending the day before) on the employee record.`,
@@ -5871,7 +5872,7 @@ document.addEventListener('click', async e => {
     return confirmDel(`Remove the certificate “${c.name}”?`, async () => { await del('employee_certificates', c.id); if (c.file_path) await sb.storage.from('certificates').remove([c.file_path]);
       toast('Certificate removed'); renderCerts(editingEmp); loadHRAlerts().then(hraBadge); }); }
   const f = /** @type {PageEl} */ (e.target).closest('[data-cert-file]');
-  if (f){ e.preventDefault(); const { data, error } = await sb.storage.from('certificates').createSignedUrl(f.dataset.certFile, 600);
+  if (f){ e.preventDefault(); const { data, error } = await sb.storage.from('certificates').createSignedUrl(/** @type {string} */ (f.dataset.certFile), 600);
     if (error || !data) return toast(error ? error.message : 'Could not open the file', 'err'); window.open(data.signedUrl, '_blank'); }
 });
 $('cert-save').addEventListener('click', async () => {
@@ -5912,7 +5913,7 @@ saveEmp = async function(){ const r = await _saveEmp26.apply(this, arguments); L
 //  unchanged: for an HR officer, sb.from('employees') is routed here.
 // ═════════════════════════════════════════════════════════
 function officerEmpWrite(kind, rec){
-  const b = { ids:null,
+  const b = { ids: /** @type {string[] | null} */ (null),
     eq(c, v){ if (c === 'id') b.ids = [String(v)]; return b; },
     in(c, v){ if (c === 'id') b.ids = (v || []).map(String); return b; },
     select(){ return b; },
@@ -5996,8 +5997,9 @@ leaveHint = function(){ const r = _leaveHint27.apply(this, arguments);
 function contractEndPreview(ev){
   const f = k => document.querySelector(`#emp-form [data-f="${k}"]`);
   const type = f('contract_type'), start = f('contract_start_date'), end = f('contract_end_date'); if (!type || !start || !end) return;
-  let note = end.parentElement.querySelector('.ce-note');
-  if (!note){ note = document.createElement('div'); note.className = 'ce-note'; note.style.cssText = 'font-size:11px;margin-top:4px;color:var(--muted)'; end.parentElement.appendChild(note); }
+  const box = /** @type {HTMLElement} — the contract-end box always has a parent */ (end.parentElement);
+  let note = /** @type {HTMLElement | null} */ (box.querySelector('.ce-note'));
+  if (!note){ note = document.createElement('div'); note.className = 'ce-note'; note.style.cssText = 'font-size:11px;margin-top:4px;color:var(--muted)'; box.appendChild(note); }
   if (type.value === 'Permanent'){ note.textContent = 'Permanent contract — no end date and no renewal alert. Choose Temporary or Contract for a one-year contract.'; return; }
   if (start.value && (!end.value || end.dataset.auto === '1') && (ev && (ev.target === start || /** @type {PageEl} */ (ev.target) === type))){
     end.value = addYearISO(addDaysISO(start.value, -1)); end.dataset.auto = '1';          // 1 Sep 2026 → 31 Aug 2027
@@ -6139,7 +6141,7 @@ document.addEventListener('change', e => {
   const el = /** @type {PageEl} */ (e.target); if (!el.closest || !el.closest('#emp-form') || !el.dataset || !el.dataset.pick) return;
   if (el.value === PICK_OTHER) {
     const inp = document.createElement('input'); inp.type = 'text'; inp.dataset.f = el.dataset.f;
-    inp.placeholder = 'Type the new ' + (el.closest('.field').querySelector('label') || {}).textContent.toLowerCase() + '…';
+    inp.placeholder = 'Type the new ' + String((el.closest('.field')?.querySelector('label') || {}).textContent).toLowerCase() + '…';
     if (el.dir) inp.dir = el.dir; el.replaceWith(inp); inp.focus(); return;
   }
   if (el.dataset.pick === 'dept') {
@@ -6223,7 +6225,7 @@ document.addEventListener('click', async e => {
       }); }
   const cn = /** @type {PageEl} */ (e.target).closest('[data-doc-cancel]');
   if (cn) return confirmDel('Cancel this document request? The employee will no longer see it.', async () => {
-    const { error } = await sb.rpc('cancel_document_request', { p_id: cn.dataset.docCancel }); if (error) throw error;
+    const { error } = await sb.rpc('cancel_document_request', { p_id: /** @type {string} */ (cn.dataset.docCancel) }); if (error) throw error;
     toast('Request cancelled'); await loadDocRequests(); renderHRAlerts(); });
 });
 
@@ -6538,7 +6540,7 @@ async function sendSelfMission(){
   if (p && (!tf || !tt || tt <= tf)) return toast('The end time must be after the start time', 'warn');
   if (!pl) return toast('Write where the mission is', 'warn');
   const who = SMIS.assign ? [...document.querySelectorAll('.smis-w:checked')].map(c => c.value) : null;
-  if (SMIS.assign && !who.length) return toast('Choose at least one employee', 'warn');
+  if (SMIS.assign && !(who || []).length) return toast('Choose at least one employee', 'warn');
   const args = { p_from: f, p_to: to, p_time_from: tf, p_time_to: tt, p_place: pl, p_purpose: $('smis-pu').value.trim() || null, p_project: $('smis-pr').value.trim() || null };
   $('smis-go').disabled = true;
   const { error } = SMIS.assign ? await sb.rpc('assign_mission', { p_emps: who, ...args }) : await sb.rpc('request_mission', args);
@@ -6565,7 +6567,7 @@ document.addEventListener('click', e => {
   const ok = /** @type {PageEl} */ (e.target).closest('[data-smis-ok]'); if (ok) { ok.disabled = true; return smisRpc('manager_decide_mission', { p_id: ok.dataset.smisOk, p_approve: true }, 'Approved — sent to HR'); }
   const no = /** @type {PageEl} */ (e.target).closest('[data-smis-no]'); if (no) { const note = prompt('Reason for rejecting (the employee will see it):'); if (note === null) return; if (!note.trim()) return toast('Write the reason', 'warn');
     return smisRpc('manager_decide_mission', { p_id: no.dataset.smisNo, p_approve: false, p_note: note.trim() }, 'Rejected — the employee is notified'); }
-  const cx = /** @type {PageEl} */ (e.target).closest('[data-smis-cancel]'); if (cx) { const id = cx.dataset.smisCancel;
+  const cx = /** @type {PageEl} */ (e.target).closest('[data-smis-cancel]'); if (cx) { const id = /** @type {string} */ (cx.dataset.smisCancel);
     confirmDel('Cancel this mission?', async () => { const { error } = await sb.rpc('cancel_mission', { p_id: id }); if (error) throw new Error(error.message.replace(/^[A-Z_]+:\s*/, '')); toast('Mission cancelled'); await loadSelf(); });
     $('del-title').textContent = 'Please confirm'; $('del-ok').textContent = 'Cancel mission'; }
 });
@@ -6684,8 +6686,8 @@ function birthFromNid(nid){
 document.addEventListener('input', e => {
   const f = /** @type {PageEl} */ (e.target).closest && /** @type {PageEl} */ (e.target).closest('#emp-form [data-f="national_id"]'); if (!f) return;
   const b = document.querySelector('#emp-form [data-f="birth_date"]'); if (!b) return;
-  const v = birthFromNid(f.value), field = b.closest('.field');
-  let note = field.querySelector('.bd-note');
+  const v = birthFromNid(f.value), field = /** @type {PageEl} — the birth-date box always sits in a .field */ (b.closest('.field'));
+  let note = /** @type {HTMLElement | null} */ (field.querySelector('.bd-note'));
   if (v && (!b.value || b.dataset.auto === '1')) {
     b.value = v; b.dataset.auto = '1';
     if (!note) { note = document.createElement('div'); note.className = 'bd-note'; note.style.cssText = 'font-size:11px;color:var(--muted);margin-top:4px'; field.appendChild(note); }
@@ -6694,7 +6696,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('input', e => {                    // HR typed the birth date himself → stop auto-filling it
   const b = /** @type {PageEl} */ (e.target).closest && /** @type {PageEl} */ (e.target).closest('#emp-form [data-f="birth_date"]'); if (!b) return;
-  delete b.dataset.auto; const n = b.closest('.field').querySelector('.bd-note'); if (n) n.textContent = '';
+  delete b.dataset.auto; const n = b.closest('.field')?.querySelector('.bd-note'); if (n) n.textContent = '';
 });
 REPORTS.push({ id:'emp-birth-id', g:'HR', t:'Birth date different from national ID',
   d:'Employees whose recorded birth date does not match the date written in their Egyptian national ID (digits 2–7). Check the ID card: either the birth date or the ID number was typed wrong. A wrong birth date affects the leave entitlement at age 50, the first-sign-in question and the birthday greeting.',
@@ -6702,7 +6704,7 @@ REPORTS.push({ id:'emp-birth-id', g:'HR', t:'Birth date different from national 
     const rows = (S.employees || []).map(e => ({ e, idb: birthFromNid(e.national_id) }))
       .filter(x => x.idb && x.e.birth_date && String(x.e.birth_date).slice(0, 10) !== x.idb)
       .map(({ e, idb }) => ({ code:e.id, name:empName(e), status:e.status, department:e.department, rec:String(e.birth_date).slice(0, 10), idb,
-        diff: String(e.birth_date).slice(0, 4) !== idb.slice(0, 4) ? 'Year differs' : String(e.birth_date).slice(5, 7) !== idb.slice(5, 7) ? 'Month differs' : 'Day differs' }));
+        diff: String(e.birth_date).slice(0, 4) !== /** @type {string} — rows without one were filtered out */ (idb).slice(0, 4) ? 'Year differs' : String(e.birth_date).slice(5, 7) !== /** @type {string} */ (idb).slice(5, 7) ? 'Month differs' : 'Day differs' }));
     return { cols:[C('code','Code','id'),C('name','Employee','strong'),C('status','Status'),C('department','Department'),
         C('rec','Recorded birth date','date'),C('idb','Birth date in the national ID','date'),C('diff','Difference')],
       rows: rows.sort((a, b) => String(a.code).localeCompare(String(b.code), undefined, { numeric:true })) };
@@ -6777,14 +6779,14 @@ function employeeMissing(r, withPay){
 function empFormRecord(){
   const e = editingEmp ? (empOrBlank(editingEmp)) : /** @type {Employee} */ ({}), r = { ...e };
   document.querySelectorAll('#emp-form [data-f]').forEach(el => {
-    const k = el.dataset.f, def = EMP_FIELDS.flatMap(s => s[1]).find(f => f[0] === k);
+    const k = /** @type {string} */ (el.dataset.f), def = EMP_FIELDS.flatMap(s => s[1]).find(f => f[0] === k);
     r[k] = def && def[2] === 'bool' ? el.value === 'Yes' : el.value;
   });
   r.top_of_org = !!($('emp-top') && $('emp-top').checked);
   return r;
 }
 function reqMark(){
-  REQ_ALWAYS.forEach(([k]) => { const f = document.querySelector(`#emp-form [data-f="${k}"]`), lab = f && f.closest('.field').querySelector('label');
+  REQ_ALWAYS.forEach(([k]) => { const f = document.querySelector(`#emp-form [data-f="${k}"]`), lab = f && f.closest('.field')?.querySelector('label');
     if (lab && !lab.querySelector('.req')) lab.insertAdjacentHTML('beforeend', ' <span class="req" style="color:var(--danger,#d33)">*</span>'); });
 }
 const _openEmpReq = openEmp;
@@ -6803,14 +6805,15 @@ const _saveEmpReq = saveEmp;
 saveEmp = async function(){
   const pe = document.querySelector('#emp-form [data-f="personal_email"]');
   if (pe) { pe.value = pe.value.replace(/\s/g, '').toLowerCase();
-    if (pe.value && !/^[^@]+@[^@]+\.[a-z]{2,}$/.test(pe.value)) { pe.closest('.field').classList.add('req-miss'); pe.focus();
+    if (pe.value && !/^[^@]+@[^@]+\.[a-z]{2,}$/.test(pe.value)) { pe.closest('.field')?.classList.add('req-miss'); pe.focus();
       return toast('The personal e-mail is not a valid e-mail address (example: name@gmail.com)', 'warn'); } }
   const miss = employeeMissing(empFormRecord(), !isOfficer());
   document.querySelectorAll('#emp-form .field.req-miss').forEach(f => f.classList.remove('req-miss'));
   if (miss.length) {
     /** @type {PageEl | null} */ let first = null;
-    miss.forEach(([k]) => { const el = document.querySelector(`#emp-form [data-f="${k}"]`); if (el) { el.closest('.field').classList.add('req-miss'); first = first || el; } });
-    if (first) { first.focus(); first.scrollIntoView && first.scrollIntoView({ block:'center' }); }
+    miss.forEach(([k]) => { const el = document.querySelector(`#emp-form [data-f="${k}"]`); if (el) { el.closest('.field')?.classList.add('req-miss'); first = first || el; } });
+    const fst = /** @type {PageEl | null} — set inside forEach above */ (first);
+    if (fst) { fst.focus(); fst.scrollIntoView && fst.scrollIntoView({ block:'center' }); }
     return toast(`Fill in before saving (${miss.length}): ${miss.map(x => x[1]).join(', ')}`, 'warn');
   }
   return _saveEmpReq.apply(this, arguments);
@@ -7147,7 +7150,7 @@ function taDay(d, m, D){
     state = open && d === today ? 'in' : open ? 'no check-out' : 'present';
     if (!weekend && !hol && !m.exempt && rec.some(r => r.status === 'Present')) {
       const lim = taMin(R.lateAfter), eve = taMin(R.eveningShiftAfter), fi = taMin(firstIn);
-      if (fi != null && fi < eve) late = Math.max(0, fi - lim);
+      if (fi != null && fi < (eve ?? 0)) late = Math.max(0, fi - (lim ?? 0));   // a missing rule time counts as 00:00 (as before)
       if (!open && !flags.length) short = Math.max(0, Math.round((num(R.hoursPerDay) - hours) * 60) - late);
     }
     if (ms.some(x => !x.time_from)) { late = 0; short = 0; }        // a full-day mission excuses the day

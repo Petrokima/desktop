@@ -183,7 +183,6 @@ body.is-officer :is([data-page="payroll"],[data-page="history"],[data-page="loan
 body:not(.can-hr):not(.can-pay) .ro-var{display:block}
 body:not(.can-set) :is(#set-save,#pay-approve,[data-act="goto-current"]){display:none!important}
 .ro-set-inline{display:none} body:not(.can-set) .ro-set-inline{display:inline}
-body:not(.can-hr):not(.can-master) :is(#rl-assign,#rl-mgr){display:none!important}   /* HR officers assign managers too (49) */
 body:not(.can-admin) .admin-only{display:none!important}
 .ro-note{display:none;font-size:12px;color:var(--warn);margin-top:4px}
 body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set{display:block}
@@ -515,22 +514,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div class="page" id="page-hrreq"><div id="react-hrreq"></div></div>
 
 <!-- REPORTING LINES -->
-<div class="page" id="page-reporting">
-  <div class="page-header"><div><div class="page-title">Reporting lines</div><div class="page-sub" id="rl-sub"></div></div></div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title" id="rl-none-title">Employees without a direct manager</span>
-      <div class="toolbar-right">
-        <input class="inp" id="rl-q" placeholder="Name, code or job…"><select class="sel" id="rl-dept"><option value="">All departments</option></select>
-        <input class="inp" id="rl-mgr" list="dl-emp-mgr" placeholder="Manager to assign…" style="width:230px">
-        <button class="btn btn-primary btn-sm" id="rl-assign" disabled>Assign to selected</button></div></div>
-    <div class="tbl-wrap" style="max-height:420px;overflow-y:auto"><table><thead><tr><th style="width:32px"><input type="checkbox" id="rl-all" title="Select all shown"></th><th>Code</th><th>Arabic name</th><th>English name</th><th>Department</th><th>Unit</th><th>Job</th></tr></thead><tbody id="rl-none"></tbody></table></div>
-    <div class="foot">Tick employees (or tick the header box to select everyone shown), choose their manager, then click Assign. The Chairman or anyone else at the top is marked “Top of the organisation” on their employee record.</div>
-  </div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title">Managers and their direct teams</span><div class="toolbar-right"><input class="inp" id="rl-mq" placeholder="Search manager…"></div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Manager</th><th>Job</th><th>Department</th><th class="num">Direct reports</th><th>Team</th></tr></thead><tbody id="rl-teams"></tbody></table></div>
-  </div>
-</div>
+<div class="page" id="page-reporting"><div id="react-reporting"></div></div>
 
 <!-- PAYROLL HISTORY -->
 <div class="page" id="page-history">
@@ -1349,6 +1333,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=6cd10d68a043"></script>
-<script src="react.js?v=c4672b7343d3"></script>
+<script src="app.js?v=ad797d304a88"></script>
+<script src="react.js?v=e182c68c450f"></script>
 </body></html>

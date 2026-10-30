@@ -453,7 +453,7 @@ function buildLists(){
   const depts = [...new Set(S.employees.map(e=>e.department).filter(Boolean))].sort();
   const units = [...new Set(S.employees.map(e=>e.unit).filter(Boolean))].sort();
   const dOpts = '<option value="">All departments</option>' + depts.map(d=>`<option>${esc(d)}</option>`).join('');
-  ['emp-dept','mon-dept','pay-dept','rep-dept','rl-dept','loan-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
+  ['emp-dept','mon-dept','pay-dept','rep-dept','loan-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
   const uv=$('emp-unit').value; $('emp-unit').innerHTML='<option value="">All units</option>'+units.map(u=>`<option>${esc(u)}</option>`).join(''); $('emp-unit').value=uv;
   const mEls = S.elements.filter(e => e.input_method==='Monthly' && e.active!==false);
   const mv=$('mon-el').value;
@@ -2571,54 +2571,19 @@ function renderLocks(){
 }
 
 // ═════════════════════════════════════════════════════════
-//  REPORTING LINES
+//  REPORTING LINES — moved to React 30 Oct 2026 (react/src/reporting). The old code keeps the 🧭 menu badge and the step after a change.
 // ═════════════════════════════════════════════════════════
-let rlSel = new Set();
 function renderReporting(){
-  const act = activeEmps(), q=$('rl-q').value.trim().toLowerCase(), d=$('rl-dept').value;
-  const none = act.filter(e => !e.manager_id && !e.top_of_org);
-  const shown = none.filter(e => orgMatch(e,'rl') && (!q || [e.id,e.name_ar,e.name_en,e.job_name].some(v=>String(v||'').toLowerCase().includes(q))));
-  rlSel = new Set([...rlSel].filter(id => none.some(e=>String(e.id)===id)));
-  const b=$('rl-badge'); b.style.display = none.length ? '' : 'none'; b.textContent = none.length;
-  $('rl-sub').textContent = `${act.length - none.length} of ${act.length} active employees have a direct manager${none.length?` · ${none.length} still to assign`:' ✓'}`;
-  $('rl-none-title').textContent = `Employees without a direct manager (${none.length})`;
-  $('rl-none').innerHTML = shown.slice(0,500).map(e => `<tr><td><input type="checkbox" data-rl="${esc(e.id)}" ${rlSel.has(String(e.id))?'checked':''}></td><td class="mono">${esc(e.id)}</td>
-    <td class="ar">${esc(e.name_ar)}</td><td class="strong">${esc(e.name_en)}</td><td>${esc(e.department)}</td><td>${esc(e.unit)}</td><td>${esc(e.job_name)}</td></tr>`).join('')
-    || `<tr><td colspan="7" class="empty">${none.length ? 'No employees match these filters' : 'Every active employee has a direct manager ✓'}</td></tr>`;
-  $('rl-all').checked = shown.length>0 && shown.every(e=>rlSel.has(String(e.id)));
-  $('rl-assign').disabled = !rlSel.size; $('rl-assign').textContent = rlSel.size ? `Assign to selected (${rlSel.size})` : 'Assign to selected';
-  // teams
-  const mq=$('rl-mq').value.trim().toLowerCase(), teams={};
-  act.forEach(e => { if (e.manager_id) (teams[e.manager_id] = teams[e.manager_id] || []).push(e); });
-  const rows = Object.entries(teams).map(([mid, L]) => ({ m: empById(mid) || /** @type {Employee} */ ({ id:mid }), L }))
-    .filter(x => !mq || [x.m.id, x.m.name_en, x.m.name_ar, x.m.job_name].some(v=>String(v||'').toLowerCase().includes(mq)))
-    .sort((a,b)=>b.L.length-a.L.length);
-  $('rl-teams').innerHTML = rows.map(x => `<tr><td class="mono">${esc(x.m.id)}</td><td class="strong">${esc(empName(x.m))}</td><td>${esc(x.m.job_name||'')}</td><td>${esc(x.m.department||'')}</td>
-    <td class="num">${x.L.length}</td><td style="white-space:normal;max-width:420px;font-size:12px;color:var(--label)">${x.L.slice(0,12).map(e=>esc(empName(e))).join(', ')}${x.L.length>12?` … +${x.L.length-12}`:''}</td></tr>`).join('')
-    || '<tr><td colspan="6" class="empty">No reporting lines yet</td></tr>';
+  const n = activeEmps().filter(e => !e.manager_id && !e.top_of_org).length;
+  const b=$('rl-badge'); b.style.display = n ? '' : 'none'; b.textContent = String(n);
+  if (typeof PKR !== 'undefined') PKR.render();
 }
-async function assignManager(){
-  const mid = String($('rl-mgr').value||'').split(' — ')[0].trim(), m = empById(mid);
-  if (!m) return toast('Choose the manager from the suggestions','warn');
-  const ids = [...rlSel].filter(id => id !== mid);
-  if (!ids.length) return toast('Select at least one employee (a manager cannot report to themselves)','warn');
-  const b=$('rl-assign'); b.disabled=true; b.textContent='Assigning…';
-  try {
-    let changed = 0;
-    await chunked(ids, async chunk => { const r = await sb.from('employees').update({ manager_id:mid, top_of_org:false }).in('id', chunk).select('id'); changed += (r.data||[]).length; return r; }, 100);
-    if (!changed) throw new Error(NOPERM);
-    S.employees.forEach(e => { if (ids.includes(String(e.id))) { e.manager_id = mid; e.top_of_org = false; } });
-    rlSel.clear(); $('rl-mgr').value='';
-    renderReporting(); renderEmployees(); renderReports();
-    toast(`${changed} employee${changed>1?'s':''} now report${changed>1?'':'s'} to ${empName(m)}`);
-  } catch(e){ toast(String(e.message).replace(/^.*?(This would create|An employee cannot)/,'$1'),'err'); }
-  b.disabled=false; renderReporting();
+/** the React page gave these employees a manager → keep the loaded data and redraw what uses it
+ * @param {string[]} ids @param {string} mid */
+function managerAssigned(ids, mid){
+  S.employees.forEach(e => { if (ids.includes(String(e.id))) { e.manager_id = mid; e.top_of_org = false; } });
+  renderReporting(); renderEmployees(); renderReports();
 }
-$('rl-none').addEventListener('change', e => { const c=/** @type {PageEl} */ (e.target).closest('[data-rl]'); if(!c) return; c.checked?rlSel.add(c.dataset.rl):rlSel.delete(c.dataset.rl); renderReporting(); });
-$('rl-all').addEventListener('change', e => { document.querySelectorAll('[data-rl]').forEach(c=>{ /** @type {HTMLInputElement} */ (e.target).checked?rlSel.add(c.dataset.rl):rlSel.delete(c.dataset.rl); }); renderReporting(); });
-['rl-q','rl-mq'].forEach(id=>$(id).addEventListener('input', renderReporting));
-$('rl-dept').addEventListener('change', renderReporting);
-$('rl-assign').addEventListener('click', assignManager);
 
 // ═════════════════════════════════════════════════════════
 //  WARN WHEN TODAY IS OUTSIDE THE PERIOD ON SCREEN
@@ -3226,7 +3191,7 @@ $('aa-q').addEventListener('input', renderApprovals);
 //  DEPARTMENT + UNIT FILTERS — on every page that lists employees
 // ═════════════════════════════════════════════════════════
 const ORG_PAGES = { emp:()=>renderEmployees(), att:()=>renderAttendance(), pn:()=>renderPenalties(),
-  rl:()=>renderReporting(), mon:()=>renderMonthly(), pay:()=>renderPayroll(), aa:()=>renderApprovals(),
+  mon:()=>renderMonthly(), pay:()=>renderPayroll(), aa:()=>renderApprovals(),
   hs:()=>renderHistLines(), as:()=>renderAssign(), loan:()=>renderLoans(), rep:()=>{ if (repCur) runReport(); } };
 // does this employee match the department and unit chosen on page p?
 function orgMatch(e, p){

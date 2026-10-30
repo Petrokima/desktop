@@ -2380,12 +2380,12 @@ function renderUsers(){
 }
 async function createLogins(){
   const temp=$('us-temp').value, onlyTxt=$('us-only').value.trim(), only = onlyTxt ? onlyTxt.split(' — ')[0].trim() : null;
-  if (temp && temp.length < 8) return toast('A typed temporary password must be at least 8 characters — or leave the box empty to use Petro@ + last 4 digits of the national ID','warn');
+  if (temp && temp.length < 8) return toast('A typed temporary password must be at least 8 characters — or leave the box empty to use the standard first password (HR procedure)','warn');
   if (only && !empById(only)) return toast(`Employee "${only}" not found`,'warn');
   const withLogin = new Set(USERS.map(u=>String(u.emp_id||'')).filter(Boolean));
   const waiting = only ? 1 : S.employees.filter(e=>e.status!=='Inactive' && !withLogin.has(String(e.id))).length;
   const target = only ? `employee ${only}` : `${waiting} active employee${waiting===1?'':'s'} without a login`;
-  confirmDel(`Create logins for ${target}? New logins start switched OFF: tick “Active” for an employee when you give him his login. They will sign in with their employee code and ${temp ? 'the temporary password you typed' : 'Petro@ + the last 4 digits of their national ID (employees without a national ID are skipped)'}, then must choose their own password. Logins are created in batches of 25 — keep this window open until it finishes.`, async () => {
+  confirmDel(`Create logins for ${target}? New logins start switched OFF: tick “Active” for an employee when you give him his login. They will sign in with their employee code and ${temp ? 'the temporary password you typed' : 'the standard first password from the HR procedure (employees without a national ID are skipped)'}, then must choose their own password. Logins are created in batches of 25 — keep this window open until it finishes.`, async () => {
     const b=$('us-create'); b.disabled=true; let total=0, rounds=0;
     try{
       while (rounds++ < 200){
@@ -2409,9 +2409,9 @@ async function createLogins(){
 async function resetUser(tr){
   const u=USERS.find(x=>x.id===tr.dataset.uid), temp=$('us-temp').value;
   if (temp && temp.length < 8) { $('us-temp').focus(); return toast('A typed temporary password must be at least 8 characters — or leave the box empty','warn'); }
-  confirmDel(`Reset ${u.email}? ${temp ? 'Their password becomes the one you typed.' : 'Their password goes back to Petro@ + the last 4 digits of their national ID.'} They must choose a new password at next sign-in.`, async () => {
+  confirmDel(`Reset ${u.email}? ${temp ? 'Their password becomes the one you typed.' : 'Their password goes back to the standard first password (HR procedure).'} They must choose a new password at next sign-in.`, async () => {
     const { error } = await sb.rpc('admin_reset_password', { p_user:u.id, p_temp: temp || null });
-    if (error) throw error; toast(`${u.email} reset — ${temp ? 'tell them the temporary password' : 'they sign in with Petro@ + last 4 digits of their national ID'}`); await loadUsers();
+    if (error) throw error; toast(`${u.email} reset — ${temp ? 'tell them the temporary password' : 'they sign in with the standard first password (HR procedure)'}`); await loadUsers();
   });
   $('del-title').textContent='Please confirm'; $('del-ok').textContent='Reset'; $('del-ok').className='btn btn-danger';
 }

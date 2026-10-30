@@ -174,7 +174,6 @@ body:not(.can-pay) :is(#cc-save,#cc-reset){display:none!important}
 body:not(.can-hr) .nav-item:is([data-page="news"],[data-page="voice"]){display:none!important}
 body:not(.can-hr):not(.can-pay):not(.can-master) .nav-item[data-page="bulk"]{display:none!important}
 body:not(.can-hr):not(.can-master) :is([data-act="new-emp"],#emp-save){display:none!important}   /* HR officers edit master data too (49) */
-body:not(.can-hr) :is(#aa-send,#aa-approve-all,[data-aa-ok],[data-aa-no],[data-aa-resend]){display:none!important}
 body.is-officer :is([data-page="payroll"],[data-page="history"],[data-page="loans"],[data-page="settings"],.no-officer){display:none!important}
 body:not(.can-hr):not(.can-pay) .ro-var{display:block}
 body:not(.can-set) :is(#set-save,#pay-approve,[data-act="goto-current"]){display:none!important}
@@ -644,21 +643,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div class="page" id="page-parrules"><div id="react-parrules"></div></div>
 
 <!-- ALLOWANCE APPROVALS -->
-<div class="page" id="page-approvals">
-  <div class="page-header"><div><div class="page-title">Allowance approvals</div>
-    <div class="page-sub" id="aa-sub">Automatic Project Allowance is paid only after the employee's direct manager and then HR have both approved it</div></div>
-    <div class="btn-group"><button class="btn btn-ghost" id="aa-approve-all">✔ Approve all waiting for HR</button><button class="btn btn-primary" id="aa-send">📤 Send this cycle for approval</button></div></div>
-  <div id="aa-missing"></div>
-  <div class="stats" id="aa-stats"></div>
-  <div id="aa-nomgr"></div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title">Employees with an automatic allowance this cycle</span>
-      <div class="toolbar-right"><select class="sel" id="aa-status"><option value="">All</option><option value="Not sent">Not sent</option><option value="Pending manager">Waiting for manager</option><option value="Pending HR">Waiting for HR</option><option value="Approved">Approved</option><option value="Rejected">Rejected</option><option value="changed">Changed since sent</option></select>
-        <input class="inp" id="aa-q" placeholder="Search…"></div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Direct manager</th><th>Working</th><th class="num">Calculated now</th><th class="num">Sent / approved</th><th>Status</th><th>Manager</th><th>HR</th><th></th></tr></thead><tbody id="aa-tbl"></tbody></table></div>
-    <div class="foot" id="aa-foot"></div>
-  </div>
-</div>
+<div class="page" id="page-approvals"><div id="react-approvals"></div></div>
 
 <!-- EXCEPTION RULE -->
 <div class="page" id="page-exempt"><div id="react-exempt"></div></div>
@@ -1213,6 +1198,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=c213de7adfb3"></script>
-<script src="react.js?v=eee387fd1bd7"></script>
+<script src="app.js?v=1565fcbf487e"></script>
+<script src="react.js?v=741bb8770942"></script>
 </body></html>

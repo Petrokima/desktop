@@ -2867,7 +2867,6 @@ function aaCalculated(){                       // every employee with an automat
     return { emp:e, amount, details };
   }).filter(x => x.amount > 0);
 }
-const aaWorking = d => (d||[]).map(x => `${x.days}d × ${fmt(x.rate)} @ ${x.project}`).join(' + ');
 const aaSame = (a, b) => Math.abs(num(a) - num(b)) < 0.005;
 function aaRows(){
   const calc = new Map(aaCalculated().map(x => [String(x.emp.id), x]));
@@ -2877,96 +2876,22 @@ function aaRows(){
   rows.forEach(r => { r.state = r.rec ? r.rec.status : 'Not sent'; r.changed = !!r.rec && !aaSame(r.rec.amount, r.calc.amount); });
   return rows;
 }
-function renderApprovals(){
-  $('aa-missing').innerHTML = apprTableMissing ? '<div class="alert a-warn">The approvals table does not exist yet. Run <b>allowance-approvals.sql</b>, then click ⟳ Refresh.</div>' : '';
-  if (currentRun()) { $('aa-sub').textContent = `${periodLabel(settings.period)} is approved and locked — its allowances are final`; }
-  const rows = aaRows(), st = $('aa-status').value, q = $('aa-q').value.trim().toLowerCase();
-  const count = s => rows.filter(r => r.state===s).length, sum = s => rows.filter(r => r.state===s).reduce((t,r) => t + num(r.rec ? r.rec.amount : r.calc.amount), 0);
-  const card = (l, n, v, sub) => `<div class="stat"><div class="stat-label">${l}</div><div class="stat-value">${n}</div><div class="stat-sub">${sub || fmt(v) + ' EGP'}</div></div>`;
-  $('aa-stats').innerHTML = card('Not sent yet', count('Not sent'), sum('Not sent')) + card('Waiting for manager', count('Pending manager'), sum('Pending manager'))
-    + card('Waiting for HR', count('Pending HR'), sum('Pending HR')) + card('Approved — will be paid', count('Approved'), sum('Approved')) + card('Rejected', count('Rejected'), sum('Rejected'));
-  const noMgr = rows.filter(r => r.state==='Not sent' && !r.emp.manager_id);
-  $('aa-nomgr').innerHTML = noMgr.length ? `<div class="alert a-warn">⚠ <b>${noMgr.length}</b> employee${noMgr.length>1?'s have':' has'} no direct manager, so ${noMgr.length>1?'their allowances':'the allowance'} cannot be sent: <b>${noMgr.slice(0,12).map(r => esc(r.emp.id + ' ' + empName(r.emp))).join(', ')}</b>${noMgr.length>12?' …':''}. Set the manager on <a href="#" data-nav="reporting" style="color:var(--link)">Reporting lines</a>.</div>` : '';
-  const chipFor = r => r.state==='Not sent' ? '<span class="chip c-grey">Not sent</span>' : r.state==='Pending manager' ? '<span class="chip c-orange">Waiting for manager</span>'
-    : r.state==='Pending HR' ? '<span class="chip c-blue">Waiting for HR</span>' : r.state==='Approved' ? '<span class="chip c-green">Approved</span>' : '<span class="chip c-red">Rejected</span>';
-  const list = rows.filter(r => orgMatch(r.emp,'aa') && (!st || (st==='changed' ? r.changed : r.state===st)) && (!q || [r.emp.id, empName(r.emp), r.rec && r.rec.emp_name].some(v => String(v||'').toLowerCase().includes(q))))
-    .sort((a,b) => ['Pending HR','Not sent','Pending manager','Rejected','Approved'].indexOf(a.state) - ['Pending HR','Not sent','Pending manager','Rejected','Approved'].indexOf(b.state) || String(a.emp.id).localeCompare(String(b.emp.id), undefined, { numeric:true }));
-  const locked = !!currentRun(), mine = id => ME && ME.emp_id && String(ME.emp_id)===String(id);
-  $('aa-tbl').innerHTML = list.map(r => { const a = r.rec, m = empById((a && a.manager_id) || r.emp.manager_id);
-    const act = locked ? '' : r.state==='Pending HR' && !mine(r.emp.id) ? `<button class="btn btn-success btn-sm" data-aa-ok="${a.id}">Approve</button> <button class="btn btn-ghost btn-sm" data-aa-no="${a.id}">Reject</button>`
-      : (r.changed || r.state==='Rejected') && r.calc.amount > 0 && r.emp.manager_id ? `<button class="btn btn-ghost btn-sm" data-aa-resend="${esc(r.emp.id)}" title="Send the current amount to the manager again">↻ Re-send</button>` : '';
-    return `<tr><td class="strong">${esc(empName(r.emp) || (a && a.emp_name) || r.emp.id)} <span class="mono" style="color:var(--muted)">${esc(r.emp.id)}</span></td>
-      <td>${m ? esc(empName(m)) : '<span class="neg">none</span>'}</td><td style="font-size:12px;color:var(--label);white-space:normal;min-width:180px">${esc(aaWorking(r.calc.details))}</td>
-      <td class="num">${fmt(r.calc.amount)}</td><td class="num strong">${a ? fmt(a.amount) : '—'}${r.changed ? ' <span class="chip c-orange" title="Attendance changed after it was sent">changed</span>' : ''}</td>
-      <td>${chipFor(r)}</td>
-      <td style="font-size:12px;white-space:normal;min-width:120px">${a && a.manager_at ? `${esc(a.manager_by||'')} · ${esc(String(a.manager_at).slice(0,10))}${a.manager_note?`<br>💬 ${esc(a.manager_note)}`:''}` : ''}</td>
-      <td style="font-size:12px;white-space:normal;min-width:120px">${a && a.hr_at ? `${esc(a.hr_by||'')} · ${esc(String(a.hr_at).slice(0,10))}${a.hr_note?`<br>💬 ${esc(a.hr_note)}`:''}` : ''}</td>
-      <td style="white-space:nowrap">${act}${mine(r.emp.id) && r.state==='Pending HR' ? '<span style="font-size:11px;color:var(--muted)">another HR user must approve your own</span>' : ''}</td></tr>`; }).join('')
-    || '<tr><td colspan="9" class="empty">No automatic allowances this cycle. Add rules on the Project allowance rules page.</td></tr>';
-  $('aa-foot').textContent = `${list.length} shown · only “Approved” amounts are paid, exactly as approved`;
-  $('aa-send').disabled = locked; $('aa-approve-all').disabled = locked || !count('Pending HR');
-}
-async function aaSend(){
-  if (currentRun()) return toast('This payroll month is approved and locked','warn');
-  const by = (ME && (ME.full_name || ME.email)) || 'HR';
-  const rows = aaRows(), inserts = [], resends = [];
-  rows.forEach(r => {
-    if (!r.calc.amount || !r.emp.manager_id) return;
-    const base = { emp_id:String(r.emp.id), emp_name: empName(r.emp), job_name: r.emp.job_name || null, period: settings.period, amount: r.calc.amount, details: r.calc.details, manager_id: r.emp.manager_id, submitted_by: by };
-    if (!r.rec) inserts.push({ ...base, status:'Pending manager' });
-    else if (r.rec.status==='Pending manager' && (r.changed || String(r.rec.manager_id)!==String(r.emp.manager_id))) resends.push({ id:r.rec.id, rec:base });
-  });
-  const skipped = rows.filter(r => !r.rec && r.calc.amount && !r.emp.manager_id).length;
-  const later = rows.filter(r => r.rec && r.rec.status!=='Pending manager' && r.changed).length;
-  if (!inserts.length && !resends.length) return toast(`Nothing new to send${skipped ? ` · ${skipped} without a direct manager` : ''}${later ? ` · ${later} changed after a decision — use ↻ Re-send on those rows` : ''}`, 'warn');
-  confirmDel(`Send ${inserts.length + resends.length} allowance${inserts.length+resends.length>1?'s':''} to the employees' direct managers for approval? (${fmt(inserts.concat(resends.map(x=>x.rec)).reduce((s,x)=>s+num(x.amount),0))} EGP)`, async () => {
-    if (inserts.length) await chunked(inserts, c => sb.from('allowance_approvals').insert(c), 200);
-    for (const x of resends){ const { error } = await sb.from('allowance_approvals').update({ ...x.rec, status:'Pending manager' }).eq('id', x.id); if (error) throw error; }
-    S.allowAppr = await fetchAll('allowance_approvals','emp_id', q => q.eq('period', settings.period));
-    renderApprovals(); renderDashboard();
-    toast(`${inserts.length + resends.length} sent to managers${skipped ? ` · ${skipped} not sent (no direct manager)` : ''}`);
-  });
-  $('del-title').textContent='Please confirm'; $('del-ok').textContent='Send'; $('del-ok').className='btn btn-primary';
-}
-async function aaHrDecide(ids, approve, note){
-  const by = (ME && (ME.full_name || ME.email)) || 'HR';
-  const { data, error } = await sb.from('allowance_approvals').update({ status: approve ? 'Approved' : 'Rejected', hr_by:by, hr_at:new Date().toISOString(), hr_note: note || null }).in('id', ids).select();
-  if (error) return toast(error.message.replace(/^.*?(You cannot|HR can approve|Only the)/,'$1'),'err');
-  if (!(data && data.length)) return toast(NOPERM,'err');
-  data.forEach(d => { S.allowAppr = S.allowAppr.map(a => a.id===d.id ? d : a); });
+// The page moved to React 30 Oct 2026 (react/src/approvals). The old code keeps aaRows (above — also used by the payroll
+// approval window) and the step after a change.
+function renderApprovals(){ if (typeof PKR !== 'undefined') PKR.render(); }
+/** the period's approval rows read again after sending @param {AllowanceApproval[]} rows */
+function allowanceApprovalsReplaced(rows){ S.allowAppr = rows; renderApprovals(); renderDashboard(); }
+/** rows changed by an HR decision or a re-send @param {AllowanceApproval[]} rows */
+function allowanceApprovalsUpdated(rows){
+  rows.forEach(d => { S.allowAppr = S.allowAppr.map(a => a.id === d.id ? d : a); });
   renderApprovals(); renderDashboard(); DIRTY.add('payroll'); DIRTY.add('reports');
-  toast(`${data.length} allowance${data.length>1?'s':''} ${approve ? 'approved — included in the payroll' : 'rejected'}`);
 }
-async function aaResend(empId){
-  const r = aaRows().find(x => String(x.emp.id)===String(empId)); if (!r || !r.rec) return;
-  const by = (ME && (ME.full_name || ME.email)) || 'HR';
-  const { data, error } = await sb.from('allowance_approvals').update({ status:'Pending manager', amount:r.calc.amount, details:r.calc.details, manager_id:r.emp.manager_id,
-    emp_name: empName(r.emp), submitted_by:by, submitted_at:new Date().toISOString() }).eq('id', r.rec.id).select();
-  if (error) return toast(error.message,'err'); if (!(data && data.length)) return toast(NOPERM,'err');
-  S.allowAppr = S.allowAppr.map(a => a.id===data[0].id ? data[0] : a); renderApprovals(); renderDashboard(); DIRTY.add('payroll');
-  toast(`${empName(r.emp)}: ${fmt(r.calc.amount)} sent to the manager again`);
-}
-$('aa-send').addEventListener('click', aaSend);
-$('aa-approve-all').addEventListener('click', () => {
-  const ids = S.allowAppr.filter(a => a.status==='Pending HR' && !(ME && ME.emp_id && String(ME.emp_id)===String(a.emp_id))).map(a => a.id);
-  if (!ids.length) return toast('Nothing is waiting for HR (your own allowance must be approved by another HR user)','warn');
-  const tot = S.allowAppr.filter(a => ids.includes(a.id)).reduce((s,a) => s + num(a.amount), 0);
-  confirmDel(`Approve ${ids.length} allowance${ids.length>1?'s':''} already approved by the managers (${fmt(tot)} EGP)?`, () => aaHrDecide(ids, true));
-  $('del-title').textContent='Please confirm'; $('del-ok').textContent='Approve all'; $('del-ok').className='btn btn-success';
-});
-$('aa-tbl').addEventListener('click', e => {
-  const ok = /** @type {PageEl} */ (e.target).closest('[data-aa-ok]'); if (ok) return aaHrDecide([ok.dataset.aaOk], true);
-  const no = /** @type {PageEl} */ (e.target).closest('[data-aa-no]'); if (no) { const note = prompt('Reason for rejecting (the employee\'s manager and HR will see it):'); if (note === null) return; return aaHrDecide([no.dataset.aaNo], false, note.trim() || 'Rejected by HR'); }
-  const rs = /** @type {PageEl} */ (e.target).closest('[data-aa-resend]'); if (rs) return aaResend(rs.dataset.aaResend);
-});
-['aa-status'].forEach(id => $(id).addEventListener('change', renderApprovals));
-$('aa-q').addEventListener('input', renderApprovals);
 
 // ═════════════════════════════════════════════════════════
 //  DEPARTMENT + UNIT FILTERS — on every page that lists employees
 // ═════════════════════════════════════════════════════════
 const ORG_PAGES = { emp:()=>renderEmployees(), att:()=>renderAttendance(),
-  mon:()=>renderMonthly(), pay:()=>renderPayroll(), aa:()=>renderApprovals(),
+  mon:()=>renderMonthly(), pay:()=>renderPayroll(),
   rep:()=>{ if (repCur) runReport(); } };
 // does this employee match the department and unit chosen on page p?
 function orgMatch(e, p){

@@ -1,4 +1,3 @@
-// @ts-check — checked by TypeScript (tsconfig.json); keep it free of type errors
 // ═════════════════════════════════════════════════════════
 //  ERROR REPORTING (30 Oct 2026) — keep IDENTICAL in desktop/src/part0err.js and mobile/index.html (checked automatically)
 //  Unexpected errors on staff PCs and phones are reported to Sentry (EU), the standard error-monitoring service, through
@@ -48,7 +47,6 @@ const PK_ERR = (function(){
   };
 })();
 
-// @ts-check — checked by TypeScript (tsconfig.json); keep it free of type errors
 // ═════════════════════════════════════════════════════════
 //  STATE
 // ═════════════════════════════════════════════════════════
@@ -58,7 +56,7 @@ let sb = null;
  *          monthly: MonthlyEntry[], loans: Loan[], permissions: Permission[], leaves: Leave[], penalties: Penalty[], holidays: Holiday[],
  *          hrreq: HrRequest[], runs: PayrollRun[], runLines: PayrollRunLine[], clocks: ClockEvent[], devices: EmployeeDevice[],
  *          parRules: AllowanceRule[], allowAppr: AllowanceApproval[], phoneAlerts: PhoneAlert[], empProjects: EmployeeProject[],
- *          missions: Mission[], [more: string]: any }} */
+ *          missions: Mission[], undos?: Row<'checkout_undos'>[] }}   (undos: filled by part37) */
 const S = { employees:[], projects:[], attendance:[], elements:[], fixed:[], monthly:[], loans:[], permissions:[], leaves:[], penalties:[], holidays:[], hrreq:[], runs:[], runLines:[], clocks:[], devices:[], parRules:[], allowAppr:[], phoneAlerts:[], empProjects:[], missions:[] };
 let permTableMissing = false, leaveTableMissing = false, penTableMissing = false, holTableMissing = false, hrTableMissing = false, runsTableMissing = false, parTableMissing = false, apprTableMissing = false, assignTableMissing = false;
 let holidaySet = new Set();
@@ -70,6 +68,7 @@ const DEFAULTS = {
   siRateEG:11, siRateSA:10,
   codeOT:5, codeSI:15, codeLoan:6, codeDelay:4, codePenalty:2
 };
+/** @type {typeof DEFAULTS & { calcRates?: any }} — company settings; calcRates = the payroll calculator's own rates (part21) */
 let settings = { ...DEFAULTS };
 let attDayFilter = null;   // null = whole range
 let ATT_RANGE = null;      // null = the current payroll cycle; otherwise { from, to, rows, clocks } loaded for viewing past attendance
@@ -470,7 +469,6 @@ function renderAll(){
   renderPageIfNeeded(currentPage());
 }
 
-// @ts-check — checked by TypeScript (tsconfig.json); keep it free of type errors
 // ═════════════════════════════════════════════════════════
 //  PAYROLL ENGINE
 // ═════════════════════════════════════════════════════════
@@ -819,7 +817,6 @@ function renderEmployees(){
   $('emp-foot').textContent = `Showing ${list.length} of ${S.employees.length}. Click any row to view or edit.`;
 }
 
-// @ts-check — checked by TypeScript (tsconfig.json); keep it free of type errors
 // ═════════════════════════════════════════════════════════
 //  EMPLOYEE MODAL
 // ═════════════════════════════════════════════════════════
@@ -1182,8 +1179,8 @@ function renderMonthly(){ if (MON_MODE==='proj') return renderMonthlyByProject()
   const code = num($('mon-el').value), q=$('mon-q').value.trim().toLowerCase(), d=$('mon-dept').value;
   if (!code){ $('mon-tbl').innerHTML='<tr><td colspan="7" class="empty">No variable elements yet — click “+ New variable element”</td></tr>'; monUpdateFooter(); return; }
   if (monEl !== code) buildMonLines(code);
-  const el = elByCode(code) || {};
-  const list = Object.keys(monLines).filter(id => monLines[id].length).map(id => empById(id) || { id, name_en:'(unknown employee)' })
+  const el = elOrBlank(code);
+  const list = Object.keys(monLines).filter(id => monLines[id].length).map(id => empById(id) || /** @type {Employee} */ ({ id, name_en:'(unknown employee)' }))
     .filter(e => orgMatch(e,'mon') && (!q || [e.id,e.name_ar,e.name_en].some(v=>String(v||'').toLowerCase().includes(q))))
     .sort((a,b)=>String(a.id).localeCompare(String(b.id),undefined,{numeric:true}));
   $('mon-tbl').innerHTML = list.map(e => {
@@ -1259,7 +1256,7 @@ function renderLoans(){
   const thisP = S.loans.reduce((s,l)=>s+loanInstalment(l,p),0);
   $('loan-sub').textContent = `${S.loans.length} loans · outstanding ${fmt(out)} EGP · deducting ${fmt(thisP)} EGP in ${p}`;
   const q = ($('loan-q').value||'').trim().toLowerCase();
-  const base = S.loans.filter(l => { const e=empById(l.emp_id)||{};
+  const base = S.loans.filter(l => { const e=empOrBlank(l.emp_id);
     return orgMatch(e,'loan') && (!q || [l.emp_id, e.name_en, e.name_ar, l.reference].some(v=>String(v||'').toLowerCase().includes(q))); });
   const st = stFill('loan-status', base.map(l => l.status));
   const list = base.filter(l => !st || l.status===st);
@@ -1416,7 +1413,7 @@ function renderMonthlyByProject(){
   if (monEl !== code) buildMonLines(code);
   if (!MON_PROJ){ $('mon-tbl').innerHTML='<tr><td colspan="7" class="empty">Choose the project above to see and enter the amounts for its employees.</td></tr>'; monUpdateFooter(); return; }
   const rows = [];
-  Object.entries(monLines).forEach(([id, L]) => L.forEach((ln, i) => { if (lineProj(ln) === MON_PROJ) rows.push({ id, i, ln, e: empById(id) || { id, name_en:'(unknown)' } }); }));
+  Object.entries(monLines).forEach(([id, L]) => L.forEach((ln, i) => { if (lineProj(ln) === MON_PROJ) rows.push({ id, i, ln, e: empById(id) || /** @type {Employee} */ ({ id, name_en:'(unknown)' }) }); }));
   const shown = rows.filter(r => orgMatch(r.e,'mon') && (!q || [r.e.id, r.e.name_ar, r.e.name_en].some(v => String(v||'').toLowerCase().includes(q))))
                     .sort((a,b) => String(a.id).localeCompare(String(b.id), undefined, { numeric:true }));
   const total = shown.reduce((s,r) => s + num(r.ln.amount), 0);
@@ -1501,7 +1498,7 @@ function showPage(name){
 }
 
 document.addEventListener('click', async ev => {
-  const t = ev.target;
+  const t = /** @type {PageEl} */ (ev.target);
   const nav = t.closest('[data-page]'); if (nav && nav.classList.contains('nav-item')) return showPage(nav.dataset.page);
   const nv = t.closest('[data-nav]'); if (nv) return showPage(nv.dataset.nav);
   const orp = t.closest('[data-open-report]'); if (orp) { showPage('reports'); return openReport(orp.dataset.openReport); }
@@ -1552,12 +1549,12 @@ document.addEventListener('click', async ev => {
 ['mon-q','mon-dept'].forEach(id => $(id).addEventListener('input', renderMonthly));
 $('mon-el').addEventListener('change', onMonElementChange);
 $('att-q').addEventListener('input', renderAttendance);
-$('att-day').addEventListener('change', e => { attDayFilter = e.target.value || null; renderAttendance(); });
+$('att-day').addEventListener('change', e => { attDayFilter = /** @type {PageEl} */ (e.target).value || null; renderAttendance(); });
 $('att-all').addEventListener('click', () => { attDayFilter = null; $('att-day').value=''; renderAttendance(); });
-$('mon-tbl').addEventListener('input', e => { const el=e.target.closest('[data-me]'); if(el) monInput(el); });
+$('mon-tbl').addEventListener('input', e => { const el=/** @type {PageEl} */ (e.target).closest('[data-me]'); if(el) monInput(el); });
 $('mon-tbl').addEventListener('click', e => {
-  const a=e.target.closest('[data-mon-add]'); if(a) return monAddLine(a.dataset.monAdd);
-  const r=e.target.closest('[data-mon-rm]');  if(r) return monRemoveLine(r.dataset.monRm, num(r.dataset.mi));
+  const a=/** @type {PageEl} */ (e.target).closest('[data-mon-add]'); if(a) return monAddLine(a.dataset.monAdd);
+  const r=/** @type {PageEl} */ (e.target).closest('[data-mon-rm]');  if(r) return monRemoveLine(r.dataset.monRm, num(r.dataset.mi));
 });
 $('a-status').addEventListener('change', () => { toggleWork(); checkSplits(); });
 $('a-emp').addEventListener('input', checkSplits);
@@ -1566,7 +1563,7 @@ $('a-splits').addEventListener('input', checkSplits);
 $('a-add-split').addEventListener('click', () => addSplit());
 $('a-save').addEventListener('click', saveAtt);
 $('emp-save').addEventListener('click', saveEmp);
-$('emp-pkg').addEventListener('click', e => { if (e.target.id==='pk-add') addPackageRow(); });
+$('emp-pkg').addEventListener('click', e => { if (/** @type {PageEl} */ (e.target).id==='pk-add') addPackageRow(); });
 $('p-save').addEventListener('click', saveProj);
 $('l-save').addEventListener('click', saveLoan);
 $('lpp-save').addEventListener('click', saveLoanPostpone);
@@ -1588,7 +1585,6 @@ function cycleHint(){
 }
 ['s-cycle','s-period'].forEach(id => $(id).addEventListener('input', cycleHint));
 
-// @ts-check — checked by TypeScript (tsconfig.json); keep it free of type errors
 // ═════════════════════════════════════════════════════════
 //  REPORTS
 // ═════════════════════════════════════════════════════════
@@ -1951,7 +1947,7 @@ function exportReport(){
 }
 function renderReports(){ renderReportList(); if (repCur) runReport(); }
 
-$('rep-list').addEventListener('click', e => { const i=e.target.closest('[data-rep]'); if(i) openReport(i.dataset.rep); });
+$('rep-list').addEventListener('click', e => { const i=/** @type {PageEl} */ (e.target).closest('[data-rep]'); if(i) openReport(i.dataset.rep); });
 ['rep-mode','rep-group','rep-dept'].forEach(id => $(id).addEventListener('change', runReport));
 $('rep-q').addEventListener('input', runReport);
 $('rep-export').addEventListener('click', exportReport);
@@ -1992,9 +1988,9 @@ function renderPermissions(){
   $('perm-sub').textContent = `Period ${periodLabel(settings.period)} · each employee may have ${limit} approved permission${limit>1?'s':''} per payroll cycle, up to ${settings.permissionMaxHours} h each · ${pend} pending`;
   const st=$('perm-status').value, q=$('perm-q').value.trim().toLowerCase();
   const list = S.permissions.filter(p => (!st || p.status===st) && orgMatch(empById(p.emp_id),'perm') &&
-      (!q || [p.emp_id, empName(empById(p.emp_id)), (empById(p.emp_id)||{}).name_ar].some(v=>String(v||'').toLowerCase().includes(q))))
+      (!q || [p.emp_id, empName(empById(p.emp_id)), (empOrBlank(p.emp_id)).name_ar].some(v=>String(v||'').toLowerCase().includes(q))))
     .sort((a,b)=> (a.status==='Pending'?0:1)-(b.status==='Pending'?0:1) || String(b.date).localeCompare(String(a.date)));
-  $('perm-tbl').innerHTML = list.map(p => { const e=empById(p.emp_id)||{}, used=permUsed(p.emp_id, monthOf(p.date));
+  $('perm-tbl').innerHTML = list.map(p => { const e=empOrBlank(p.emp_id), used=permUsed(p.emp_id, monthOf(p.date));
     return `<tr><td class="mono">${esc(p.date)}</td><td class="strong">${esc(empName(e)||p.emp_id)} <span class="mono" style="color:var(--muted)">${esc(p.emp_id)}</span></td>
       <td>${esc(e.department)}</td><td>${esc(p.type)}</td><td class="num">${fmt(p.hours)}</td><td style="white-space:normal;min-width:140px">${esc(p.reason||'')}</td>
       <td><span class="chip ${used>=limit?'c-red':'c-grey'}">${used} of ${limit}</span></td><td>${esc(p.source||'')}</td>
@@ -2032,7 +2028,7 @@ async function savePerm(){
 let deciding = null;
 function openDecide(id){
   const p=S.permissions.find(x=>x.id===id); if(!p) return; deciding=p;
-  const e=empById(p.emp_id)||{}, used=permUsed(p.emp_id, monthOf(p.date)), limit=num(settings.permissionsPerMonth)||2;
+  const e=empOrBlank(p.emp_id), used=permUsed(p.emp_id, monthOf(p.date)), limit=num(settings.permissionsPerMonth)||2;
   const att=S.attendance.find(a=>String(a.emp_id)===String(p.emp_id) && a.date===p.date), R=att?dayRules(att,e):null;
   $('dc-body').innerHTML = `<b style="color:var(--text)">${esc(empName(e))}</b> (${esc(p.emp_id)}) · ${esc(e.department||'')}<br>
     ${esc(p.type)} on <b>${esc(p.date)}</b> for <b>${fmt(p.hours)} h</b>${p.reason?` — “${esc(p.reason)}”`:''}<br>
@@ -2059,8 +2055,8 @@ $('pr-save').addEventListener('click', savePerm);
 $('dc-approve').addEventListener('click', ()=>decide('Approved'));
 $('dc-reject').addEventListener('click', ()=>decide('Rejected'));
 $('perm-tbl').addEventListener('click', e => {
-  const d=e.target.closest('[data-decide]'); if(d) return openDecide(d.dataset.decide);
-  const x=e.target.closest('[data-del-perm]');
+  const d=/** @type {PageEl} */ (e.target).closest('[data-decide]'); if(d) return openDecide(d.dataset.decide);
+  const x=/** @type {PageEl} */ (e.target).closest('[data-del-perm]');
   if(x){ const id=x.dataset.delPerm; confirmDel('Delete this permission request?', async()=>{ await del('attendance_permissions',id); S.permissions=S.permissions.filter(p=>p.id!==id); afterPermChange(); toast('Deleted'); }); }
 });
 
@@ -2103,7 +2099,7 @@ function renderLeaves(){
   $('lv-missing').innerHTML = leaveTableMissing ? '<div class="alert a-warn">The vacations table does not exist yet. Run <b>vacations-and-exceptions.sql</b> in the database SQL Editor, then click ⟳ Refresh.</div>' : '';
   const scope=$('lv-scope').value, t=$('lv-type').value, d=$('lv-dept').value, q=$('lv-q').value.trim().toLowerCase();
   const ps=periodStart(settings.period), pe=periodEnd(settings.period);
-  const base = S.leaves.filter(l => { const e=empById(l.emp_id)||{};
+  const base = S.leaves.filter(l => { const e=empOrBlank(l.emp_id);
       return (scope==='year' || (l.date_from<=pe && l.date_to>=ps)) && (!t || l.leave_type===t) && orgMatch(e,'lv') &&
              (!q || [l.emp_id, e.name_en, e.name_ar].some(v=>String(v||'').toLowerCase().includes(q))); });
   const st = stFill('lv-stf', base.map(l => l.status));
@@ -2111,7 +2107,7 @@ function renderLeaves(){
     .sort((a,b)=>String(b.date_from).localeCompare(String(a.date_from)));
   const inP = S.leaves.filter(l=>l.status==='Approved').reduce((s,l)=>s+leaveDaysIn(l,ps,pe),0);
   $('lv-sub').textContent = `${S.leaves.filter(l=>l.status==='Approved').length} approved vacations in ${settings.period.slice(0,4)} · ${fmt(inP)} leave days in ${settings.period} · weekends: ${(settings.weekendDays||[]).map(i=>DAYS[i]).join(', ')||'none'}`;
-  $('lv-tbl').innerHTML = list.map(l => { const e=empById(l.emp_id)||{}, ip=leaveDaysIn(l,ps,pe);
+  $('lv-tbl').innerHTML = list.map(l => { const e=empOrBlank(l.emp_id), ip=leaveDaysIn(l,ps,pe);
     const tc = {Annual:'c-blue',Casual:'c-blue',Sick:'c-orange',Unpaid:'c-red','Other paid':'c-grey'}[l.leave_type]||'c-grey';
     return `<tr class="click" data-leave="${l.id}"><td class="strong">${esc(empName(e)||l.emp_id)} <span class="mono" style="color:var(--muted)">${esc(l.emp_id)}</span></td>
       <td>${esc(e.department)}</td><td><span class="chip ${tc}">${esc(l.leave_type)}</span></td><td class="mono">${esc(l.date_from)}</td><td class="mono">${esc(l.date_to)}</td>
@@ -2126,7 +2122,7 @@ function leaveHint(){
   const emp=parseEmpInput($('lv-emp').value), e=empById(emp), f=$('lv-from').value, t=$('lv-to').value, type=$('lv-t').value;
   const out=[];
   if (f && t && t < f) out.push('<span class="neg">“To” is before “From”.</span>');
-  if (f && t && t >= f){ const cal=Math.round((dObj(t)-dObj(f))/86400000)+1, wd=workdays(f,t);
+  if (f && t && t >= f){ const cal=Math.round((dObj(t).getTime()-dObj(f).getTime())/86400000)+1, wd=workdays(f,t);
     out.push(`${cal} calendar day${cal>1?'s':''}, ${wd} working day${wd===1?'':'s'} (weekends excluded).`); }
   if (e && (type==='Annual' || (type==='Casual' && settings.casualCountsAnnual!=='no'))){
     const ent=annualEntitlement(e), taken=annualTaken(emp, editingLeave), req=num($('lv-days').value), left=ent-taken-req;
@@ -2168,11 +2164,11 @@ async function saveLeave(){
 function afterLeaveChange(){ renderLeaves(); renderAttendance(); renderPayroll(); renderDashboard(); renderReports(); }
 
 $('lv-tbl').addEventListener('click', e => {
-  const ap=e.target.closest('[data-lv-approve]'), rj=e.target.closest('[data-lv-reject]');
+  const ap=/** @type {PageEl} */ (e.target).closest('[data-lv-approve]'), rj=/** @type {PageEl} */ (e.target).closest('[data-lv-reject]');
   if (ap || rj) return decideLeave((ap||rj).dataset[ap?'lvApprove':'lvReject'], ap ? 'Approved' : 'Rejected');
-  const x=e.target.closest('[data-del-leave]');
+  const x=/** @type {PageEl} */ (e.target).closest('[data-del-leave]');
   if (x){ const id=x.dataset.delLeave; return confirmDel('Delete this vacation?', async()=>{ await del('employee_leaves',id); S.leaves=S.leaves.filter(l=>l.id!==id); afterLeaveChange(); toast('Deleted'); }); }
-  const r=e.target.closest('[data-leave]'); if (r){ const l=S.leaves.find(x=>x.id===r.dataset.leave); if(l) openLeave(l); }
+  const r=/** @type {PageEl} */ (e.target).closest('[data-leave]'); if (r){ const l=S.leaves.find(x=>x.id===r.dataset.leave); if(l) openLeave(l); }
 });
 ['lv-scope','lv-type','lv-dept'].forEach(id=>$(id).addEventListener('change', renderLeaves));
 $('lv-q').addEventListener('input', renderLeaves);
@@ -2220,11 +2216,11 @@ async function setExempt(ids, value){
     toast(`${ids.length} employee${ids.length>1?'s':''} ${value?'added to':'removed from'} ${EX_FIELD==='project_staff' ? 'site staff' : 'the exception rule'}`);
   }catch(e){ toast(e.message,'err'); }
 }
-$('ex-on-tbl').addEventListener('change', e => { const c=e.target.closest('[data-ex-on]'); if(!c) return; c.checked?exOnSel.add(c.dataset.exOn):exOnSel.delete(c.dataset.exOn); renderExempt(); });
-$('ex-off-tbl').addEventListener('change', e => { const c=e.target.closest('[data-ex-off]'); if(!c) return; c.checked?exOffSel.add(c.dataset.exOff):exOffSel.delete(c.dataset.exOff); renderExempt(); });
-$('ex-on-tbl').addEventListener('click', e => { const b=e.target.closest('[data-ex-rm]'); if(b) setExempt([b.dataset.exRm], false); });
-$('ex-on-all').addEventListener('change', e => { document.querySelectorAll('[data-ex-on]').forEach(c=>{ e.target.checked?exOnSel.add(c.dataset.exOn):exOnSel.delete(c.dataset.exOn); }); renderExempt(); });
-$('ex-off-all').addEventListener('change', e => { document.querySelectorAll('[data-ex-off]').forEach(c=>{ e.target.checked?exOffSel.add(c.dataset.exOff):exOffSel.delete(c.dataset.exOff); }); renderExempt(); });
+$('ex-on-tbl').addEventListener('change', e => { const c=/** @type {PageEl} */ (e.target).closest('[data-ex-on]'); if(!c) return; c.checked?exOnSel.add(c.dataset.exOn):exOnSel.delete(c.dataset.exOn); renderExempt(); });
+$('ex-off-tbl').addEventListener('change', e => { const c=/** @type {PageEl} */ (e.target).closest('[data-ex-off]'); if(!c) return; c.checked?exOffSel.add(c.dataset.exOff):exOffSel.delete(c.dataset.exOff); renderExempt(); });
+$('ex-on-tbl').addEventListener('click', e => { const b=/** @type {PageEl} */ (e.target).closest('[data-ex-rm]'); if(b) setExempt([b.dataset.exRm], false); });
+$('ex-on-all').addEventListener('change', e => { document.querySelectorAll('[data-ex-on]').forEach(c=>{ /** @type {PageEl} */ (e.target).checked?exOnSel.add(c.dataset.exOn):exOnSel.delete(c.dataset.exOn); }); renderExempt(); });
+$('ex-off-all').addEventListener('change', e => { document.querySelectorAll('[data-ex-off]').forEach(c=>{ /** @type {PageEl} */ (e.target).checked?exOffSel.add(c.dataset.exOff):exOffSel.delete(c.dataset.exOff); }); renderExempt(); });
 $('ex-remove-sel').addEventListener('click', () => confirmDel(EX_FIELD==='project_staff' ? `Remove ${exOnSel.size} employee${exOnSel.size>1?'s':''} from site staff? Their fingerprint-machine punches will count again and they may check in without a project.` : `Remove ${exOnSel.size} employee${exOnSel.size>1?'s':''} from the exception rule? They will get overtime and delay deductions again.`, ()=>setExempt([...exOnSel], false)));
 $('ex-kind').addEventListener('change', () => { EX_FIELD = $('ex-kind').value; exOnSel = new Set(); exOffSel = new Set(); renderExempt(); });
 $('ex-add-sel').addEventListener('click', () => setExempt([...exOffSel], true));
@@ -2246,13 +2242,13 @@ function penLabel(x){ return x.penalty_type==='Amount' ? `${fmt(x.quantity)} EGP
 function renderPenalties(){
   $('pn-missing').innerHTML = penTableMissing ? '<div class="alert a-warn">The penalties table does not exist yet. Run <b>absence-penalties-holidays.sql</b> in the database SQL Editor, then click ⟳ Refresh.</div>' : '';
   const scope=$('pn-scope').value, st=$('pn-status').value, q=$('pn-q').value.trim().toLowerCase();
-  const list = S.penalties.filter(x => { const e=empById(x.emp_id)||{};
+  const list = S.penalties.filter(x => { const e=empOrBlank(x.emp_id);
       return (scope==='year' || x.apply_period===settings.period) && (!st || x.status===st) && orgMatch(e,'pn') &&
              (!q || [x.emp_id,e.name_en,e.name_ar].some(v=>String(v||'').toLowerCase().includes(q))); })
     .sort((a,b)=>String(b.incident_date).localeCompare(String(a.incident_date)));
   const thisP = S.penalties.filter(x=>x.status==='Approved' && x.apply_period===settings.period);
   $('pn-sub').textContent = `${thisP.length} approved penalt${thisP.length===1?'y':'ies'} deducted in the ${periodLabel(settings.period)} payroll · total ${fmt(thisP.reduce((s,x)=>s+penaltyValue(x),0))} EGP`;
-  $('pn-tbl').innerHTML = list.map(x => { const e=empById(x.emp_id)||{};
+  $('pn-tbl').innerHTML = list.map(x => { const e=empOrBlank(x.emp_id);
     return `<tr class="click" data-pen="${x.id}"><td class="mono">${esc(x.incident_date)}</td><td class="strong">${esc(empName(e)||x.emp_id)} <span class="mono" style="color:var(--muted)">${esc(x.emp_id)}</span></td>
       <td>${esc(e.department)}</td><td>${esc(penLabel(x))}</td><td class="num neg">${fmt(penaltyValue(x))}</td><td class="mono">${esc(x.apply_period)}</td>
       <td style="white-space:normal;min-width:140px">${esc(x.reason||'')}</td><td>${esc(x.requested_by||'')}</td><td>${esc(x.recorded_by||'')}</td><td>${chip(x.status)}</td>
@@ -2304,9 +2300,9 @@ async function savePen(){
 }
 function afterPenChange(){ renderPenalties(); renderPayroll(); renderDashboard(); renderReports(); }
 $('pn-tbl').addEventListener('click', e => {
-  const x=e.target.closest('[data-del-pen]');
+  const x=/** @type {PageEl} */ (e.target).closest('[data-del-pen]');
   if (x){ const id=x.dataset.delPen; return confirmDel('Delete this penalty?', async()=>{ await del('employee_penalties',id); S.penalties=S.penalties.filter(p=>p.id!==id); afterPenChange(); toast('Deleted'); }); }
-  const r=e.target.closest('[data-pen]'); if(r){ const p=S.penalties.find(z=>z.id===r.dataset.pen); if(p) openPen(p); }
+  const r=/** @type {PageEl} */ (e.target).closest('[data-pen]'); if(r){ const p=S.penalties.find(z=>z.id===r.dataset.pen); if(p) openPen(p); }
 });
 ['pn-scope','pn-status'].forEach(id=>$(id).addEventListener('change', renderPenalties));
 $('pn-q').addEventListener('input', renderPenalties);
@@ -2355,7 +2351,7 @@ function afterHolChange(){ renderHolidays(); renderLeaves(); renderAttendance();
 $('hd-year').addEventListener('change', renderHolidays);
 ['hd-date','hd-days'].forEach(id=>$(id).addEventListener('input', holHint));
 $('hd-save').addEventListener('click', saveHol);
-$('hd-tbl').addEventListener('click', e => { const x=e.target.closest('[data-del-hol]');
+$('hd-tbl').addEventListener('click', e => { const x=/** @type {PageEl} */ (e.target).closest('[data-del-hol]');
   if (x){ const id=x.dataset.delHol; confirmDel('Delete this public holiday? Leave day counts already saved are not changed.', async()=>{ await del('public_holidays',id); S.holidays=S.holidays.filter(h=>h.id!==id); holidaySet=new Set(S.holidays.map(h=>h.date)); afterHolChange(); toast('Deleted'); }); } });
 
 let SUPER = {};
@@ -2399,7 +2395,7 @@ function renderUsers(){
       <td class="mono">${u.last_sign_in_at ? esc(String(u.last_sign_in_at).slice(0,16).replace('T',' ')) : '<span style="color:var(--muted)">never</span>'}</td>
       <td style="white-space:nowrap"><button class="btn btn-primary btn-sm" data-u-save>Save</button>${me?'':` <button class="btn btn-ghost btn-sm" data-u-reset title="Reset to the temporary password">Reset password</button> <button class="btn btn-ghost btn-sm" data-u-random title="Give this person a new random one-time password (they then enter their year of birth and choose their own password)">🎲 Random password</button>`}${['hr','hr_officer'].includes(u.role) ? ` <button class="btn btn-ghost btn-sm" data-u-reps title="Choose which reports this user can open">📊 Reports (${Array.isArray(u.allowed_reports) ? u.allowed_reports.length : 'all'})</button>` : ''}</td></tr>`; }).join('')
     || '<tr><td colspan="10" class="empty">No users match</td></tr>';
-  let dl = document.getElementById('dl-emp-all');
+  let dl = /** @type {HTMLDataListElement} */ (document.getElementById('dl-emp-all'));
   if (!dl){ dl=document.createElement('datalist'); dl.id='dl-emp-all'; document.body.appendChild(dl); }
   if (dl.options.length !== S.employees.length) dl.innerHTML = S.employees.map(e=>`<option value="${esc(e.id)} — ${esc(empName(e))}"></option>`).join('');
 }
@@ -2485,10 +2481,10 @@ async function saveUser(tr){
   if (u.id===ME.id){ ME.full_name=name; $('me-name').textContent=name||ME.email; }
   loadUsers();
 }
-$('us-tbl').addEventListener('click', e => { const b=e.target.closest('[data-u-save]'); if(b) return saveUser(b.closest('tr'));
-  const r=e.target.closest('[data-u-reset]'); if(r) return resetUser(r.closest('tr'));
-  const rn=e.target.closest('[data-u-random]'); if(rn) return randomUser(rn.closest('tr'));
-  const rp=e.target.closest('[data-u-reps]'); if(rp) return openReps(rp.closest('tr').dataset.uid); });
+$('us-tbl').addEventListener('click', e => { const b=/** @type {PageEl} */ (e.target).closest('[data-u-save]'); if(b) return saveUser(b.closest('tr'));
+  const r=/** @type {PageEl} */ (e.target).closest('[data-u-reset]'); if(r) return resetUser(r.closest('tr'));
+  const rn=/** @type {PageEl} */ (e.target).closest('[data-u-random]'); if(rn) return randomUser(rn.closest('tr'));
+  const rp=/** @type {PageEl} */ (e.target).closest('[data-u-reps]'); if(rp) return openReps(rp.closest('tr').dataset.uid); });
 // ── which reports each HR user may open (admin only) ──
 let repsUser = null;
 function openReps(uid){
@@ -2523,7 +2519,7 @@ document.querySelector('[data-page="users"]').addEventListener('click', loadUser
 
 // the "Project cost reports" permission (works for any user, including an employee account)
 document.addEventListener('change', async e => {
-  const c = e.target.closest('[data-u-acct]'); if (!c) return;
+  const c = /** @type {PageEl} */ (e.target).closest('[data-u-acct]'); if (!c) return;
   const u = USERS.find(x => x.id === c.dataset.uAcct);
   const { data, error } = await sb.from('app_users').update({ acct_reports: c.checked }).eq('id', c.dataset.uAcct).select('id');
   if (error || !(data && data.length)){ c.checked = !c.checked; return toast(error ? error.message : NOPERM, 'err'); }
@@ -2630,7 +2626,7 @@ function renderSelf(){
 function slHint(){
   const f=$('sl-from').value, t=$('sl-to').value, type=$('sl-type').value, days=num($('sl-days').value), out=[];
   if (f && t && t < f) out.push('<span class="neg">“To” is before “From”.</span>');
-  if (f && t && t >= f){ const cal=Math.round((dObj(t)-dObj(f))/86400000)+1, wd=workdays(f,t);
+  if (f && t && t >= f){ const cal=Math.round((dObj(t).getTime()-dObj(f).getTime())/86400000)+1, wd=workdays(f,t);
     out.push(`${cal} calendar day${cal>1?'s':''} · <b>${wd} working day${wd===1?'':'s'}</b> (weekends and public holidays are not counted)`); }
   if (f && f < todayStr()) out.push('<span style="color:var(--warn)">These dates are in the past — HR will review them.</span>');
   if (selfAnnualTypes().includes(type) && SD.emp){
@@ -2702,7 +2698,7 @@ async function selfCancel(key){
   });
   $('del-title').textContent='Please confirm'; $('del-ok').textContent='Cancel request';
 }
-$('self-list').addEventListener('click', e => { const b=e.target.closest('[data-self-cancel]'); if(b) selfCancel(b.dataset.selfCancel); });
+$('self-list').addEventListener('click', e => { const b=/** @type {PageEl} */ (e.target).closest('[data-self-cancel]'); if(b) selfCancel(b.dataset.selfCancel); });
 document.querySelectorAll('[data-spage]').forEach(t => t.addEventListener('click', () => {
   document.querySelectorAll('[data-spage]').forEach(x=>x.classList.toggle('active', x===t));
   ['req','team','tatt','pcost','att','pay','prof'].forEach(k => $('self-'+k).style.display = t.dataset.spage===k ? '' : 'none');
@@ -2737,13 +2733,13 @@ async function decideLeave(id, status){
 function renderHrRequests(){
   $('hq-missing').innerHTML = hrTableMissing ? '<div class="alert a-warn">The HR requests table does not exist yet. Run <b>self-service.sql</b> in the database SQL Editor, then click ⟳ Refresh.</div>' : '';
   const st=$('hq-status').value, ty=$('hq-type').value, q=$('hq-q').value.trim().toLowerCase();
-  const list = S.hrreq.filter(r => { const e=empById(r.emp_id)||{};
+  const list = S.hrreq.filter(r => { const e=empOrBlank(r.emp_id);
       return orgMatch(e,'hq') && (st==='open' ? (r.status==='Pending'||r.status==='In progress') : (!st || r.status===st)) && (!ty || r.request_type===ty) &&
              (!q || [r.emp_id, e.name_en, e.name_ar].some(v=>String(v||'').toLowerCase().includes(q))); })
     .sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
   const open = S.hrreq.filter(r=>r.status==='Pending'||r.status==='In progress').length;
   $('hq-sub').textContent = `${open} open request${open===1?'':'s'} · ${S.hrreq.length} in total`;
-  $('hq-tbl').innerHTML = list.map(r => { const e=empById(r.emp_id)||{};
+  $('hq-tbl').innerHTML = list.map(r => { const e=empOrBlank(r.emp_id);
     return `<tr><td class="mono">${esc(String(r.created_at||'').slice(0,10))}</td><td class="strong">${esc(empName(e)||r.emp_id)} <span class="mono" style="color:var(--muted)">${esc(r.emp_id)}</span></td>
       <td>${esc(e.department)}</td><td>${esc(r.request_type)}</td><td style="white-space:normal;min-width:180px">${esc(r.details||'')}</td><td>${chip(r.status)}</td>
       <td style="white-space:normal;min-width:150px">${esc(r.hr_response||'')}</td><td>${esc(r.handled_by||'')}</td>
@@ -2753,7 +2749,7 @@ function renderHrRequests(){
 }
 let handling = null;
 function openHandle(id){
-  const r=S.hrreq.find(x=>x.id===id); if(!r) return; handling=r; const e=empById(r.emp_id)||{};
+  const r=S.hrreq.find(x=>x.id===id); if(!r) return; handling=r; const e=empOrBlank(r.emp_id);
   $('hq-body').innerHTML = `<b style="color:var(--text)">${esc(empName(e))}</b> (${esc(r.emp_id)}) · ${esc(e.department||'')}<br><b>${esc(r.request_type)}</b> — submitted ${esc(String(r.created_at).slice(0,10))}<br>${esc(r.details||'(no details)')}`;
   $('hq-st').value = r.status==='Pending' ? 'In progress' : 'Completed'; $('hq-reply').value = r.hr_response||''; $('hq-by').value = localStorage.getItem('approver') || (ME&&ME.full_name) || '';
   openM('m-hq');
@@ -2774,7 +2770,7 @@ function updateBadges(){
   b('hr-badge', S.hrreq.filter(r=>r.status==='Pending'||r.status==='In progress').length);
   b('aa-badge', S.allowAppr.filter(a=>a.status==='Pending HR').length);
 }
-$('hq-tbl').addEventListener('click', e => { const b=e.target.closest('[data-hr-handle]'); if(b) openHandle(b.dataset.hrHandle); });
+$('hq-tbl').addEventListener('click', e => { const b=/** @type {PageEl} */ (e.target).closest('[data-hr-handle]'); if(b) openHandle(b.dataset.hrHandle); });
 ['hq-status','hq-type'].forEach(id=>$(id).addEventListener('change', renderHrRequests));
 $('hq-q').addEventListener('input', renderHrRequests);
 $('hq-save').addEventListener('click', saveHandle);
@@ -2787,8 +2783,8 @@ async function teamDecide(id, approve){
   if (error) return toast(error.message,'err');
   toast(approve ? 'Approved — sent to HR for the final approval' : 'Rejected'); await loadSelf();
 }
-$('self-team-tbl').addEventListener('click', e => { const ok=e.target.closest('[data-team-ok]'); if (ok) return teamDecide(ok.dataset.teamOk, true);
-  const no=e.target.closest('[data-team-no]'); if (no) return teamDecide(no.dataset.teamNo, false); });
+$('self-team-tbl').addEventListener('click', e => { const ok=/** @type {PageEl} */ (e.target).closest('[data-team-ok]'); if (ok) return teamDecide(ok.dataset.teamOk, true);
+  const no=/** @type {PageEl} */ (e.target).closest('[data-team-no]'); if (no) return teamDecide(no.dataset.teamNo, false); });
 
 async function teamReqDecide(key, approve){
   const [kind, id] = key.split(':'); let note = null;
@@ -2797,8 +2793,8 @@ async function teamReqDecide(key, approve){
   if (error) return toast(error.message,'err');
   toast(approve ? (/final/.test(data) ? 'Approved' : 'Approved — sent to HR for the final approval') : 'Rejected'); await loadSelf();
 }
-$('self-treq-tbl').addEventListener('click', e => { const ok=e.target.closest('[data-treq-ok]'); if (ok) return teamReqDecide(ok.dataset.treqOk, true);
-  const no=e.target.closest('[data-treq-no]'); if (no) return teamReqDecide(no.dataset.treqNo, false); });
+$('self-treq-tbl').addEventListener('click', e => { const ok=/** @type {PageEl} */ (e.target).closest('[data-treq-ok]'); if (ok) return teamReqDecide(ok.dataset.treqOk, true);
+  const no=/** @type {PageEl} */ (e.target).closest('[data-treq-no]'); if (no) return teamReqDecide(no.dataset.treqNo, false); });
 
 // ── payslips are shown only after the employee re-enters his password ──
 function lockSelfPay(){ $('self-pay-card').style.display = 'none'; $('self-pay-lock').style.display = ''; $('self-pay-pass').value = ''; $('self-pay-err').textContent = ''; }
@@ -2819,7 +2815,6 @@ $('self-pay-pass').addEventListener('keydown', e => { if (e.key === 'Enter') unl
 $('self-pay-relock').addEventListener('click', lockSelfPay);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && $('self-pay-card').style.display !== 'none') lockSelfPay(); });
 
-// @ts-check — checked by TypeScript (tsconfig.json); keep it free of type errors
 // ═════════════════════════════════════════════════════════
 //  PAYROLL APPROVAL (permanent snapshot)
 // ═════════════════════════════════════════════════════════
@@ -2979,11 +2974,11 @@ function exportRunCsv(run, period){
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download=`petrokima-payroll-${period}${S.runs.some(x=>x.period===period)?'-approved':'-draft'}.csv`; a.click(); toast('Payroll exported');
 }
-$('hs-tbl').addEventListener('click', e => { const r=e.target.closest('[data-hist]'); if(r) openHistory(r.dataset.hist); });
-$('hs-lines').addEventListener('click', e => { const r=e.target.closest('[data-hslip]'); if(r){ const l=HIST.lines.find(x=>String(x.emp_id)===r.dataset.hslip); if(l) showSnapSlip(l, HIST.period); } });
+$('hs-tbl').addEventListener('click', e => { const r=/** @type {PageEl} */ (e.target).closest('[data-hist]'); if(r) openHistory(r.dataset.hist); });
+$('hs-lines').addEventListener('click', e => { const r=/** @type {PageEl} */ (e.target).closest('[data-hslip]'); if(r){ const l=HIST.lines.find(x=>String(x.emp_id)===r.dataset.hslip); if(l) showSnapSlip(l, HIST.period); } });
 $('hs-q').addEventListener('input', renderHistLines);
 $('hs-export').addEventListener('click', () => exportRunCsv(HIST.lines.map(snapToResult), HIST.period));
-$('self-slips').addEventListener('click', e => { const b=e.target.closest('[data-self-slip]'); if(b){ const l=(SD.slips||[]).find(x=>x.period===b.dataset.selfSlip); if(l) showSnapSlip(l, l.period); } });
+$('self-slips').addEventListener('click', e => { const b=/** @type {PageEl} */ (e.target).closest('[data-self-slip]'); if(b){ const l=(SD.slips||[]).find(x=>x.period===b.dataset.selfSlip); if(l) showSnapSlip(l, l.period); } });
 
 // Lock notices on pages whose data belongs to an approved cycle
 function renderLocks(){
@@ -3036,7 +3031,7 @@ async function assignManager(){
   } catch(e){ toast(String(e.message).replace(/^.*?(This would create|An employee cannot)/,'$1'),'err'); }
   b.disabled=false; renderReporting();
 }
-$('rl-none').addEventListener('change', e => { const c=e.target.closest('[data-rl]'); if(!c) return; c.checked?rlSel.add(c.dataset.rl):rlSel.delete(c.dataset.rl); renderReporting(); });
+$('rl-none').addEventListener('change', e => { const c=/** @type {PageEl} */ (e.target).closest('[data-rl]'); if(!c) return; c.checked?rlSel.add(c.dataset.rl):rlSel.delete(c.dataset.rl); renderReporting(); });
 $('rl-all').addEventListener('change', e => { document.querySelectorAll('[data-rl]').forEach(/** @param {HTMLInputElement} c */ c=>{ /** @type {HTMLInputElement} */ (e.target).checked?rlSel.add(c.dataset.rl):rlSel.delete(c.dataset.rl); }); renderReporting(); });
 ['rl-q','rl-mq'].forEach(id=>$(id).addEventListener('input', renderReporting));
 $('rl-dept').addEventListener('change', renderReporting);
@@ -3218,7 +3213,7 @@ async function onBulkFile(){
   const ok = BULK.rows.filter(r=>!r.err), bad = BULK.rows.length - ok.length;
   const add = ok.filter(r=>r.elType==='Addition').reduce((s,r)=>s+r.amount,0), ded = ok.filter(r=>r.elType==='Deduction').reduce((s,r)=>s+r.amount,0);
   $('bk-summary').innerHTML = `<div class="alert ${bad?'a-warn':'a-info'}"><b>${ok.length}</b> row${ok.length===1?'':'s'} ready · <b>${new Set(ok.map(r=>r.code)).size}</b> employees · additions <b>${fmt(add)}</b> · deductions <b>${fmt(ded)}</b>${bad?` · <b class="neg">${bad} row${bad>1?'s':''} with problems will be skipped</b> — fix them in your file and upload again if needed`:''}</div>`;
-  $('bk-rows').innerHTML = BULK.rows.sort((a,b)=>(!!b.err)-(!!a.err) || a.line-b.line).map(r => `<tr${r.err?' style="background:rgba(217,79,79,.07)"':''}><td class="mono">${r.line}</td><td class="mono">${esc(r.code)}</td><td class="strong">${esc(r.name)}</td>
+  $('bk-rows').innerHTML = BULK.rows.sort((a,b)=>Number(!!b.err)-Number(!!a.err) || a.line-b.line).map(r => `<tr${r.err?' style="background:rgba(217,79,79,.07)"':''}><td class="mono">${r.line}</td><td class="mono">${esc(r.code)}</td><td class="strong">${esc(r.name)}</td>
     <td>${esc(r.elc)}${r.elName?' · '+esc(r.elName):''}</td><td class="mono">${esc(r.proj||'')}</td><td class="num ${r.elType==='Deduction'?'neg':''}">${r.amount==null?'':fmt(r.amount)}</td>
     <td>${r.err ? `<span class="neg">✗ ${esc(r.err)}</span>` : '<span class="pos">✓</span>'}</td></tr>`).join('');
   $('bk-import').disabled = !ok.length;
@@ -3407,7 +3402,7 @@ const miMin = t => { const [h,m] = String(t).split(':').map(Number); return h*60
 const miHHm = m => { m = ((Math.floor(m) % 1440) + 1440) % 1440; return `${pad2(Math.floor(m/60))}:${pad2(m%60)}`; };
 const miSegHours = segs => Math.round(segs.filter(x => x.out).reduce((t,x) => t + num(x.hours), 0) * 100) / 100;
 function miCombine(ex, d, proj){
-  const base = new Date(d.date + 'T00:00:00'), mFirst = (d.first - base)/60000, mLast = (d.last - base)/60000;
+  const base = new Date(d.date + 'T00:00:00'), mFirst = (d.first - base.getTime())/60000, mLast = (d.last - base.getTime())/60000;
   const phone = (ex.projects || []).filter(x => x.src !== 'Machine').map(x => ({ ...x }));
   let pFirst = Infinity, pLast = -Infinity;
   phone.forEach(x => { if (!x.in) return; const i = miMin(x.in); pFirst = Math.min(pFirst, i);
@@ -3443,7 +3438,7 @@ async function loadAttRange(){
   const from = $('att-from').value, to = $('att-to').value;
   if (!from || !to) return toast('Choose both dates','warn');
   if (to < from) return toast('“To” is before “From”','warn');
-  if ((new Date(to) - new Date(from)) / 86400000 > 400) return toast('Please choose at most about one year at a time','warn');
+  if ((new Date(to).getTime() - new Date(from).getTime()) / 86400000 > 400) return toast('Please choose at most about one year at a time','warn');
   const b = $('att-load'); b.disabled = true; b.textContent = 'Loading…';
   try {
     const [rows, clocks] = await Promise.all([
@@ -3530,8 +3525,8 @@ $('par-type').addEventListener('change', parShowType);
 ['par-job','par-amt','par-proj'].forEach(id => $(id).addEventListener('input', parHint));
 $('par-q').addEventListener('input', renderParRules);
 $('par-tbl').addEventListener('click', e => {
-  const ed = e.target.closest('[data-par-edit]'); if (ed) return openParRule(ed.dataset.parEdit);
-  const dl = e.target.closest('[data-par-del]');
+  const ed = /** @type {PageEl} */ (e.target).closest('[data-par-edit]'); if (ed) return openParRule(ed.dataset.parEdit);
+  const dl = /** @type {PageEl} */ (e.target).closest('[data-par-del]');
   if (dl) { const id = dl.dataset.parDel; confirmDel('Delete this rule? The automatic allowance it gives will disappear from payrolls that are not yet approved.', async () => {
     const { data, error } = await sb.from('project_allowance_rules').delete().eq('id', id).select(); if (error) throw error; if (!(data && data.length)) throw new Error(NOPERM);
     S.parRules = S.parRules.filter(x => x.id !== id); renderParRules(); DIRTY.add('payroll'); DIRTY.add('reports'); toast('Rule deleted'); }); }
@@ -3553,7 +3548,7 @@ function aaRows(){
   const calc = new Map(aaCalculated().map(x => [String(x.emp.id), x]));
   const rows = [];
   calc.forEach((c, id) => rows.push({ emp:c.emp, calc:c, rec: S.allowAppr.find(a => String(a.emp_id)===id) }));
-  S.allowAppr.forEach(a => { if (!calc.has(String(a.emp_id))) rows.push({ emp: empById(a.emp_id) || { id:a.emp_id, name_en:a.emp_name }, calc:{ amount:0, details:[] }, rec:a }); });
+  S.allowAppr.forEach(a => { if (!calc.has(String(a.emp_id))) rows.push({ emp: empById(a.emp_id) || /** @type {Employee} */ ({ id:a.emp_id, name_en:a.emp_name }), calc:{ amount:0, details:[] }, rec:a }); });
   rows.forEach(r => { r.state = r.rec ? r.rec.status : 'Not sent'; r.changed = !!r.rec && !aaSame(r.rec.amount, r.calc.amount); });
   return rows;
 }
@@ -3635,9 +3630,9 @@ $('aa-approve-all').addEventListener('click', () => {
   $('del-title').textContent='Please confirm'; $('del-ok').textContent='Approve all'; $('del-ok').className='btn btn-success';
 });
 $('aa-tbl').addEventListener('click', e => {
-  const ok = e.target.closest('[data-aa-ok]'); if (ok) return aaHrDecide([ok.dataset.aaOk], true);
-  const no = e.target.closest('[data-aa-no]'); if (no) { const note = prompt('Reason for rejecting (the employee\'s manager and HR will see it):'); if (note === null) return; return aaHrDecide([no.dataset.aaNo], false, note.trim() || 'Rejected by HR'); }
-  const rs = e.target.closest('[data-aa-resend]'); if (rs) return aaResend(rs.dataset.aaResend);
+  const ok = /** @type {PageEl} */ (e.target).closest('[data-aa-ok]'); if (ok) return aaHrDecide([ok.dataset.aaOk], true);
+  const no = /** @type {PageEl} */ (e.target).closest('[data-aa-no]'); if (no) { const note = prompt('Reason for rejecting (the employee\'s manager and HR will see it):'); if (note === null) return; return aaHrDecide([no.dataset.aaNo], false, note.trim() || 'Rejected by HR'); }
+  const rs = /** @type {PageEl} */ (e.target).closest('[data-aa-resend]'); if (rs) return aaResend(rs.dataset.aaResend);
 });
 ['aa-status'].forEach(id => $(id).addEventListener('change', renderApprovals));
 $('aa-q').addEventListener('input', renderApprovals);
@@ -3684,6 +3679,7 @@ function orgFillUnits(p){
 })();
 // keep the lists filled whenever employee data is (re)loaded
 const _orgBuildLists = buildLists;
+// @ts-expect-error — buildLists is deliberately extended here (the new version wraps the earlier one)
 buildLists = function(){
   _orgBuildLists.apply(this, arguments);
   const opts = orgDeptOptions();
@@ -3716,8 +3712,8 @@ async function reviewPhoneAlert(id){
   renderDashboard(); openPhoneAlerts(); toast('Marked as reviewed');
 }
 document.addEventListener('click', e => {
-  if (e.target.closest('[data-open-phal]')) return openPhoneAlerts();
-  const ok = e.target.closest('[data-phal-ok]'); if (ok) return reviewPhoneAlert(ok.dataset.phalOk);
+  if (/** @type {PageEl} */ (e.target).closest('[data-open-phal]')) return openPhoneAlerts();
+  const ok = /** @type {PageEl} */ (e.target).closest('[data-phal-ok]'); if (ok) return reviewPhoneAlert(ok.dataset.phalOk);
 });
 
 // ═════════════════════════════════════════════════════════
@@ -3730,7 +3726,7 @@ function renderAssign(){
   const q = $('as-q').value.trim().toLowerCase(), show = $('as-show').value;
   const list = activeEmps().filter(e => orgMatch(e,'as') && (!q || [e.id, e.name_en, e.name_ar, e.job_name].some(v => String(v||'').toLowerCase().includes(q))))
     .map(e => ({ e, n: asCount(e.id) })).filter(x => !show || (show==='with' ? x.n : !x.n))
-    .sort((a,b) => (b.n>0) - (a.n>0) || String(a.e.id).localeCompare(String(b.e.id), undefined, { numeric:true }));
+    .sort((a,b) => Number(b.n>0) - Number(a.n>0) || String(a.e.id).localeCompare(String(b.e.id), undefined, { numeric:true }));
   $('as-tbl').innerHTML = list.slice(0, 400).map(({e,n}) => `<tr class="clickable${asSel===String(e.id)?' sel':''}" data-as-emp="${esc(e.id)}" style="cursor:pointer${asSel===String(e.id)?';background:var(--hover)':''}">
       <td class="as-chk"><input type="checkbox" data-as-tick="${esc(e.id)}"${asTicked.has(String(e.id))?' checked':''}></td>
       <td class="mono">${esc(e.id)}</td><td class="strong">${esc(empName(e))}</td><td>${esc(e.department||'')}</td><td>${esc(e.unit||'')}</td><td>${esc(e.job_name||'')}</td>
@@ -3743,7 +3739,7 @@ function renderAssign(){
 }
 function renderAssignDetail(){
   if (!asSel){ $('as-detail').style.display = 'none'; return; }
-  const e = empById(asSel) || { id: asSel }, rows = S.empProjects.filter(x => String(x.emp_id) === String(asSel)).sort((a,b) => String(a.project_code).localeCompare(String(b.project_code)));
+  const e = empById(asSel) || /** @type {Employee} */ ({ id: asSel }), rows = S.empProjects.filter(x => String(x.emp_id) === String(asSel)).sort((a,b) => String(a.project_code).localeCompare(String(b.project_code)));
   $('as-detail').style.display = '';
   $('as-detail-title').innerHTML = `📌 ${esc(empName(e))} <span class="mono" style="color:var(--muted)">${esc(e.id)}</span> — ${rows.length ? `${rows.length} project${rows.length>1?'s':''}: can check in only at these` : 'no projects: can check in at any project'}`;
   $('as-proj-tbl').innerHTML = rows.map(r => `<tr><td class="mono">${esc(r.project_code)}</td><td>${esc(projName(r.project_code) || '')}</td>
@@ -3767,15 +3763,15 @@ async function unassignProject(empId, code){
 $('as-q').addEventListener('input', renderAssign);
 $('as-show').addEventListener('change', renderAssign);
 $('as-tbl').addEventListener('click', e => {
-  const tk = e.target.closest('[data-as-tick]'); if (tk){ tk.checked ? asTicked.add(tk.dataset.asTick) : asTicked.delete(tk.dataset.asTick); $('as-bulk-go').textContent = `Add to ticked (${asTicked.size})`; return; }
-  const r = e.target.closest('[data-as-emp]'); if (r){ asSel = r.dataset.asEmp; renderAssign(); }
+  const tk = /** @type {PageEl} */ (e.target).closest('[data-as-tick]'); if (tk){ tk.checked ? asTicked.add(tk.dataset.asTick) : asTicked.delete(tk.dataset.asTick); $('as-bulk-go').textContent = `Add to ticked (${asTicked.size})`; return; }
+  const r = /** @type {PageEl} */ (e.target).closest('[data-as-emp]'); if (r){ asSel = r.dataset.asEmp; renderAssign(); }
 });
 $('as-all').addEventListener('change', () => { document.querySelectorAll('#as-tbl [data-as-tick]').forEach(c => { c.checked = $('as-all').checked; c.checked ? asTicked.add(c.dataset.asTick) : asTicked.delete(c.dataset.asTick); }); $('as-bulk-go').textContent = `Add to ticked (${asTicked.size})`; });
 $('as-add-go').addEventListener('click', () => { const c = parseProjInput($('as-add-proj').value); if (!c) return toast('Pick the project from the suggestions','warn'); assignProjects([asSel], c).then(() => $('as-add-proj').value=''); });
 $('as-bulk-go').addEventListener('click', () => { const c = parseProjInput($('as-bulk-proj').value); if (!c) return toast('Pick the project from the suggestions','warn'); if (!asTicked.size) return toast('Tick the employees first','warn');
   confirmDel(`Add ${projLabel(c)} to ${asTicked.size} employee${asTicked.size>1?'s':''}?`, () => assignProjects([...asTicked], c));
   $('del-title').textContent='Please confirm'; $('del-ok').textContent='Add'; $('del-ok').className='btn btn-primary'; });
-$('as-proj-tbl').addEventListener('click', e => { const rm = e.target.closest('[data-as-rm]'); if (rm) confirmDel(`Remove ${projLabel(rm.dataset.asRm)} from ${empName(empById(asSel))}?`, () => unassignProject(asSel, rm.dataset.asRm)); });
+$('as-proj-tbl').addEventListener('click', e => { const rm = /** @type {PageEl} */ (e.target).closest('[data-as-rm]'); if (rm) confirmDel(`Remove ${projLabel(rm.dataset.asRm)} from ${empName(empById(asSel))}?`, () => unassignProject(asSel, rm.dataset.asRm)); });
 
 // ── a manager on the desktop (My requests → Team approvals) ──
 let tprojEmp = null, tprojT;
@@ -3801,15 +3797,16 @@ $('tproj-q').addEventListener('input', () => { clearTimeout(tprojT); tprojT = se
   $('tproj-res').innerHTML = (r.data||[]).filter(p => !have.has(p.id)).map(p => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)"><span><b class="mono">${esc(p.id)}</b> ${esc(p.name||'')}</span><button class="btn btn-primary btn-sm" data-tproj-add="${esc(p.id)}">+ Add</button></div>`).join('') || '<div style="color:var(--muted);font-size:13px">No matching projects</div>';
 }, 300); });
 document.addEventListener('click', e => {
-  const tp = e.target.closest('[data-tproj]'); if (tp) return openTeamProj(tp.dataset.tproj);
-  const ta = e.target.closest('[data-tproj-add]'); if (ta) return teamProjChangeDesk(ta.dataset.tprojAdd, true);
-  const tr = e.target.closest('[data-tproj-rm]'); if (tr) return teamProjChangeDesk(tr.dataset.tprojRm, false);
+  const tp = /** @type {PageEl} */ (e.target).closest('[data-tproj]'); if (tp) return openTeamProj(tp.dataset.tproj);
+  const ta = /** @type {PageEl} */ (e.target).closest('[data-tproj-add]'); if (ta) return teamProjChangeDesk(ta.dataset.tprojAdd, true);
+  const tr = /** @type {PageEl} */ (e.target).closest('[data-tproj-rm]'); if (tr) return teamProjChangeDesk(tr.dataset.tprojRm, false);
 });
 
 // ═════════════════════════════════════════════════════════
 //  EMPLOYEE RECORD — the projects this employee may check in at
 // ═════════════════════════════════════════════════════════
 const _openEmpWithProjects = openEmp;
+// @ts-expect-error — openEmp is deliberately extended here (the new version wraps the earlier one)
 openEmp = function(id){
   _openEmpWithProjects.apply(this, arguments);
   const box = $('emp-proj'); if (!box) return;
@@ -3820,7 +3817,7 @@ openEmp = function(id){
     : '<span style="color:var(--muted)">No projects assigned — can check in at any project.</span>')
     + ` <a href="#" data-goto-assign="${esc(id)}" style="color:var(--link);margin-inline-start:8px">Manage on the Project assignments page →</a>`;
 };
-document.addEventListener('click', e => { const g = e.target.closest('[data-goto-assign]'); if (!g) return; e.preventDefault();
+document.addEventListener('click', e => { const g = /** @type {PageEl} */ (e.target).closest('[data-goto-assign]'); if (!g) return; e.preventDefault();
   closeM('m-emp'); asSel = g.dataset.gotoAssign; showPage('assign'); renderAssign(); });
 
 // ═════════════════════════════════════════════════════════
@@ -3871,7 +3868,7 @@ const todayISO = () => new Date().toISOString().slice(0,10);
     const grp = head.querySelector('.btn-group'); if (grp) grp.insertBefore(b, grp.firstChild); else head.appendChild(b);
   });
 })();
-document.addEventListener('click', e => { const b = e.target.closest('[data-xl]'); if (b) exportPageExcel(b.closest('.page')); });
+document.addEventListener('click', e => { const b = /** @type {PageEl} */ (e.target).closest('[data-xl]'); if (b) exportPageExcel(b.closest('.page')); });
 $('rep-xlsx').addEventListener('click', exportReportExcel);
 
 // ═════════════════════════════════════════════════════════
@@ -3903,6 +3900,7 @@ $('pay-publish').addEventListener('click', () => {
 });
 // show the button only for an approved month
 const _renderPayrollPublish = renderPayroll;
+// @ts-expect-error — renderPayroll is deliberately extended here (the new version wraps the earlier one)
 renderPayroll = function(){ const r = _renderPayrollPublish.apply(this, arguments); $('pay-publish').style.display = currentRun() ? '' : 'none'; return r; };
 
 // ── the accountant's view (My requests → Project costs) ──
@@ -3995,7 +3993,11 @@ $('pc-xlsx').addEventListener('click', async () => {
   }
   paint();
   // keep the red dots current whenever the counters change
-  if (typeof updateBadges === 'function'){ const _ub = updateBadges; updateBadges = function(){ const r = _ub.apply(this, arguments); paint(); return r; }; }
+  if (typeof updateBadges === 'function'){
+    const _ub = updateBadges;
+    // @ts-expect-error — updateBadges is deliberately extended here (the new version wraps the earlier one)
+    updateBadges = function(){ const r = _ub.apply(this, arguments); paint(); return r; };
+  }
   window.paintNavSections = paint;
 })();
 
@@ -4004,9 +4006,10 @@ $('pc-xlsx').addEventListener('click', async () => {
 // ═════════════════════════════════════════════════════════
 $('menu-btn').addEventListener('click', () => document.body.classList.toggle('nav-open'));
 $('nav-backdrop').addEventListener('click', () => document.body.classList.remove('nav-open'));
-document.addEventListener('click', e => { if (e.target.closest('#app .sidebar .nav-item[data-page]')) document.body.classList.remove('nav-open'); });
+document.addEventListener('click', e => { if (/** @type {PageEl} */ (e.target).closest('#app .sidebar .nav-item[data-page]')) document.body.classList.remove('nav-open'); });
 // users list: mark the super admin
 const _renderUsersSA = renderUsers;
+// @ts-expect-error — renderUsers is deliberately extended here (the new version wraps the earlier one)
 renderUsers = function(){ const r = _renderUsersSA.apply(this, arguments);
   document.querySelectorAll('#us-tbl tr').forEach(tr => { const cb = tr.querySelector('[data-u-acct]'); if (cb && SUPER[cb.dataset.uAcct]){
     const cell = tr.querySelector('td'); if (cell && !cell.querySelector('.sa-badge')) cell.insertAdjacentHTML('beforeend', ' <span class="chip c-red sa-badge" title="Full authority — only she can make or remove administrators">👑 Super admin</span>'); } });
@@ -4035,6 +4038,7 @@ function buTime(v){
   return h < 24 && +m[2] < 60 ? `${pad(h)}:${m[2]}` : null;
 }
 function buMonth(v){ if (v === '' || v == null) return ''; const d = buDate(v); if (d) return d.slice(0,7); const m = buTxt(v).match(/^(\d{4})[-/](\d{1,2})$/); return m ? `${m[1]}-${pad(+m[2])}` : null; }
+/** @returns {any} '' when blank, the number, or null when it is not a number */
 function buNum(v){ if (v === '' || v == null) return ''; const n = Number(String(v).replace(/,/g,'').trim()); return isFinite(n) ? n : null; }
 function buBool(v){ const s = buTxt(v).toLowerCase(); if (!s) return ''; if (['yes','y','true','1','نعم','x','✓'].includes(s)) return true; if (['no','n','false','0','لا'].includes(s)) return false; return null; }
 function buPick(v, opts){ const s = buTxt(v); if (!s) return ''; const hit = opts.find(o => o.toLowerCase() === s.toLowerCase()); return hit ?? null; }
@@ -4045,7 +4049,9 @@ const meName = () => (ME && (ME.full_name || ME.email)) || 'HR';
 // ── the kinds of data ──
 // col: [key, heading, kind, required, allowed values / note]
 const EMP_SKIP = ['id'];
+/** @returns {[string, string, string, boolean, any][]} code, title, kind, required, choices/help */
 function empCols(){
+  /** @type {[string, string, string, boolean, any][]} */
   const out = [['id','Code','code',true,'Existing code = update only the filled-in columns · new code = new employee']];
   EMP_FIELDS.forEach(([, fs]) => fs.forEach(f => { if (EMP_SKIP.includes(f[0])) return; if (f[0]==='location_exempt' && !(ME && ME.role==='admin')) return; if (isOfficer() && PAY_FIELDS.includes(f[0])) return;
     const kind = f[2]==='manager' ? 'emp' : f[2]==='select' ? 'pick' : f[2]==='number' ? 'num' : f[2]==='bool' ? 'bool' : f[2]==='date' ? 'date' : 'text';
@@ -4255,7 +4261,10 @@ async function buErrors(){
 $('bu-type').addEventListener('change', () => { BU.type = $('bu-type').value; BU.rows = []; renderBulk(); });
 $('bu-template').addEventListener('click', buTemplate);
 $('bu-file').addEventListener('change', buFile);
-$('bu-save').addEventListener('click', () => confirmDel(`Save ${BU.rows.filter(r => ['new','update'].includes(r.res.kind)).length} row(s) of ${BU_TYPES[BU.type].t}?`, buSave) || ($('del-title').textContent='Please confirm', $('del-ok').textContent='Save', $('del-ok').className='btn btn-primary'));
+$('bu-save').addEventListener('click', () => {   // the delete-confirm window, relabelled for saving
+  confirmDel(`Save ${BU.rows.filter(r => ['new','update'].includes(r.res.kind)).length} row(s) of ${BU_TYPES[BU.type].t}?`, buSave);
+  $('del-title').textContent='Please confirm'; $('del-ok').textContent='Save'; $('del-ok').className='btn btn-primary';
+});
 $('bu-filter').addEventListener('change', renderBulkPreview);
 $('bu-errors').addEventListener('click', buErrors);
 $('bu-replace').addEventListener('change', () => { if (BU.rows.length && BU.type==='attendance'){ const T = BU_TYPES.attendance; BU.rows = markDuplicates('attendance', BU.rows.map(r => ({ ...r, res: T.check(r.v) }))); renderBulkPreview(); } });
@@ -4455,7 +4464,7 @@ function stTax(gross, ins, months){                         // tax for the perio
   return { annual, tax: annualTax(annual, R).tax * (months || 1) / 12 };
 }
 $('st-file').addEventListener('change', async e => {
-  const f = e.target.files[0]; if (!f) return;
+  const f = /** @type {PageEl} */ (e.target).files[0]; if (!f) return;
   $('st-out').innerHTML = '<div class="empty">Reading the workbook…</div>';
   try {
     await loadSheetJs();
@@ -4543,6 +4552,7 @@ function renderBirthdays(){
   box.innerHTML = L.length ? `<div class="alert a-info" style="margin-bottom:14px">🎂 <b>Birthdays today:</b> ${L.map(e => esc(`${empName(e)} (${e.id})${e.department ? ' — ' + e.department : ''}`)).join(' · ')}. Their phone app shows “Petrokima family wishes you a happy birthday”.</div>` : '';
 }
 const _renderDashboardB = renderDashboard;
+// @ts-expect-error — renderDashboard is deliberately extended here (the new version wraps the earlier one)
 renderDashboard = function(){ const r = _renderDashboardB.apply(this, arguments); renderBirthdays(); if (ME && ['admin','hr'].includes(ME.role) && !V.loaded){ V.loaded = true; loadVoice().catch(() => {}); } return r; };
 async function renderSelfBirthday(){
   const box = $('self-bday'); if (!box) return;
@@ -4552,6 +4562,7 @@ async function renderSelfBirthday(){
       <div style="opacity:.9;margin-top:4px">عائلة بتروكيما تتمنى لك عيد ميلاد سعيد</div></div>` : '';
 }
 const _showSelfB = showSelf;
+// @ts-expect-error — showSelf is deliberately extended here (the new version wraps the earlier one)
 showSelf = async function(){ const r = await _showSelfB.apply(this, arguments); renderSelfBirthday(); return r; };
 
 // ── announcements ──
@@ -4589,8 +4600,8 @@ async function publishNews(){
   b.disabled = false; b.textContent = '📢 Publish';
 }
 document.addEventListener('click', async e => {
-  const at = e.target.closest('[data-an-att]'); if (at){ e.preventDefault(); const { data, error } = await sb.storage.from('announcements').createSignedUrl(at.dataset.anAtt, 600); if (error) return toast(error.message,'err'); window.open(data.signedUrl, '_blank'); return; }
-  const del = e.target.closest('[data-an-del]'); if (del){ const a = V.news.find(x => x.id === del.dataset.anDel); if (!a) return;
+  const at = /** @type {PageEl} */ (e.target).closest('[data-an-att]'); if (at){ e.preventDefault(); const { data, error } = await sb.storage.from('announcements').createSignedUrl(at.dataset.anAtt, 600); if (error) return toast(error.message,'err'); window.open(data.signedUrl, '_blank'); return; }
+  const del = /** @type {PageEl} */ (e.target).closest('[data-an-del]'); if (del){ const a = V.news.find(x => x.id === del.dataset.anDel); if (!a) return;
     confirmDel(`Delete “${a.title}”? Employees will no longer see it.`, async () => {
       const { error } = await sb.from('announcements').delete().eq('id', a.id); if (error) throw error;
       if (a.attachment_path) await sb.storage.from('announcements').remove([a.attachment_path]);
@@ -4627,7 +4638,7 @@ async function renderVoicePage(){
 }
 let VO_CUR = null;
 document.addEventListener('click', e => {
-  const r = e.target.closest('[data-vo]'); if (!r) return;
+  const r = /** @type {PageEl} */ (e.target).closest('[data-vo]'); if (!r) return;
   const [kind, id] = r.dataset.vo.split(':'), x = (kind === 'fb' ? V.fb : kind === 'hire' ? V.hire : kind === 'act' ? V.act : V.train).find(y => y.id === id); if (!x) return;
   VO_CUR = { kind, x };
   $('mv-close').style.display = kind === 'hire' && x.status !== 'Closed' && !x.hr_closed ? '' : 'none';
@@ -4684,14 +4695,14 @@ $('mv-close').addEventListener('click', async () => {
 // ═════════════════════════════════════════════════════════
 let SR_CUR = null; V.sal = [];
 function currentBasic(empId, onDate){
-  const rows = (S.fixed || []).filter(r => String(r.emp_id) === String(empId) && (elByCode(r.element_code) || {}).is_basic
+  const rows = (S.fixed || []).filter(r => String(r.emp_id) === String(empId) && (elOrBlank(r.element_code)).is_basic
     && r.effective_from <= onDate && (!r.effective_to || r.effective_to >= onDate)).sort((a,b) => String(b.effective_from).localeCompare(String(a.effective_from)));
   return rows.length ? num(rows[0].amount) : null;
 }
 function openSalaryRequest(empId, code, amount, from){
   const e = empById(empId); if (!e) return toast('Save the employee first','warn');
   SR_CUR = { empId, code };
-  $('sr-who').innerHTML = `<b>${esc(empName(e))}</b> (${esc(empId)}) · ${esc((elByCode(code) || {}).name_en || 'Basic salary')}`;
+  $('sr-who').innerHTML = `<b>${esc(empName(e))}</b> (${esc(empId)}) · ${esc((elOrBlank(code)).name_en || 'Basic salary')}`;
   const f = from || todayISO(); $('sr-from').value = f;
   const cur = currentBasic(empId, f); $('sr-cur').value = cur == null ? '—' : fmt(cur);
   $('sr-new').value = amount || ''; $('sr-reason').value = '';
@@ -4717,14 +4728,17 @@ async function renderSalaryPending(empId){
     + (last && !w ? `<div style="font-size:12px;color:var(--muted);margin:8px 0">Last basic salary request: ${fmt(last.new_amount)} from ${esc(last.effective_from)} — ${esc(last.status)}${last.board_by ? ' by ' + esc(last.board_by) : ''}</div>` : '')
     + `<button class="btn btn-ghost btn-sm" style="margin:6px 0" data-sal-req="${esc(empId)}">💼 Request basic salary change</button>`;
 }
-document.addEventListener('click', e => { const b = e.target.closest('[data-sal-req]'); if (!b) return;
+document.addEventListener('click', e => { const b = /** @type {PageEl} */ (e.target).closest('[data-sal-req]'); if (!b) return;
   const basic = (S.elements || []).find(x => x.is_basic && x.active !== false); openSalaryRequest(b.dataset.salReq, basic ? basic.code : null, null, null); });
 const _openEmpSal = openEmp;
+// @ts-expect-error — openEmp is deliberately extended here (the new version wraps the earlier one)
 openEmp = function(id){ const r = _openEmpSal.apply(this, arguments); renderSalaryPending(id); return r; };
 // list on the Employee voice page
 const _loadVoiceSal = loadVoice;
+// @ts-expect-error — loadVoice is deliberately extended here (the new version wraps the earlier one)
 loadVoice = async function(){ await _loadVoiceSal.apply(this, arguments); const r = await sb.from('salary_change_requests').select('*').order('created_at', { ascending:false }); V.sal = r.data || []; };
 const _renderVoiceSal = renderVoicePage;
+// @ts-expect-error — renderVoicePage is deliberately extended here (the new version wraps the earlier one)
 renderVoicePage = async function(){ await _renderVoiceSal.apply(this, arguments);
   $('vo-sal').innerHTML = V.sal.map(x => `<tr><td class="mono">${esc(vDate(x.created_at))}</td><td>${esc(x.emp_name ? `${x.emp_name} (${x.emp_id})` : vName(x.emp_id))}</td>
       <td class="num">${x.current_amount == null ? '—' : fmt(x.current_amount)}</td><td class="num strong">${fmt(x.new_amount)}</td><td class="mono">${esc(x.effective_from)}</td>
@@ -4732,7 +4746,7 @@ renderVoicePage = async function(){ await _renderVoiceSal.apply(this, arguments)
       <td style="white-space:normal;font-size:12px">${x.board_by ? esc(x.board_by) + (x.board_note ? ': ' + esc(x.board_note) : '') : ''}</td><td>${vChip(x.status)}</td>
       <td>${x.status === 'Waiting for board' ? `<button class="btn btn-ghost btn-sm" data-sal-cancel="${esc(x.id)}">Cancel</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="10" class="empty">No requests</td></tr>';
 };
-document.addEventListener('click', async e => { const b = e.target.closest('[data-sal-cancel]'); if (!b) return;
+document.addEventListener('click', async e => { const b = /** @type {PageEl} */ (e.target).closest('[data-sal-cancel]'); if (!b) return;
   const { error } = await sb.rpc('cancel_salary_change', { p_id: b.dataset.salCancel }); if (error) return toast(error.message, 'err');
   toast('Request cancelled'); renderVoicePage(); });
 
@@ -4742,7 +4756,7 @@ document.addEventListener('click', async e => { const b = e.target.closest('[dat
 const ff = k => document.querySelector(`#emp-form [data-f="${k}"]`);
 // resignation date and Inactive go together
 document.addEventListener('change', e => {
-  const f = e.target.closest('#emp-form [data-f]'); if (!f) return;
+  const f = /** @type {PageEl} */ (e.target).closest('#emp-form [data-f]'); if (!f) return;
   if (f.dataset.f === 'resignation_date' && f.value && ff('status') && ff('status').value !== 'Inactive'){
     ff('status').value = 'Inactive'; toast('Status set to Inactive — a resignation date always goes with Inactive');
   }
@@ -4751,6 +4765,7 @@ document.addEventListener('change', e => {
   }
 });
 const _saveEmpLife = saveEmp;
+// @ts-expect-error — saveEmp is deliberately extended here (the new version wraps the earlier one)
 saveEmp = async function(){
   const st = ff('status'), rd = ff('resignation_date');
   if (st && rd){
@@ -4792,7 +4807,7 @@ function openRehire(id){
     [['from','New employment date *','date',''], ['job','Job name','text', e.job_name], ['dept','Department','text', e.department]]);
 }
 document.addEventListener('click', e => {
-  const b = e.target.closest('[data-life]'); if (!b) return; const emp = empById(editingEmp); if (!emp) return;
+  const b = /** @type {PageEl} */ (e.target).closest('[data-life]'); if (!b) return; const emp = empById(editingEmp); if (!emp) return;
   const k = b.dataset.life;
   if (k === 'rehire') return openRehire(emp.id);
   if (k === 'past') return lifeModal('past', '＋ Add a past period', 'For an earlier period with Petrokima under this code (from the old files).', [['from','Employed from','date',''], ['to','Resigned on','date',''], ['job','Job name','text',''], ['dept','Department','text',''], ['note','Note','textarea','']]);
@@ -4821,6 +4836,7 @@ $('ml-go').addEventListener('click', async () => {
   if (ML.kind === 'rehire' || ML.kind === 'black' || ML.kind === 'unblack'){ openEmp(id); if (typeof renderEmployees === 'function') renderEmployees(); } else renderEmpLife(id);
 });
 const _openEmpLife = openEmp;
+// @ts-expect-error — openEmp is deliberately extended here (the new version wraps the earlier one)
 openEmp = function(id){ const r = _openEmpLife.apply(this, arguments); renderEmpLife(id); return r; };
 
 // ═════════════════════════════════════════════════════════
@@ -4830,7 +4846,7 @@ const STAFF_ROLES = ['admin','hr','hr_officer'];
 let SEC = { require_staff_mfa:false, enrolled:false, aal:'aal1', ready:false };
 
 // the two two-step windows must not close by clicking beside them or pressing Esc
-document.addEventListener('click', e => { if (e.target && (e.target.id === 'm-code' || e.target.id === 'm-2fa')) e.stopImmediatePropagation(); }, true);
+document.addEventListener('click', e => { if (e.target && (/** @type {PageEl} */ (e.target).id === 'm-code' || /** @type {PageEl} */ (e.target).id === 'm-2fa')) e.stopImmediatePropagation(); }, true);
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && ($('m-code').classList.contains('open') || $('m-2fa').classList.contains('open'))) e.stopImmediatePropagation(); }, true);
 
 async function loadSecurity(){
@@ -4997,7 +5013,7 @@ $('tfa-off').addEventListener('click', () => {
   $('del-title').textContent = 'Please confirm'; $('del-ok').textContent = 'Switch off'; $('del-ok').className = 'btn btn-danger';
 });
 $('us-tbl').addEventListener('click', e => {
-  const b = e.target.closest('[data-u-mfa]'); if (!b) return;
+  const b = /** @type {PageEl} */ (e.target).closest('[data-u-mfa]'); if (!b) return;
   const u = USERS.find(x => x.id === b.closest('tr').dataset.uid); if (!u) return;
   confirmDel(`Reset two-step sign-in for ${u.full_name || u.email}? Use this when they lost or changed their phone. At their next sign-in they scan a new QR code.`,
     async () => { const { error } = await sb.rpc('admin_reset_mfa', { p_user:u.id }); if (error) throw error; toast('Two-step sign-in reset'); loadTwoStepAdmin(); });
@@ -5120,11 +5136,11 @@ function renderLocWarnings(){
   const list = locFlagged().filter(c => {
     const fl = c.location_flags || [];
     if (kind === 'held' ? c.applied !== false : kind && !fl.includes(kind)) return false;
-    if (!q) return true; const e = empById(c.emp_id) || {};
+    if (!q) return true; const e = empOrBlank(c.emp_id);
     return [c.emp_id, empName(e), c.project_code, projName(c.project_code)].some(v => String(v||'').toLowerCase().includes(q));
   }).sort((a,b) => String(b.at).localeCompare(String(a.at)));
   $('lw-count').textContent = `${list.length} check-in${list.length===1?'':'s'} with location warnings`;
-  $('lw-tbl').innerHTML = list.slice(0, 500).map(c => { const e = empById(c.emp_id) || {}, u = mapUrl(c);
+  $('lw-tbl').innerHTML = list.slice(0, 500).map(c => { const e = empOrBlank(c.emp_id), u = mapUrl(c);
     return `<tr><td class="mono">${esc(c.local_date||'')}</td><td class="mono">${esc(c.local_time||'')}</td>
       <td><span class="mono">${esc(c.emp_id)}</span> ${esc(empName(e))}</td><td>${c.event_type==='in'?'Check in':'Check out'}</td>
       <td>${c.project_code ? `<span class="mono">${esc(c.project_code)}</span> ${esc(projName(c.project_code))}` : '<span style="color:var(--muted)">no project</span>'}</td>
@@ -5137,7 +5153,7 @@ function renderLocWarnings(){
 }
 $('lw-kind').addEventListener('change', renderLocWarnings);
 $('lw-q').addEventListener('input', renderLocWarnings);
-$('lw-tbl').addEventListener('click', e => { const b = e.target.closest('[data-loc-pin]'); if (!b) return;
+$('lw-tbl').addEventListener('click', e => { const b = /** @type {PageEl} */ (e.target).closest('[data-loc-pin]'); if (!b) return;
   const c = S.clocks.find(x => String(x.id) === b.dataset.locPin); if (!c) return;
   confirmDel(`Use this check-in (${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}) as the map point of site ${c.project_code} — ${projName(c.project_code)}? Only do this if you are sure the employee was really at the site.`,
     async () => { await saveSite(c.project_code, c.lat, c.lng, null); toast('Site map point saved'); renderSites(); });
@@ -5179,21 +5195,22 @@ function renderSites(){
 $('ls-show').addEventListener('change', renderSites);
 $('ls-q').addEventListener('input', renderSites);
 $('ls-tbl').addEventListener('input', e => {         // pasting "30.04, 31.23" into Latitude fills both boxes
-  const i = e.target.closest('[data-s="lat"]'); if (!i || !/[ ,]/.test(i.value.trim())) return;
+  const i = /** @type {PageEl} */ (e.target).closest('[data-s="lat"]'); if (!i || !/[ ,]/.test(i.value.trim())) return;
   const ll = parseLatLng(i.value); if (!ll) return;
-  i.value = ll.lat; i.closest('tr').querySelector('[data-s="lng"]').value = ll.lng;
+  i.value = String(ll.lat); i.closest('tr').querySelector('[data-s="lng"]').value = String(ll.lng);
 });
 $('ls-tbl').addEventListener('click', async e => {
-  const tr = e.target.closest('tr[data-site]'); if (!tr) return; const code = tr.dataset.site;
-  if (e.target.closest('[data-s-clear]')) {
+  const tr = /** @type {PageEl} */ (e.target).closest('tr[data-site]'); if (!tr) return; const code = tr.dataset.site;
+  if (/** @type {PageEl} */ (e.target).closest('[data-s-clear]')) {
     try { const { data, error } = await sb.from('projects').update({ site_lat:null, site_lng:null, site_radius_m:null }).eq('id', code).select('id');
       if (error) throw error; if (!(data && data.length)) throw new Error(NOPERM);
       const p = S.projects.find(x => String(x.id) === code); if (p) Object.assign(p, { site_lat:null, site_lng:null, site_radius_m:null });
       toast('Map point removed — this site is no longer checked'); renderSites(); } catch (err) { toast(err.message, 'err'); }
     return;
   }
-  if (!e.target.closest('[data-s-save]')) return;
-  let lat = tr.querySelector('[data-s="lat"]').value.trim(), lng = tr.querySelector('[data-s="lng"]').value.trim();
+  if (!/** @type {PageEl} */ (e.target).closest('[data-s-save]')) return;
+  /** @type {string | number} */ let lat = tr.querySelector('[data-s="lat"]').value.trim();
+  /** @type {string | number} */ let lng = tr.querySelector('[data-s="lng"]').value.trim();
   const ll = parseLatLng(lat + (lng ? ',' + lng : '')); if (ll) { lat = ll.lat; lng = ll.lng; } else { lat = Number(lat); lng = Number(lng); }
   const radTxt = tr.querySelector('[data-s="rad"]').value.trim(), rad = radTxt === '' ? null : Math.round(Number(radTxt));
   if (!validLatLng(lat, lng)) return toast('Enter a valid latitude and longitude (e.g. 30.04442 and 31.23571)', 'warn');
@@ -5231,19 +5248,19 @@ function renderOffices(){
     || '<tr><td colspan="7" class="empty">No offices yet — click + Add office</td></tr>';
 }
 $('wl-tbl').addEventListener('input', e => {
-  const i = e.target.closest('[data-w="lat"]'); if (!i || !/[ ,]/.test(i.value.trim())) return;
-  const ll = parseLatLng(i.value); if (!ll) return; i.value = ll.lat; i.closest('tr').querySelector('[data-w="lng"]').value = ll.lng;
+  const i = /** @type {PageEl} */ (e.target).closest('[data-w="lat"]'); if (!i || !/[ ,]/.test(i.value.trim())) return;
+  const ll = parseLatLng(i.value); if (!ll) return; i.value = String(ll.lat); i.closest('tr').querySelector('[data-w="lng"]').value = String(ll.lng);
 });
 $('wl-tbl').addEventListener('click', async e => {
-  const tr = e.target.closest('tr[data-wl]'); if (!tr) return; const id = tr.dataset.wl;
-  if (e.target.closest('[data-w-del]')) {
+  const tr = /** @type {PageEl} */ (e.target).closest('tr[data-wl]'); if (!tr) return; const id = tr.dataset.wl;
+  if (/** @type {PageEl} */ (e.target).closest('[data-w-del]')) {
     confirmDel('Delete this office? Check-ins without a project will no longer be compared with it.', async () => {
       const { data, error } = await sb.from('work_locations').delete().eq('id', id).select('id'); if (error) throw error; if (!(data && data.length)) throw new Error(NOPERM);
       WORK_LOCS = WORK_LOCS.filter(w => w.id !== id); renderOffices(); toast('Office deleted'); });
     return;
   }
-  if (e.target.closest('[data-w-emps]')) return openOfficeEmps(id);
-  if (!e.target.closest('[data-w-save]')) return;
+  if (/** @type {PageEl} */ (e.target).closest('[data-w-emps]')) return openOfficeEmps(id);
+  if (!/** @type {PageEl} */ (e.target).closest('[data-w-save]')) return;
   const g = k => tr.querySelector(`[data-w="${k}"]`);
   const row = { name: g('name').value.trim(), lat: Number(g('lat').value), lng: Number(g('lng').value), radius_m: Math.round(Number(g('rad').value)), active: g('active').checked };
   if (!row.name) return toast('Give the office a name', 'warn');
@@ -5274,6 +5291,7 @@ $('lr-save').addEventListener('click', async () => {
 
 // ── dashboard alert + menu badge ──
 const _renderDashboardBase = renderDashboard;
+// @ts-expect-error — renderDashboard is deliberately extended here (the new version wraps the earlier one)
 renderDashboard = function(){
   _renderDashboardBase();
   const flagged = locFlagged(), n = flagged.length, held = flagged.filter(c => c.applied === false).length;
@@ -5300,7 +5318,7 @@ function renderOfficeEmps(){
   if (!WLE) return;
   const q = $('wle-q').value.trim().toLowerCase();
   const mine = OFFICE_EMPS.filter(x => x.location_id === WLE.id);
-  const rows = mine.map(x => ({ x, e: empById(x.emp_id) || { id: x.emp_id } }))
+  const rows = mine.map(x => ({ x, e: empById(x.emp_id) || /** @type {Employee} */ ({ id: x.emp_id }) }))
     .filter(({ e }) => !q || [e.id, e.name_en, e.name_ar, e.department].some(v => String(v || '').toLowerCase().includes(q)))
     .sort((a, b) => String(a.e.id).localeCompare(String(b.e.id), undefined, { numeric: true }));
   $('wle-count').textContent = `${mine.length} employee${mine.length === 1 ? '' : 's'}`;
@@ -5346,7 +5364,7 @@ $('wle-dept-add').addEventListener('click', () => {
 });
 $('wle-q').addEventListener('input', renderOfficeEmps);
 $('wle-tbl').addEventListener('click', async e => {
-  const b = e.target.closest('[data-wle-rm]'); if (!b) return;
+  const b = /** @type {PageEl} */ (e.target).closest('[data-wle-rm]'); if (!b) return;
   const id = b.dataset.wleRm;
   const { data, error } = await sb.from('employee_work_locations').delete().eq('emp_id', id).eq('location_id', WLE.id).select();
   if (error) return toast(error.message, 'err'); if (!(data && data.length)) return toast(NOPERM, 'err');
@@ -5591,8 +5609,8 @@ $('hra-save-rules').addEventListener('click', async () => {
 // decisions
 let HRA_PICK = null;
 document.addEventListener('click', e => {
-  const em = e.target.closest('[data-hra-emp]'); if (em){ e.preventDefault(); return openEmp(em.dataset.hraEmp); }
-  const b = e.target.closest('[data-hra-act]'); if (!b) return;
+  const em = /** @type {PageEl} */ (e.target).closest('[data-hra-emp]'); if (em){ e.preventDefault(); return openEmp(em.dataset.hraEmp); }
+  const b = /** @type {PageEl} */ (e.target).closest('[data-hra-act]'); if (!b) return;
   const a = hraFind(b.dataset.k); if (!a) return;
   const act = b.dataset.hraAct, nm = `<b>${esc(a.name_en || a.name_ar || a.emp_id)}</b> (${esc(a.emp_id)})`;
   HRA_PICK = { a, act };
@@ -5611,7 +5629,7 @@ document.addEventListener('click', e => {
   openM('m-hra');
 });
 document.addEventListener('click', async e => {
-  if (!e.target.closest('#hra-m-go') || !HRA_PICK) return;
+  if (!/** @type {PageEl} */ (e.target).closest('#hra-m-go') || !HRA_PICK) return;
   const { a, act } = HRA_PICK, btn = $('hra-m-go'); btn.disabled = true;
   try {
     if (act === 'renew'){
@@ -5629,6 +5647,7 @@ document.addEventListener('click', async e => {
 });
 // dashboard alert + menu badge (loads once after sign-in, again when the page is opened)
 const _renderDashboard26 = renderDashboard;
+// @ts-expect-error — renderDashboard is deliberately extended here (the new version wraps the earlier one)
 renderDashboard = function(){
   const r = _renderDashboard26.apply(this, arguments);
   if (canHRA() && !HRA.loaded && !HRA.loading) loadHRAlerts().then(() => renderDashboard(), () => {});
@@ -5663,10 +5682,11 @@ function lbText(b, reqDays, type, alreadyIn){
     out.push(`Emergency leave ${y}: ${fmt(b.emergency_cap)} days allowed · <b class="${el < 0 ? 'neg' : 'pos'}">${fmt(el)} left</b> after this request${el < 0 ? ' — over the emergency limit' : ''}`); }
   return out;
 }
+// @ts-expect-error — leaveHint is deliberately extended here (the new version wraps the earlier one)
 leaveHint = function(){
   const emp = parseEmpInput($('lv-emp').value), e = empById(emp), f = $('lv-from').value, t = $('lv-to').value, type = $('lv-t').value, out = [];
   if (f && t && t < f) out.push('<span class="neg">“To” is before “From”.</span>');
-  if (f && t && t >= f){ const cal = Math.round((dObj(t) - dObj(f)) / 86400000) + 1, wd = workdays(f, t);
+  if (f && t && t >= f){ const cal = Math.round((dObj(t).getTime() - dObj(f).getTime()) / 86400000) + 1, wd = workdays(f, t);
     out.push(`${cal} calendar day${cal > 1 ? 's' : ''}, ${wd} working day${wd === 1 ? '' : 's'} (weekends excluded).`); }
   if (e && (type === 'Annual' || type === 'Casual')){
     const y = (f || todayStr()).slice(0, 4), b = LB.get(`${emp}|${y}`);
@@ -5689,13 +5709,15 @@ leaveHint = function(){
   $('lv-hint').innerHTML = out.join('<br>');
 };
 const _openLeave26 = openLeave;
+// @ts-expect-error — openLeave is deliberately extended here (the new version wraps the earlier one)
 openLeave = function(){ LB.clear(); LB_ALL.year = null; return _openLeave26.apply(this, arguments); };
 
 // employee self-service: own balance
+// @ts-expect-error — slHint is deliberately extended here (the new version wraps the earlier one)
 slHint = function(){
   const f = $('sl-from').value, t = $('sl-to').value, type = $('sl-type').value, days = num($('sl-days').value), out = [];
   if (f && t && t < f) out.push('<span class="neg">“To” is before “From”.</span>');
-  if (f && t && t >= f){ const cal = Math.round((dObj(t) - dObj(f)) / 86400000) + 1, wd = workdays(f, t);
+  if (f && t && t >= f){ const cal = Math.round((dObj(t).getTime() - dObj(f).getTime()) / 86400000) + 1, wd = workdays(f, t);
     out.push(`${cal} calendar day${cal > 1 ? 's' : ''} · <b>${wd} working day${wd === 1 ? '' : 's'}</b> (weekends and public holidays are not counted)`); }
   if (f && f < todayStr()) out.push('<span style="color:var(--warn)">These dates are in the past — HR will review them.</span>');
   if (SD.emp && (type === 'Annual' || type === 'Casual')){
@@ -5716,8 +5738,10 @@ slHint = function(){
   $('sl-hint').innerHTML = out.join('<br>');
 };
 const _openSelfLeave26 = openSelfLeave;
+// @ts-expect-error — openSelfLeave is deliberately extended here (the new version wraps the earlier one)
 openSelfLeave = function(){ LB.clear(); return _openSelfLeave26.apply(this, arguments); };
 const _renderSelf26 = renderSelf;
+// @ts-expect-error — renderSelf is deliberately extended here (the new version wraps the earlier one)
 renderSelf = function(){
   const r = _renderSelf26.apply(this, arguments);
   if (SD && SD.emp){ const y = todayStr().slice(0, 4), id = SD.emp.id;
@@ -5746,6 +5770,7 @@ if (repLB){
   };
 }
 const _openReport26 = openReport;
+// @ts-expect-error — openReport is deliberately extended here (the new version wraps the earlier one)
 openReport = function(id){
   const r = _openReport26.apply(this, arguments);
   const y = Number(settings.period.slice(0, 4));
@@ -5802,13 +5827,13 @@ function openCert(c){
   openM('m-cert'); setTimeout(() => $('cert-name').focus(), 50);
 }
 document.addEventListener('click', async e => {
-  if (e.target.closest('#cert-add')) return openCert(null);
-  const ed = e.target.closest('[data-cert-edit]'); if (ed) return openCert(CERTS.find(c => c.id === ed.dataset.certEdit));
-  const dl = e.target.closest('[data-cert-del]');
+  if (/** @type {PageEl} */ (e.target).closest('#cert-add')) return openCert(null);
+  const ed = /** @type {PageEl} */ (e.target).closest('[data-cert-edit]'); if (ed) return openCert(CERTS.find(c => c.id === ed.dataset.certEdit));
+  const dl = /** @type {PageEl} */ (e.target).closest('[data-cert-del]');
   if (dl){ const c = CERTS.find(x => x.id === dl.dataset.certDel); if (!c) return;
     return confirmDel(`Remove the certificate “${c.name}”?`, async () => { await del('employee_certificates', c.id); if (c.file_path) await sb.storage.from('certificates').remove([c.file_path]);
       toast('Certificate removed'); renderCerts(editingEmp); loadHRAlerts().then(hraBadge); }); }
-  const f = e.target.closest('[data-cert-file]');
+  const f = /** @type {PageEl} */ (e.target).closest('[data-cert-file]');
   if (f){ e.preventDefault(); const { data, error } = await sb.storage.from('certificates').createSignedUrl(f.dataset.certFile, 600);
     if (error || !data) return toast(error ? error.message : 'Could not open the file', 'err'); window.open(data.signedUrl, '_blank'); }
 });
@@ -5833,9 +5858,11 @@ $('cert-save').addEventListener('click', async () => {
   btn.disabled = false;
 });
 const _openEmp26 = openEmp;
+// @ts-expect-error — openEmp is deliberately extended here (the new version wraps the earlier one)
 openEmp = function(id){ const r = _openEmp26.apply(this, arguments); renderEmpLeave(id); renderCerts(id); return r; };
 // after an employee is saved, dates may have been filled in by the database (probation, contract end) — alerts follow
 const _saveEmp26 = saveEmp;
+// @ts-expect-error — saveEmp is deliberately extended here (the new version wraps the earlier one)
 saveEmp = async function(){ const r = await _saveEmp26.apply(this, arguments); LB.clear(); if (canHRA()) loadHRAlerts().then(hraBadge); return r; };
 // the original hint functions were attached directly — attach the new ones too (they run last and replace the text)
 ['lv-emp','lv-t','lv-days'].forEach(id => $(id).addEventListener('input', () => leaveHint()));
@@ -5881,22 +5908,26 @@ function officerPatch(client){
   client.__officerPatch = true;
 }
 const _startApp27 = startApp;
+// @ts-expect-error — startApp is deliberately extended here (the new version wraps the earlier one)
 startApp = async function(){ const r = await _startApp27.apply(this, arguments); officerPatch(sb); return r; };
 const _afterLogin27 = afterLogin;
+// @ts-expect-error — afterLogin is deliberately extended here (the new version wraps the earlier one)
 afterLogin = async function(){ officerPatch(sb); return _afterLogin27.apply(this, arguments); };
 // HR officers: show the employee Save / New employee / Bulk upload controls (pay stays hidden)
 const _afterLogin27b = afterLogin;
+// @ts-expect-error — afterLogin is deliberately extended here (the new version wraps the earlier one)
 afterLogin = async function(){ const r = await _afterLogin27b.apply(this, arguments);
   document.body.classList.toggle('can-master', !!(ME && ['admin','hr','hr_officer'].includes(ME.role))); return r; };
 
 // ── HR officers enter attendance, vacations, permissions, penalties (50). Penalties in days / hours of pay:
 //    officers see the days / hours only — the money value would reveal the employee's pay.
 const _renderPenalties27 = renderPenalties;
+// @ts-expect-error — renderPenalties is deliberately extended here (the new version wraps the earlier one)
 renderPenalties = function(){
   const r = _renderPenalties27.apply(this, arguments);
   if (!isOfficer()) return r;
   document.querySelectorAll('#pn-tbl tr[data-pen]').forEach(tr => { const x = S.penalties.find(p => String(p.id) === tr.dataset.pen);
-    if (x && x.penalty_type !== 'Amount'){ const c = tr.children[4]; if (c){ c.textContent = '—'; c.title = 'Worked out in the payroll from the employee\'s pay'; } } });
+    if (x && x.penalty_type !== 'Amount'){ const c = /** @type {HTMLElement} */ (tr.children[4]); if (c){ c.textContent = '—'; c.title = 'Worked out in the payroll from the employee\'s pay'; } } });
   const thisP = S.penalties.filter(x => x.status === 'Approved' && x.apply_period === settings.period), amt = thisP.filter(x => x.penalty_type === 'Amount');
   $('pn-sub').textContent = `${thisP.length} approved penalt${thisP.length === 1 ? 'y' : 'ies'} in the ${periodLabel(settings.period)} payroll · ${fmt(amt.reduce((s, x) => s + num(x.quantity), 0))} EGP in fixed amounts`
     + (thisP.length > amt.length ? ` + ${thisP.length - amt.length} in days / hours of pay (worked out in the payroll)` : '');
@@ -5904,6 +5935,7 @@ renderPenalties = function(){
   return r;
 };
 const _penHint27 = penHint;
+// @ts-expect-error — penHint is deliberately extended here (the new version wraps the earlier one)
 penHint = function(){
   if (!isOfficer()) return _penHint27.apply(this, arguments);
   const t = $('pn-type').value; $('pn-qty-l').textContent = t === 'Amount' ? 'Amount (EGP)' : t === 'Hours' ? 'Number of hours' : 'Number of days';
@@ -5917,6 +5949,7 @@ penHint = function(){
 };
 // the vacation hint: no "deducts … daily pay" figure for officers
 const _leaveHint27 = leaveHint;
+// @ts-expect-error — leaveHint is deliberately extended here (the new version wraps the earlier one)
 leaveHint = function(){ const r = _leaveHint27.apply(this, arguments);
   if (isOfficer()) $('lv-hint').innerHTML = $('lv-hint').innerHTML.replace(/Unpaid: deducts [^<]*?per day in the payroll period it falls in\./, 'Unpaid: deducted in the payroll at the employee\'s daily pay.');
   return r; };
@@ -5929,15 +5962,16 @@ function contractEndPreview(ev){
   let note = end.parentElement.querySelector('.ce-note');
   if (!note){ note = document.createElement('div'); note.className = 'ce-note'; note.style.cssText = 'font-size:11px;margin-top:4px;color:var(--muted)'; end.parentElement.appendChild(note); }
   if (type.value === 'Permanent'){ note.textContent = 'Permanent contract — no end date and no renewal alert. Choose Temporary or Contract for a one-year contract.'; return; }
-  if (start.value && (!end.value || end.dataset.auto === '1') && (ev && (ev.target === start || ev.target === type))){
+  if (start.value && (!end.value || end.dataset.auto === '1') && (ev && (ev.target === start || /** @type {PageEl} */ (ev.target) === type))){
     end.value = addYearISO(addDaysISO(start.value, -1)); end.dataset.auto = '1';          // 1 Sep 2026 → 31 Aug 2027
   }
   note.textContent = start.value ? 'One year after the start, ending the day before.' : 'Enter the contract start — the end fills in by itself.';
 }
-document.addEventListener('input', e => { if (e.target.closest && e.target.closest('#emp-form') && /^(contract_type|contract_start_date)$/.test(e.target.dataset.f || '')) contractEndPreview(e); });
-document.addEventListener('change', e => { if (e.target.closest && e.target.closest('#emp-form') && /^(contract_type|contract_start_date|contract_end_date)$/.test(e.target.dataset.f || '')){
-  if (e.target.dataset.f === 'contract_end_date') e.target.dataset.auto = ''; else contractEndPreview(e); } });
+document.addEventListener('input', e => { if (/** @type {PageEl} */ (e.target).closest && /** @type {PageEl} */ (e.target).closest('#emp-form') && /^(contract_type|contract_start_date)$/.test(/** @type {PageEl} */ (e.target).dataset.f || '')) contractEndPreview(e); });
+document.addEventListener('change', e => { if (/** @type {PageEl} */ (e.target).closest && /** @type {PageEl} */ (e.target).closest('#emp-form') && /^(contract_type|contract_start_date|contract_end_date)$/.test(/** @type {PageEl} */ (e.target).dataset.f || '')){
+  if (/** @type {PageEl} */ (e.target).dataset.f === 'contract_end_date') /** @type {PageEl} */ (e.target).dataset.auto = ''; else contractEndPreview(e); } });
 const _openEmp27 = openEmp;
+// @ts-expect-error — openEmp is deliberately extended here (the new version wraps the earlier one)
 openEmp = function(){ const r = _openEmp27.apply(this, arguments); contractEndPreview(null); return r; };
 
 // ═════════════════════════════════════════════════════════
@@ -5983,7 +6017,7 @@ openEmp = function(){ const r = _openEmp27.apply(this, arguments); contractEndPr
   window.fitWidthNow = fit;
   let t = null; const later = () => { clearTimeout(t); t = setTimeout(fit, 120); };
   window.addEventListener('resize', later);
-  document.addEventListener('click', ev => { if (ev.target.closest('[data-page],[data-nav],[data-spage],.tab,.seg button')) later(); }, true);
+  document.addEventListener('click', ev => { if (/** @type {PageEl} */ (ev.target).closest('[data-page],[data-nav],[data-spage],.tab,.seg button')) later(); }, true);
   const mo = new MutationObserver(later);
   document.querySelectorAll('#app .main, #self .main').forEach(m => mo.observe(m, { childList: true, subtree: true }));
   label(); later();
@@ -6027,6 +6061,7 @@ setInterval(idleCheck, 1000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) idleCheck(); });   // a computer waking from sleep
 // the sign-in screen explains why the user was signed out
 const showLoginBeforeIdle = showLogin;
+// @ts-expect-error — showLogin is deliberately extended here (the new version wraps the earlier one)
 showLogin = function(msg){
   let idle = false; try { idle = sessionStorage.getItem('pk_idle_out') === '1'; sessionStorage.removeItem('pk_idle_out'); } catch(e){}
   showLoginBeforeIdle(msg || (idle ? 'You were signed out automatically after 10 minutes without activity. Please sign in again.' : undefined));
@@ -6064,7 +6099,7 @@ function pickSelect(k, src, v, dept){
 }
 // choosing "Other" turns the list into a text box; changing the department refreshes the unit list
 document.addEventListener('change', e => {
-  const el = e.target; if (!el.closest || !el.closest('#emp-form') || !el.dataset || !el.dataset.pick) return;
+  const el = /** @type {PageEl} */ (e.target); if (!el.closest || !el.closest('#emp-form') || !el.dataset || !el.dataset.pick) return;
   if (el.value === PICK_OTHER) {
     const inp = document.createElement('input'); inp.type = 'text'; inp.dataset.f = el.dataset.f;
     inp.placeholder = 'Type the new ' + (el.closest('.field').querySelector('label') || {}).textContent.toLowerCase() + '…';
@@ -6119,16 +6154,16 @@ function docRequest(emps){
     });
 }
 document.addEventListener('click', async e => {
-  const rq = e.target.closest('[data-doc-req]'); if (rq) return docRequest([rq.dataset.docReq]);
-  if (e.target.closest('#hra-doc-all')) {
+  const rq = /** @type {PageEl} */ (e.target).closest('[data-doc-req]'); if (rq) return docRequest([rq.dataset.docReq]);
+  if (/** @type {PageEl} */ (e.target).closest('#hra-doc-all')) {
     const emps = [...new Set([...document.querySelectorAll('#hra-tbl [data-doc-req]')].map(b => b.dataset.docReq))];
     return emps.length ? docRequest(emps) : toast('Every national-ID alert listed already has a request', 'warn');
   }
-  const vw = e.target.closest('[data-doc-view]');
+  const vw = /** @type {PageEl} */ (e.target).closest('[data-doc-view]');
   if (vw) { const d = [...DOCS.byEmp.values()].find(x => x.id === vw.dataset.docView); if (!d) return;
     const { data, error } = await sb.storage.from('employee-docs').createSignedUrl(d.file_path, 600);
     return error ? toast(error.message, 'err') : window.open(data.signedUrl, '_blank', 'noopener'); }
-  const ok = e.target.closest('[data-doc-ok]');
+  const ok = /** @type {PageEl} */ (e.target).closest('[data-doc-ok]');
   if (ok) { const d = [...DOCS.byEmp.values()].find(x => x.id === ok.dataset.docOk); if (!d) return;
     return docModal('✓ Accept the new ID',
       `<p style="color:var(--label)"><b>${esc(empName(empById(d.emp_id)) || d.emp_id)}</b> (${esc(d.emp_id)}) sent the copy on ${esc(docDay(d.submitted_at))}. Check the photo first (👁 View copy).</p>
@@ -6139,7 +6174,7 @@ document.addEventListener('click', async e => {
         const emp = empById(d.emp_id); if (emp) emp.national_id_expiry = $('doc-exp').value;
         closeM('m-doc'); toast('Accepted — the national ID expiry date is updated'); await loadDocRequests(); await loadHRAlerts(); renderHRAlerts();
       }); }
-  const bk = e.target.closest('[data-doc-back]');
+  const bk = /** @type {PageEl} */ (e.target).closest('[data-doc-back]');
   if (bk) { const d = [...DOCS.byEmp.values()].find(x => x.id === bk.dataset.docBack); if (!d) return;
     return docModal('↩ Return to the employee',
       `<p style="color:var(--label)">The employee is asked to send it again, with your note.</p>
@@ -6149,7 +6184,7 @@ document.addEventListener('click', async e => {
         if (error) throw error;
         closeM('m-doc'); toast('Returned to the employee'); await loadDocRequests(); renderHRAlerts();
       }); }
-  const cn = e.target.closest('[data-doc-cancel]');
+  const cn = /** @type {PageEl} */ (e.target).closest('[data-doc-cancel]');
   if (cn) return confirmDel('Cancel this document request? The employee will no longer see it.', async () => {
     const { error } = await sb.rpc('cancel_document_request', { p_id: cn.dataset.docCancel }); if (error) throw error;
     toast('Request cancelled'); await loadDocRequests(); renderHRAlerts(); });
@@ -6177,6 +6212,7 @@ function payElCols(list, type){
     k: (type === 'Addition' ? 'a' : 'd') + k, t: (x.code ? x.code + ' · ' : '') + x.name, n: 1, neg: type === 'Deduction', el: 1,
     v: r => (r.lines || []).filter(l => l.type === type && String(l.code) === k).reduce((s, l) => s + num(l.amount), 0) }));
 }
+/** @returns {{ k: string, t: string, v: (r: any) => any, s?: (r: any) => string, h?: (r: any) => string, cls?: string, n?: number, el?: number, tot?: number, b?: number, neg?: number, pos?: number }[]} */
 function payCols(list){
   const name = { k: 'name', t: 'Name', v: r => empName(r.emp), s: r => [r.emp.name_en, r.emp.name_ar].join(' '),
                  h: r => `${esc(empName(r.emp))}${r.joiner ? ' <span class="chip c-blue">Joiner</span>' : ''}${r.leaver ? ' <span class="chip c-orange">Leaver</span>' : ''}`, cls: 'strong' };
@@ -6242,7 +6278,7 @@ $('pay-fclear').addEventListener('click', () => {
   PAY_F = {}; document.querySelectorAll('#pay-thead [data-pf]').forEach(i => i.value = ''); renderPayTable(PAY_LIST);
 });
 $('pay-thead').addEventListener('input', ev => {
-  const i = ev.target.closest('[data-pf]'); if (!i) return;
+  const i = /** @type {PageEl} */ (ev.target).closest('[data-pf]'); if (!i) return;
   PAY_F[i.dataset.pf] = i.value; renderPayTable(PAY_LIST);
 });
 
@@ -6309,6 +6345,7 @@ function renderBoardRequests(){
   </div>`;
 }
 const _renderDashboardBoard = renderDashboard;
+// @ts-expect-error — renderDashboard is deliberately extended here (the new version wraps the earlier one)
 renderDashboard = function(){
   const r = _renderDashboardBoard.apply(this, arguments);
   if (isBoardViewer()) { renderBoardRequests(); loadBoardRequests(false).then(ch => { if (ch) renderBoardRequests(); }).catch(() => {}); }
@@ -6338,13 +6375,13 @@ async function renderMissions(){
   const st = $('ms-status').value, q = $('ms-q').value.trim().toLowerCase();
   const rows = MS.rows.filter(m => {
     if (st === 'open' ? !['Waiting for HR', 'Waiting for manager', 'Waiting for employee'].includes(m.status) : st && m.status !== st) return false;
-    const e = empById(m.emp_id) || {};
+    const e = empOrBlank(m.emp_id);
     if (!orgMatch(e, 'ms')) return false;
     return !q || [m.emp_id, e.name_en, e.name_ar, m.place, m.purpose, m.project_code].some(v => String(v || '').toLowerCase().includes(q));
   });
   const wait = MS.rows.filter(m => m.status === 'Waiting for HR').length;
   $('ms-sub').textContent = `${wait} waiting for HR approval · ${MS.rows.length} in total`;
-  $('ms-tbl').innerHTML = rows.map(m => { const e = empById(m.emp_id) || { id: m.emp_id, name_en: m.emp_name }, mg = m.manager_id ? empById(m.manager_id) : null;
+  $('ms-tbl').innerHTML = rows.map(m => { const e = empById(m.emp_id) || /** @type {Employee} */ ({ id: m.emp_id, name_en: m.emp_name }), mg = m.manager_id ? empById(m.manager_id) : null;
     const step = m.origin === 'manager'
       ? `Assigned by ${esc(mg ? empName(mg) : m.manager_id)}${m.no_app ? ' · <span class="chip c-grey">employee does not use the app</span>' : m.ack_at ? ` · <span class="pos">✔ acknowledged ${esc(String(m.ack_at).slice(0,16).replace('T',' '))}</span>` : ' · not acknowledged yet'}`
       : (m.manager_id ? `Asked by the employee · manager ${m.manager_by ? (m.status === 'Rejected' && !m.hr_by ? '✕ rejected' : '✔ approved') + ' by ' + esc(m.manager_by) : esc(mg ? empName(mg) : m.manager_id) + ' — not decided'}` : 'Asked by the employee · no direct manager');
@@ -6371,15 +6408,17 @@ async function msDecide(id, ok){
 }
 PAGE_RENDER.missions = () => renderMissions();
 $('ms-tbl').addEventListener('click', e => {
-  const a = e.target.closest('[data-ms-ok]'); if (a) { a.disabled = true; return msDecide(a.dataset.msOk, true); }
-  const r = e.target.closest('[data-ms-no]'); if (r) return msDecide(r.dataset.msNo, false);
+  const a = /** @type {PageEl} */ (e.target).closest('[data-ms-ok]'); if (a) { a.disabled = true; return msDecide(a.dataset.msOk, true); }
+  const r = /** @type {PageEl} */ (e.target).closest('[data-ms-no]'); if (r) return msDecide(r.dataset.msNo, false);
 });
 ['ms-status', 'ms-dept'].forEach(id => $(id).addEventListener('change', renderMissions));
 $('ms-q').addEventListener('input', () => { clearTimeout(MS.t); MS.t = setTimeout(renderMissions, 250); });
 const _loadPeriodDataMs = loadPeriodData;
+// @ts-expect-error — loadPeriodData is deliberately extended here (the new version wraps the earlier one)
 loadPeriodData = async function(){ const r = await _loadPeriodDataMs.apply(this, arguments); loadMissions().catch(() => {}); return r; };
 // always fresh when the page is opened (new requests arrive from phones all day)
 const _showPageMs = showPage;
+// @ts-expect-error — showPage is deliberately extended here (the new version wraps the earlier one)
 showPage = function(name){ const r = _showPageMs.apply(this, arguments); if (name === 'missions') renderMissions(); return r; };
 
 // ═════════════════════════════════════════════════════════
@@ -6483,17 +6522,19 @@ $('smis-all').addEventListener('change', () => { document.querySelectorAll('.smi
 $('smis-who').addEventListener('change', smisCount);
 $('smis-go').addEventListener('click', sendSelfMission);
 document.addEventListener('click', e => {
-  const a = e.target.closest('[data-smis-ack]'); if (a) { a.disabled = true; return smisRpc('acknowledge_mission', { p_id: a.dataset.smisAck }, 'Thank you — your manager and HR are notified'); }
-  const ok = e.target.closest('[data-smis-ok]'); if (ok) { ok.disabled = true; return smisRpc('manager_decide_mission', { p_id: ok.dataset.smisOk, p_approve: true }, 'Approved — sent to HR'); }
-  const no = e.target.closest('[data-smis-no]'); if (no) { const note = prompt('Reason for rejecting (the employee will see it):'); if (note === null) return; if (!note.trim()) return toast('Write the reason', 'warn');
+  const a = /** @type {PageEl} */ (e.target).closest('[data-smis-ack]'); if (a) { a.disabled = true; return smisRpc('acknowledge_mission', { p_id: a.dataset.smisAck }, 'Thank you — your manager and HR are notified'); }
+  const ok = /** @type {PageEl} */ (e.target).closest('[data-smis-ok]'); if (ok) { ok.disabled = true; return smisRpc('manager_decide_mission', { p_id: ok.dataset.smisOk, p_approve: true }, 'Approved — sent to HR'); }
+  const no = /** @type {PageEl} */ (e.target).closest('[data-smis-no]'); if (no) { const note = prompt('Reason for rejecting (the employee will see it):'); if (note === null) return; if (!note.trim()) return toast('Write the reason', 'warn');
     return smisRpc('manager_decide_mission', { p_id: no.dataset.smisNo, p_approve: false, p_note: note.trim() }, 'Rejected — the employee is notified'); }
-  const cx = e.target.closest('[data-smis-cancel]'); if (cx) { const id = cx.dataset.smisCancel;
+  const cx = /** @type {PageEl} */ (e.target).closest('[data-smis-cancel]'); if (cx) { const id = cx.dataset.smisCancel;
     confirmDel('Cancel this mission?', async () => { const { error } = await sb.rpc('cancel_mission', { p_id: id }); if (error) throw new Error(error.message.replace(/^[A-Z_]+:\s*/, '')); toast('Mission cancelled'); await loadSelf(); });
     $('del-title').textContent = 'Please confirm'; $('del-ok').textContent = 'Cancel mission'; }
 });
 const _loadSelfMis = loadSelf;
+// @ts-expect-error — loadSelf is deliberately extended here (the new version wraps the earlier one)
 loadSelf = async function(){ try { await loadSelfMissions(); } catch (e) { console.warn(e); } return _loadSelfMis.apply(this, arguments); };
 const _renderSelfMis = renderSelf;
+// @ts-expect-error — renderSelf is deliberately extended here (the new version wraps the earlier one)
 renderSelf = function(){ const r = _renderSelfMis.apply(this, arguments); try { if (SD.emp) renderSelfMissions(); } catch (e) { console.warn(e); } return r; };
 
 // ═════════════════════════════════════════════════════════
@@ -6532,6 +6573,7 @@ function voiceFilterSection(kind, tbodyId, list, cols){
     c.textContent = `${nOpen} open · ${nClosed} closed`; }
 }
 const _renderVoiceShow = renderVoicePage;
+// @ts-expect-error — renderVoicePage is deliberately extended here (the new version wraps the earlier one)
 renderVoicePage = async function(){
   const r = await _renderVoiceShow.apply(this, arguments);
   const k = $('vo-kind').value;
@@ -6551,6 +6593,7 @@ renderVoicePage = async function(){
 // ═════════════════════════════════════════════════════════
 S.undos = [];
 const _loadPeriodDataUndo = loadPeriodData;
+// @ts-expect-error — loadPeriodData is deliberately extended here (the new version wraps the earlier one)
 loadPeriodData = async function(){
   const r = await _loadPeriodDataUndo.apply(this, arguments);
   try { const p = settings.period, q = await sb.from('checkout_undos').select('*').gte('date', periodStart(p)).lte('date', periodEnd(p));
@@ -6573,7 +6616,7 @@ REPORTS.push({ id:'att-returns', g:'Attendance', t:'Returns after check-out and 
     S.attendance.forEach(a => {
       const { segs, gaps } = dayGaps(a), u = und[a.emp_id + '|' + a.date] || [];
       if (!gaps.length && !u.length) return;
-      const e = empById(a.emp_id) || {}, away = gaps.reduce((s, g) => s + g.min, 0);
+      const e = empOrBlank(a.emp_id), away = gaps.reduce((s, g) => s + g.min, 0);
       R.push({ date:a.date, code:a.emp_id, name:empName(e), department:e.department, unit:e.unit,
         periods: segs.map(s => `${s.x.in}–${s.x.out}${s.x.code ? ' ' + s.x.code : ''}`).join(' · '), n: segs.length,
         gapsTxt: gaps.map(g => `${g.from} → ${g.to}`).join(' · '), away: away / 60, longest: gaps.length ? Math.max(...gaps.map(g => g.min)) / 60 : 0,
@@ -6600,7 +6643,7 @@ function birthFromNid(nid){
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 document.addEventListener('input', e => {
-  const f = e.target.closest && e.target.closest('#emp-form [data-f="national_id"]'); if (!f) return;
+  const f = /** @type {PageEl} */ (e.target).closest && /** @type {PageEl} */ (e.target).closest('#emp-form [data-f="national_id"]'); if (!f) return;
   const b = document.querySelector('#emp-form [data-f="birth_date"]'); if (!b) return;
   const v = birthFromNid(f.value), field = b.closest('.field');
   let note = field.querySelector('.bd-note');
@@ -6611,7 +6654,7 @@ document.addEventListener('input', e => {
   } else if (!v && b.dataset.auto === '1') { b.value = ''; delete b.dataset.auto; if (note) note.textContent = ''; }
 });
 document.addEventListener('input', e => {                    // HR typed the birth date himself → stop auto-filling it
-  const b = e.target.closest && e.target.closest('#emp-form [data-f="birth_date"]'); if (!b) return;
+  const b = /** @type {PageEl} */ (e.target).closest && /** @type {PageEl} */ (e.target).closest('#emp-form [data-f="birth_date"]'); if (!b) return;
   delete b.dataset.auto; const n = b.closest('.field').querySelector('.bd-note'); if (n) n.textContent = '';
 });
 REPORTS.push({ id:'emp-birth-id', g:'HR', t:'Birth date different from national ID',
@@ -6635,11 +6678,12 @@ function nidHint(f){
   const n = f.value.length; h.textContent = `${n} / 14 digits`; h.style.color = n === 14 ? 'var(--muted)' : 'var(--warn)';
 }
 document.addEventListener('input', e => {
-  const f = e.target.closest && e.target.closest('#emp-form [data-f="national_id"]'); if (!f) return;
+  const f = /** @type {PageEl} */ (e.target).closest && /** @type {PageEl} */ (e.target).closest('#emp-form [data-f="national_id"]'); if (!f) return;
   const clean = f.value.replace(/\D/g, '').slice(0, 14); if (clean !== f.value) f.value = clean;
   nidHint(f);
 }, true);                                                     // runs before the birth-date filler above
 const _openEmpNid = openEmp;
+// @ts-expect-error — openEmp is deliberately extended here (the new version wraps the earlier one)
 openEmp = function(){
   const r = _openEmpNid.apply(this, arguments);
   const f = document.querySelector('#emp-form [data-f="national_id"]');
@@ -6647,6 +6691,7 @@ openEmp = function(){
   return r;
 };
 const _saveEmpNid = saveEmp;
+// @ts-expect-error — saveEmp is deliberately extended here (the new version wraps the earlier one)
 saveEmp = async function(){
   const f = document.querySelector('#emp-form [data-f="national_id"]');
   if (f && !/^\d{14}$/.test(f.value.replace(/[\s-]/g, ''))) {
@@ -6691,7 +6736,7 @@ function employeeMissing(r, withPay){
   return m;
 }
 function empFormRecord(){
-  const e = editingEmp ? (empById(editingEmp) || {}) : {}, r = { ...e };
+  const e = editingEmp ? (empOrBlank(editingEmp)) : /** @type {Employee} */ ({}), r = { ...e };
   document.querySelectorAll('#emp-form [data-f]').forEach(el => {
     const k = el.dataset.f, def = EMP_FIELDS.flatMap(s => s[1]).find(f => f[0] === k);
     r[k] = def && def[2] === 'bool' ? el.value === 'Yes' : el.value;
@@ -6704,6 +6749,7 @@ function reqMark(){
     if (lab && !lab.querySelector('.req')) lab.insertAdjacentHTML('beforeend', ' <span class="req" style="color:var(--danger,#d33)">*</span>'); });
 }
 const _openEmpReq = openEmp;
+// @ts-expect-error — openEmp is deliberately extended here (the new version wraps the earlier one)
 openEmp = function(){
   const r = _openEmpReq.apply(this, arguments);
   reqMark();
@@ -6711,9 +6757,10 @@ openEmp = function(){
     if (miss.length) $('emp-form').insertAdjacentHTML('afterbegin', `<div class="alert a-warn req-banner" style="margin-bottom:6px">Missing data (${miss.length}): ${esc(miss.map(x => x[1]).join(', '))} — fill these in before saving.</div>`); }
   return r;
 };
-document.addEventListener('input', e => { const f = e.target.closest && e.target.closest('#emp-form .field.req-miss'); if (f) f.classList.remove('req-miss'); }, true);
-document.addEventListener('change', e => { const f = e.target.closest && e.target.closest('#emp-form .field.req-miss'); if (f) f.classList.remove('req-miss'); }, true);
+document.addEventListener('input', e => { const f = /** @type {PageEl} */ (e.target).closest && /** @type {PageEl} */ (e.target).closest('#emp-form .field.req-miss'); if (f) f.classList.remove('req-miss'); }, true);
+document.addEventListener('change', e => { const f = /** @type {PageEl} */ (e.target).closest && /** @type {PageEl} */ (e.target).closest('#emp-form .field.req-miss'); if (f) f.classList.remove('req-miss'); }, true);
 const _saveEmpReq = saveEmp;
+// @ts-expect-error — saveEmp is deliberately extended here (the new version wraps the earlier one)
 saveEmp = async function(){
   const pe = document.querySelector('#emp-form [data-f="personal_email"]');
   if (pe) { pe.value = pe.value.replace(/\s/g, '').toLowerCase();
@@ -6722,7 +6769,7 @@ saveEmp = async function(){
   const miss = employeeMissing(empFormRecord(), !isOfficer());
   document.querySelectorAll('#emp-form .field.req-miss').forEach(f => f.classList.remove('req-miss'));
   if (miss.length) {
-    let first = null;
+    /** @type {PageEl | null} */ let first = null;
     miss.forEach(([k]) => { const el = document.querySelector(`#emp-form [data-f="${k}"]`); if (el) { el.closest('.field').classList.add('req-miss'); first = first || el; } });
     if (first) { first.focus(); first.scrollIntoView && first.scrollIntoView({ block:'center' }); }
     return toast(`Fill in before saving (${miss.length}): ${miss.map(x => x[1]).join(', ')}`, 'warn');
@@ -6778,13 +6825,13 @@ async function renderDreqs(){
   const st = $('dq-status').value, q = $('dq-q').value.trim().toLowerCase();
   const rows = DQ.rows.filter(r => {
     if (st === 'open' ? !['Requested','Returned'].includes(r.status) : st === 'done' ? !['Accepted','Completed'].includes(r.status) : st && r.status !== st) return false;
-    const e = empById(r.emp_id) || {};
+    const e = empOrBlank(r.emp_id);
     if (!orgMatch(e, 'dq')) return false;
     return !q || [r.emp_id, r.emp_name, e.name_en, e.name_ar].some(v => String(v || '').toLowerCase().includes(q));
   });
   const wait = DQ.rows.filter(r => r.status === 'Answered').length, open = DQ.rows.filter(r => ['Requested','Returned'].includes(r.status)).length;
   $('dq-sub').textContent = `${wait} waiting for your review · ${open} waiting for the employee · personal mobile, e-mail and address are saved at once; everything else waits for your review here.`;
-  $('dq-tbl').innerHTML = rows.map(r => { const e = empById(r.emp_id) || { id: r.emp_id, name_en: r.emp_name };
+  $('dq-tbl').innerHTML = rows.map(r => { const e = empById(r.emp_id) || /** @type {Employee} */ ({ id: r.emp_id, name_en: r.emp_name });
     return `<tr><td class="mono" style="white-space:nowrap">${esc(String(r.requested_at).slice(0, 10))}<div style="font-size:11px;color:var(--muted)">${esc(r.requested_by || '')}</div></td>
       <td class="strong">${esc(empName(e) || r.emp_name || r.emp_id)} <span class="mono" style="color:var(--muted)">${esc(r.emp_id)}</span><div style="font-size:11px;color:var(--muted)">${esc(e.department || '')}</div></td>
       <td style="white-space:normal;max-width:220px;font-size:12px">${esc((r.fields || []).map(dqLabel).join(', '))}</td>
@@ -6812,15 +6859,17 @@ async function dqCancel(id){
 }
 PAGE_RENDER.dreq = () => renderDreqs();
 $('dq-tbl').addEventListener('click', e => {
-  const a = e.target.closest('[data-dq-ok]'); if (a) { a.disabled = true; return dqReview(a.dataset.dqOk, true); }
-  const r = e.target.closest('[data-dq-ret]'); if (r) return dqReview(r.dataset.dqRet, false);
-  const c = e.target.closest('[data-dq-cancel]'); if (c) return dqCancel(c.dataset.dqCancel);
+  const a = /** @type {PageEl} */ (e.target).closest('[data-dq-ok]'); if (a) { a.disabled = true; return dqReview(a.dataset.dqOk, true); }
+  const r = /** @type {PageEl} */ (e.target).closest('[data-dq-ret]'); if (r) return dqReview(r.dataset.dqRet, false);
+  const c = /** @type {PageEl} */ (e.target).closest('[data-dq-cancel]'); if (c) return dqCancel(c.dataset.dqCancel);
 });
 ['dq-status', 'dq-dept'].forEach(id => $(id).addEventListener('change', renderDreqs));
 $('dq-q').addEventListener('input', () => { clearTimeout(DQ.t); DQ.t = setTimeout(renderDreqs, 250); });
 const _showPageDq = showPage;
+// @ts-expect-error — showPage is deliberately extended here (the new version wraps the earlier one)
 showPage = function(name){ const r = _showPageDq.apply(this, arguments); if (name === 'dreq') renderDreqs(); return r; };
 const _loadPeriodDataDq = loadPeriodData;
+// @ts-expect-error — loadPeriodData is deliberately extended here (the new version wraps the earlier one)
 loadPeriodData = async function(){ const r = await _loadPeriodDataDq.apply(this, arguments); loadDreqs().catch(() => {}); return r; };
 
 // ── New request window ──
@@ -6875,6 +6924,7 @@ $('dqn-send').addEventListener('click', async () => {
 
 // ── Employee window: "📝 Ask to update data" ──
 const _openEmpDq = openEmp;
+// @ts-expect-error — openEmp is deliberately extended here (the new version wraps the earlier one)
 openEmp = function(){
   const r = _openEmpDq.apply(this, arguments);
   const foot = $('emp-save') && $('emp-save').parentElement;
@@ -6883,7 +6933,7 @@ openEmp = function(){
   return r;
 };
 document.addEventListener('click', async e => {
-  if (!e.target.closest || !e.target.closest('#emp-dq')) return;
+  if (!/** @type {PageEl} */ (e.target).closest || !/** @type {PageEl} */ (e.target).closest('#emp-dq')) return;
   const emp = empById(editingEmp); if (!emp) return;
   const fields = await dqFields();
   const miss = fields.map(f => f.key).filter(k => dqBlank(emp[k]) && !(k === 'military_status' && emp.gender !== 'Male') && !((k === 'bank_account' || k === 'bank_branch') && emp.payment_method !== 'Bank'));
@@ -6904,9 +6954,9 @@ function renderSelfChanges(){
   const tb = $('sc-tbl'); if (!tb) return;
   if (SC.missing) { tb.innerHTML = '<tr><td colspan="7" class="empty">Not set up yet — run database file 78-employee-self-changes.sql.</td></tr>'; return; }
   const only = $('sc-show').value === 'unseen', q = $('dq-q').value.trim().toLowerCase();
-  const rows = SC.rows.filter(r => (!only || !r.seen_at) && orgMatch(empById(r.emp_id) || {}, 'dq')
+  const rows = SC.rows.filter(r => (!only || !r.seen_at) && orgMatch(empOrBlank(r.emp_id), 'dq')
     && (!q || [r.emp_id, r.emp_name].some(v => String(v || '').toLowerCase().includes(q))));
-  tb.innerHTML = rows.map(r => { const e = empById(r.emp_id) || {};
+  tb.innerHTML = rows.map(r => { const e = empOrBlank(r.emp_id);
     return `<tr><td class="mono" style="white-space:nowrap">${esc(String(r.changed_at).slice(0, 16).replace('T', ' '))}</td>
       <td class="strong">${esc(r.emp_name || empName(e) || r.emp_id)} <span class="mono" style="color:var(--muted)">${esc(r.emp_id)}</span><div style="font-size:11px;color:var(--muted)">${esc(e.department || '')}</div></td>
       <td>${esc(dqLabel(r.field))}</td><td style="color:var(--muted)">${esc(r.old_value || '—')}</td><td class="strong">${esc(r.new_value || '—')}</td>
@@ -6922,14 +6972,16 @@ async function scSeen(ids){
   toast(`${data} change${data === 1 ? '' : 's'} marked as seen`);
   await loadSelfChanges(); renderSelfChanges();
 }
-$('sc-tbl').addEventListener('click', e => { const b = e.target.closest('[data-sc-seen]'); if (b) { b.disabled = true; scSeen([b.dataset.scSeen]); } });
+$('sc-tbl').addEventListener('click', e => { const b = /** @type {PageEl} */ (e.target).closest('[data-sc-seen]'); if (b) { b.disabled = true; scSeen([b.dataset.scSeen]); } });
 $('sc-show').addEventListener('change', renderSelfChanges);
 $('sc-all').addEventListener('click', () => scSeen(SC.shown || []));
 ['dq-dept'].forEach(id => $(id).addEventListener('change', renderSelfChanges));
 $('dq-q').addEventListener('input', () => { clearTimeout(SC.t); SC.t = setTimeout(renderSelfChanges, 250); });
 const _renderDreqsSc = renderDreqs;
+// @ts-expect-error — renderDreqs is deliberately extended here (the new version wraps the earlier one)
 renderDreqs = async function(){ const r = await _renderDreqsSc.apply(this, arguments); await loadSelfChanges(); renderSelfChanges(); return r; };
 const _loadDreqsSc = loadDreqs;
+// @ts-expect-error — loadDreqs is deliberately extended here (the new version wraps the earlier one)
 loadDreqs = async function(){ const r = await _loadDreqsSc.apply(this, arguments); await loadSelfChanges().catch(() => {}); return r; };
 
 // ═════════════════════════════════════════════════════════
@@ -6956,11 +7008,11 @@ async function renderCoReqs(){
   await loadCoReqs();
   if (CO.error) { $('co-tbl').innerHTML = `<tr><td colspan="8" class="empty">${CO.error === 'missing' ? 'Not set up yet — run database file 80-checkout-requests.sql.' : esc(CO.error)}</td></tr>`; return; }
   const st = $('co-status').value, q = $('co-q').value.trim().toLowerCase();
-  const rows = CO.rows.filter(r => (!st || r.status === st) && orgMatch(empById(r.emp_id) || {}, 'co')
+  const rows = CO.rows.filter(r => (!st || r.status === st) && orgMatch(empOrBlank(r.emp_id), 'co')
     && (!q || [r.emp_id, r.emp_name, r.place].some(v => String(v || '').toLowerCase().includes(q))));
   const wait = CO.rows.filter(r => r.status === 'Waiting').length;
   $('co-sub').textContent = `${wait} waiting for HR · employees who tried to check out away from their office or site, or left it while still checked in. Record the check-out with one click, or reject it.`;
-  $('co-tbl').innerHTML = rows.map(r => { const e = empById(r.emp_id) || { id: r.emp_id, name_en: r.emp_name };
+  $('co-tbl').innerHTML = rows.map(r => { const e = empById(r.emp_id) || /** @type {Employee} */ ({ id: r.emp_id, name_en: r.emp_name });
     const what = r.kind === 'left'
       ? `🚶 Left without checking out<div style="font-size:11px;color:var(--muted)">${r.how === 'background' ? 'found by the Android app' : 'found when he opened the app'}</div>`
       : '🚪 Tried to check out away';
@@ -6994,14 +7046,16 @@ async function coReject(id){
 }
 PAGE_RENDER.coreq = () => renderCoReqs();
 $('co-tbl').addEventListener('click', e => {
-  const a = e.target.closest('[data-co-ok]'); if (a) { a.disabled = true; return coRecord(a.dataset.coOk, a); }
-  const r = e.target.closest('[data-co-no]'); if (r) return coReject(r.dataset.coNo);
+  const a = /** @type {PageEl} */ (e.target).closest('[data-co-ok]'); if (a) { a.disabled = true; return coRecord(a.dataset.coOk, a); }
+  const r = /** @type {PageEl} */ (e.target).closest('[data-co-no]'); if (r) return coReject(r.dataset.coNo);
 });
 ['co-status', 'co-dept'].forEach(id => $(id).addEventListener('change', renderCoReqs));
 $('co-q').addEventListener('input', () => { clearTimeout(CO.t); CO.t = setTimeout(renderCoReqs, 250); });
 const _showPageCo = showPage;
+// @ts-expect-error — showPage is deliberately extended here (the new version wraps the earlier one)
 showPage = function(name){ const r = _showPageCo.apply(this, arguments); if (name === 'coreq') renderCoReqs(); return r; };
 const _loadPeriodDataCo = loadPeriodData;
+// @ts-expect-error — loadPeriodData is deliberately extended here (the new version wraps the earlier one)
 loadPeriodData = async function(){ const r = await _loadPeriodDataCo.apply(this, arguments); loadCoReqs().catch(() => {}); return r; };
 
 // ═════════════════════════════════════════════════════════
@@ -7128,8 +7182,8 @@ $('ta-this').addEventListener('click', () => taCycle(false));
 $('ta-last').addEventListener('click', () => taCycle(true));
 ['ta-from', 'ta-to'].forEach(id => $(id).addEventListener('change', loadTeamAtt));
 $('ta-refresh').addEventListener('click', loadTeamAtt);
-$('ta-q').addEventListener('input', e => { TA.q = e.target.value; renderTeamAtt(); });
-$('ta-body').addEventListener('click', e => { const r = e.target.closest('[data-ta-emp]'); if (!r) return; TA.open = TA.open === r.dataset.taEmp ? null : r.dataset.taEmp; renderTeamAtt(); });
+$('ta-q').addEventListener('input', e => { TA.q = /** @type {PageEl} */ (e.target).value; renderTeamAtt(); });
+$('ta-body').addEventListener('click', e => { const r = /** @type {PageEl} */ (e.target).closest('[data-ta-emp]'); if (!r) return; TA.open = TA.open === r.dataset.taEmp ? null : r.dataset.taEmp; renderTeamAtt(); });
 
 // ═════════════════════════════════════════════════════════
 //  STATUS FILTERS (26 Oct 2026) — "All statuses" box on every table with a Status column
@@ -7158,8 +7212,8 @@ function stFill(id, vals){
   sel.classList.toggle('st-on', !!keep);
   return keep;
 }
-[['lv-stf', () => renderLeaves()], ['att-status', () => renderAttendance()], ['proj-status', () => renderProjects()],
- ['par-status', () => renderParRules()], ['loan-status', () => renderLoans()], ['loan-dept', () => renderLoans()]]
+/** @type {[string, () => void][]} */ ([['lv-stf', () => renderLeaves()], ['att-status', () => renderAttendance()], ['proj-status', () => renderProjects()],
+ ['par-status', () => renderParRules()], ['loan-status', () => renderLoans()], ['loan-dept', () => renderLoans()]])
   .forEach(([id, fn]) => { const el = $(id); if (el) el.addEventListener('change', fn); });
 if ($('loan-q')) $('loan-q').addEventListener('input', () => renderLoans());
 
@@ -7261,7 +7315,7 @@ new MutationObserver(list => list.forEach(m => m.addedNodes.forEach(n => { if (n
 
 // while typing: only digits and separators; when a complete date is typed it is shown as 26/10/2026 and the screen updates at once
 document.addEventListener('input', e => {
-  const el = e.target; if (!el || !el.dataset || !el.dataset.dmy) return;
+  const el = /** @type {PageEl} */ (e.target); if (!el || !el.dataset || !el.dataset.dmy) return;
   const raw = DMY_NATIVE.get.call(el), clean = raw.replace(/[^\d\/.\-\s]/g, '');
   if (clean !== raw) DMY_NATIVE.set.call(el, clean);
   const p = dmyParse(clean);
@@ -7273,14 +7327,14 @@ document.addEventListener('input', e => {
 }, true);
 // leaving the box: tidy it or mark it red
 document.addEventListener('blur', e => {
-  const el = e.target; if (!el || !el.dataset || !el.dataset.dmy) return;
+  const el = /** @type {PageEl} */ (e.target); if (!el || !el.dataset || !el.dataset.dmy) return;
   const raw = DMY_NATIVE.get.call(el), p = dmyParse(raw);
   if (p) { DMY_NATIVE.set.call(el, dmyShow(p)); el.classList.remove('dmy-bad'); }
   else el.classList.toggle('dmy-bad', p === null);
 }, true);
 // the native "change" of a text box fires on blur — skip it when nothing really changed
 document.addEventListener('change', e => {
-  const el = e.target; if (!el || !el.dataset || !el.dataset.dmy || !e.isTrusted) return;
+  const el = /** @type {PageEl} */ (e.target); if (!el || !el.dataset || !el.dataset.dmy || !e.isTrusted) return;
   const v = el.value;
   if (el._dmyLast === v) { e.stopImmediatePropagation(); return; }
   el._dmyLast = v;
@@ -7298,7 +7352,7 @@ DMY_PICK.addEventListener('change', () => {
   DMY_FOR.dispatchEvent(new Event('input', { bubbles: true }));
 });
 document.addEventListener('click', e => {
-  const el = e.target; if (!el || !el.dataset || el.dataset.dmy !== '1' || el.disabled || el.readOnly) return;
+  const el = /** @type {PageEl} */ (e.target); if (!el || !el.dataset || el.dataset.dmy !== '1' || el.disabled || el.readOnly) return;
   const r = el.getBoundingClientRect();
   if (e.clientX < r.right - 30) return;                       // only the icon area opens the calendar
   DMY_FOR = el;
@@ -7313,7 +7367,7 @@ input.dmy:disabled{opacity:.55;cursor:not-allowed}
 </style>`);
 // a date typed wrongly must never be saved as "no date": Save / Approve buttons next to a red date box refuse until it is fixed
 document.addEventListener('click', e => {
-  const btn = e.target.closest && e.target.closest('.btn-primary,.btn-success'); if (!btn) return;
+  const btn = /** @type {PageEl} */ (e.target).closest && /** @type {PageEl} */ (e.target).closest('.btn-primary,.btn-success'); if (!btn) return;
   const scope = btn.closest('.modal') || btn.closest('.page') || btn.closest('#self') || document;
   const bad = [...scope.querySelectorAll('input.dmy')].find(el => el.offsetParent !== null && dmyParse(DMY_NATIVE.get.call(el)) === null);
   if (!bad) return;
@@ -7322,7 +7376,6 @@ document.addEventListener('click', e => {
   toast(`“${DMY_NATIVE.get.call(bad)}” is not a real date — type day month year, e.g. 26102026`, 'warn');
 }, true);
 
-// @ts-check — checked by TypeScript (tsconfig.json); keep it free of type errors
 // ═════════════════════════════════════════════════════════
 //  REPORTS: FROM / TO DATES (26 Oct 2026) — Mohammed: "all reports must have a filter by date from date to date"
 //  · 'range' reports (attendance, vacations, permissions, phone taps, projects, penalties, joiners…) use the two dates.
@@ -7413,7 +7466,8 @@ async function repLoadRange(rg){
 // the report is built with the range's data in place of the cycle's, then everything is put back
 function repWithData(D, fn){
   if (!D) return fn();
-  const keys = ['attendance','clocks','permissions','leaves','missions','penalties','undos'], old = {};
+  /** @type {(keyof typeof S)[]} */ const keys = ['attendance','clocks','permissions','leaves','missions','penalties','undos'];
+  const old = {};
   keys.forEach(k => { old[k] = S[k]; S[k] = D[k]; });
   try { return fn(); } finally { keys.forEach(k => { S[k] = old[k]; }); }
 }
@@ -7432,7 +7486,7 @@ function renderLocFree(){
   $('lf-title').textContent = `🧭 May check in away from office / site (${LOC_FREE.length})`;
   const rows = LOC_FREE.slice().sort((a, b) => String(a.emp_id).localeCompare(String(b.emp_id), undefined, { numeric:true }));
   $('lf-tbl').innerHTML = lfMissing ? '<tr><td colspan="6" class="empty">Database update 89-location-free-employees.sql has not been run yet.</td></tr>'
-    : rows.map(x => { const e = empById(x.emp_id) || {};
+    : rows.map(x => { const e = empOrBlank(x.emp_id);
       return `<tr><td class="strong">${esc(empName(e) || x.emp_id)} <span class="mono" style="color:var(--muted)">${esc(x.emp_id)}</span></td><td>${esc(e.job_name || '')}</td>
         <td style="white-space:normal">${esc(x.note || '')}</td><td>${esc(x.added_by || '')}</td><td class="mono">${esc(dmyShow(String(x.added_at || '').slice(0, 10)))}</td>
         <td><button class="btn btn-ghost btn-sm no-officer" data-lf-del="${esc(x.emp_id)}">Remove</button></td></tr>`; }).join('')
@@ -7453,15 +7507,17 @@ $('lf-add').addEventListener('click', async () => {
   $('lf-emp').value = ''; $('lf-note').value = '';
 });
 $('lf-tbl').addEventListener('click', e => {
-  const b = e.target.closest('[data-lf-del]'); if (!b) return;
+  const b = /** @type {PageEl} */ (e.target).closest('[data-lf-del]'); if (!b) return;
   const emp = b.dataset.lfDel;
   if (b.dataset.sure !== '1'){ b.dataset.sure = '1'; b.textContent = 'Click again to remove'; b.classList.add('btn-danger'); setTimeout(() => { if (b.isConnected){ b.dataset.sure = ''; b.textContent = 'Remove'; b.classList.remove('btn-danger'); } }, 4000); return; }
   setLocFree(emp, false);
 });
 // loaded and drawn with the rest of the Location checks page
 const _loadLocationData46 = loadLocationData;
+// @ts-expect-error — loadLocationData is deliberately extended here (the new version wraps the earlier one)
 loadLocationData = async function(){ await Promise.all([_loadLocationData46.apply(this, arguments), loadLocFree().catch(() => { lfMissing = true; })]); };
 const _renderLocations46 = renderLocations;
+// @ts-expect-error — renderLocations is deliberately extended here (the new version wraps the earlier one)
 renderLocations = function(){ _renderLocations46.apply(this, arguments); renderLocFree(); };
 PAGE_RENDER.locations = () => { loadLocationData().then(renderLocations, renderLocations); };
 
@@ -7480,13 +7536,13 @@ function renderSitePointCard(){
   if (!$('spw-tbl')) return;
   $('spw-title').textContent = `📍 May set site locations from the phone (${SP_SETTERS.length})`;
   $('spw-tbl').innerHTML = spwMissing ? '<tr><td colspan="6" class="empty">Database update 91-site-points-office-rule.sql has not been run yet.</td></tr>'
-    : SP_SETTERS.slice().sort((a, b) => String(a.emp_id).localeCompare(String(b.emp_id), undefined, { numeric:true })).map(x => { const e = empById(x.emp_id) || {};
+    : SP_SETTERS.slice().sort((a, b) => String(a.emp_id).localeCompare(String(b.emp_id), undefined, { numeric:true })).map(x => { const e = empOrBlank(x.emp_id);
       return `<tr><td class="strong">${esc(empName(e) || x.emp_id)} <span class="mono" style="color:var(--muted)">${esc(x.emp_id)}</span></td><td>${esc(e.job_name || '')}</td>
         <td style="white-space:normal">${esc(x.note || '')}</td><td>${esc(x.added_by || '')}</td><td class="mono">${esc(dmyShow(String(x.added_at || '').slice(0, 10)))}</td>
         <td><button class="btn btn-ghost btn-sm no-officer" data-spw-del="${esc(x.emp_id)}">Remove</button></td></tr>`; }).join('')
     || '<tr><td colspan="6" class="empty">Nobody yet — add a trusted employee (e.g. a site engineer).</td></tr>';
   const ll = (a, b) => a == null ? '—' : `${Number(a).toFixed(5)}, ${Number(b).toFixed(5)}`;
-  $('spl-tbl').innerHTML = SP_LOG.map(l => { const p = S.projects.find(x => String(x.id) === String(l.project_code)) || {};
+  $('spl-tbl').innerHTML = SP_LOG.map(l => { const p = S.projects.find(x => String(x.id) === String(l.project_code)) || /** @type {Project} */ ({});
       const what = l.new_lat == null ? 'Point removed' : l.old_lat == null ? `New point ${ll(l.new_lat, l.new_lng)}` : `Moved ${ll(l.old_lat, l.old_lng)} → ${ll(l.new_lat, l.new_lng)}`;
       return `<tr><td class="mono" style="white-space:nowrap">${esc(dmyShow(String(l.at).slice(0, 10)))} ${esc(String(l.at).slice(11, 16))}</td>
         <td><span class="mono">${esc(l.project_code)}</span> ${esc(p.name || '')}</td><td style="white-space:normal">${esc(what)}${l.new_radius ? ` · ${l.new_radius} m` : ''}</td>
@@ -7510,18 +7566,20 @@ $('spw-add').addEventListener('click', async () => {
   $('spw-emp').value = ''; $('spw-note').value = '';
 });
 $('spw-tbl').addEventListener('click', e => {
-  const b = e.target.closest('[data-spw-del]'); if (!b) return;
+  const b = /** @type {PageEl} */ (e.target).closest('[data-spw-del]'); if (!b) return;
   if (b.dataset.sure !== '1'){ b.dataset.sure = '1'; b.textContent = 'Click again to remove'; setTimeout(() => { if (b.isConnected){ b.dataset.sure = ''; b.textContent = 'Remove'; } }, 4000); return; }
   setSitePointSetter(b.dataset.spwDel, false);
 });
 // loaded with the Location checks page; the projects are re-read so points set on phones show who set them
 const _loadLocationData47 = loadLocationData;
+// @ts-expect-error — loadLocationData is deliberately extended here (the new version wraps the earlier one)
 loadLocationData = async function(){
   await Promise.all([_loadLocationData47.apply(this, arguments), loadSitePointData().catch(() => { spwMissing = true; }),
     sb.from('projects').select('id,site_lat,site_lng,site_radius_m,site_set_by,site_set_at,site_set_how').not('site_lat', 'is', null)
       .then(r => { (r.data || []).forEach(x => { const p = S.projects.find(y => String(y.id) === String(x.id)); if (p) Object.assign(p, x); }); }, () => {}) ]);
 };
 const _renderLocations47 = renderLocations;
+// @ts-expect-error — renderLocations is deliberately extended here (the new version wraps the earlier one)
 renderLocations = function(){ _renderLocations47.apply(this, arguments); renderSitePointCard(); };
 PAGE_RENDER.locations = () => { loadLocationData().then(renderLocations, renderLocations); };
 

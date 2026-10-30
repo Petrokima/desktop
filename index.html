@@ -653,74 +653,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div class="page" id="page-closed"><div id="react-closed"></div></div>   <!-- drawn by React: react/src/closed (database file 100) -->
 
 <!-- LOCATION CHECKS -->
-<div class="page" id="page-locations">
-  <div class="page-header"><div><div class="page-title">Location checks</div><div class="page-sub">Site boundaries, fake-GPS detection and suspicious check-ins</div></div></div>
-
-  <div class="card no-officer" style="padding:18px">
-    <div class="sec" style="margin-top:0">Rules</div>
-    <div class="grid3" style="align-items:end">
-      <div class="field"><label>A check-in or check-out outside the site boundary or away from the employee's office</label>
-        <select id="lr-outside"><option value="flag">Allow it, but warn HR</option><option value="block">Refuse it (offline taps are kept for HR review)</option></select></div>
-      <div class="field"><label>Default site radius (metres) — used when a site has no radius of its own</label><input id="lr-radius" type="number" min="50" max="5000" step="50"></div>
-      <div class="field"><label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="lr-apponly" style="width:auto"> Android employees must use the Petrokima app, not the browser</label>
-        <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;margin-top:8px"><input type="checkbox" id="lr-anywhere" style="width:auto;margin-top:3px"> <span>Employees <b>not assigned to an office</b> may check in anywhere (with or without a project). Employees assigned to an office must be at their office. A project with a map point still shows a warning when they are away from it.</span></label></div>
-    </div>
-    <div class="grid3" style="align-items:end;margin-top:10px">
-      <div class="field"><label>Oldest Android app allowed (build number — the last part of "Version 1.0.<b>N</b>" on download.petrokima-hr.com). 0 = no limit</label><input id="lr-minbuild" type="number" min="0" step="1"></div>
-      <div class="field" style="grid-column:span 2;font-size:12px;color:var(--muted);line-height:1.6">When set, older Android apps — which cannot detect fake GPS — are refused with "Your app is out of date, install the new version". Set it a few days after a new version is published, once most phones have updated.</div>
-    </div>
-    <div style="font-size:12px;color:var(--muted);margin:8px 0 12px;line-height:1.6">A location from a <b>fake-location app</b> is always refused (Android app). Suspicious patterns — the exact same point on another day, "perfect" GPS accuracy, impossible travel speed — are never refused, only shown below. Sites without a map point are not checked.</div>
-    <button class="btn btn-primary" id="lr-save">Save rules</button> <span id="lr-note" style="font-size:12px;color:var(--muted);margin-left:8px"></span>
-  </div>
-
-  <div class="card" id="lf-card">
-    <div class="toolbar"><span class="toolbar-title" id="lf-title">🧭 May check in away from office / site</span></div>
-    <div style="font-size:12px;color:var(--muted);padding:0 18px 10px;line-height:1.6">Check-ins and check-outs of these employees are <b>always accepted</b>, even when they are assigned to an office and “Refuse it” is chosen above — for people who move between sites, clients and offices all day (e.g. directors). Their GPS point is still recorded and they appear in the warnings list below as <b>“Away — allowed”</b>. A fake-location app is still refused. Only HR or an administrator can change this list, and nobody for his own record.</div>
-    <div class="no-officer" style="display:flex;gap:8px;padding:0 18px 12px;flex-wrap:wrap;align-items:center"><input class="inp" id="lf-emp" list="dl-emp" placeholder="Type code or name…" style="width:300px"><input class="inp" id="lf-note" placeholder="Reason, e.g. Director" style="width:240px"><button class="btn btn-primary btn-sm" id="lf-add">+ Add</button></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Job</th><th>Reason</th><th>Added by</th><th>Since</th><th></th></tr></thead><tbody id="lf-tbl"></tbody></table></div>
-  </div>
-
-  <div class="card" id="spw-card">
-    <div class="toolbar"><span class="toolbar-title" id="spw-title">📍 May set site locations from the phone</span></div>
-    <div style="font-size:12px;color:var(--muted);padding:0 18px 10px;line-height:1.6">Trusted employees (e.g. site engineers) see <b>“📍 Set a site's location”</b> on their phone: standing at a project, they choose it and the place where they stand becomes its map point (GPS must be accurate to 50 m or better; fake-location apps are refused). Replacing a point is allowed; every change is listed below and HR gets a phone notification. Only HR or an administrator can change this list, and nobody for his own record.</div>
-    <div class="no-officer" style="display:flex;gap:8px;padding:0 18px 12px;flex-wrap:wrap;align-items:center"><input class="inp" id="spw-emp" list="dl-emp" placeholder="Type code or name…" style="width:300px"><input class="inp" id="spw-note" placeholder="Reason, e.g. Site engineer" style="width:240px"><button class="btn btn-primary btn-sm" id="spw-add">+ Add</button></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Job</th><th>Reason</th><th>Added by</th><th>Since</th><th></th></tr></thead><tbody id="spw-tbl"></tbody></table></div>
-    <div class="toolbar" style="border-top:1px solid var(--border);padding-top:10px"><span class="toolbar-title" style="font-size:14px">Latest changes to site locations</span></div>
-    <div class="tbl-wrap"><table><thead><tr><th>When</th><th>Project</th><th>Change</th><th>By</th><th>How</th><th class="num">GPS accuracy</th><th>Note</th><th>Map</th></tr></thead><tbody id="spl-tbl"></tbody></table></div>
-  </div>
-
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title" id="lw-count">Check-ins with location warnings</span>
-      <div class="toolbar-right">
-        <select class="sel" id="lw-kind"><option value="">All warnings</option><option value="outside_site">Outside the site</option><option value="outside_office">Away from his office</option><option value="away_allowed">Away — allowed</option><option value="clock_changed">Phone clock was changed</option><option value="phone_restarted">Phone restarted offline</option><option value="fake_gps">Fake-location app</option><option value="same_point">Same exact point</option><option value="perfect_accuracy">"Perfect" accuracy</option><option value="impossible_travel">Impossible travel</option><option value="browser_android">Browser instead of app</option><option value="old_app">Old app version</option><option value="no_site_point">Project has no map point</option><option value="gps_unchecked">Fake-GPS check not done</option><option value="held">Kept for review (not counted)</option></select>
-        <input class="inp" id="lw-q" placeholder="Search code, name or site…">
-      </div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Time</th><th>Employee</th><th>Event</th><th>Site</th><th class="num">Distance</th><th>Warnings</th><th>Counted?</th><th>Map</th><th></th></tr></thead><tbody id="lw-tbl"></tbody></table></div>
-    <div class="foot">This payroll period. A kept-for-review check-in is not in the attendance — if it is genuine, add the time by hand on the Attendance page.</div>
-  </div>
-
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title" id="ls-count">Site locations</span>
-      <div class="toolbar-right">
-        <select class="sel" id="ls-show"><option value="used">Sites used this period</option><option value="mapped">Sites with a map point</option><option value="missing">Used, but no map point yet</option><option value="all">All projects</option></select>
-        <input class="inp" id="ls-q" placeholder="Search code or name…">
-      </div></div>
-    <div style="font-size:12px;color:var(--muted);padding:0 18px 10px;line-height:1.6">Get the point from Google Maps: right-click the site → click the numbers at the top (they are copied) → paste them into <b>Latitude</b> (e.g. <span class="mono">30.04442, 31.23571</span>) — both boxes fill in. Or use 📌 on a check-in made at the site.</div>
-    <div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Site</th><th>Latitude</th><th>Longitude</th><th>Radius (m)</th><th class="num">Check-ins</th><th></th></tr></thead><tbody id="ls-tbl"></tbody></table></div>
-    <details style="padding:12px 18px"><summary style="cursor:pointer;font-size:13px;font-weight:600">Paste many sites at once</summary>
-      <div style="font-size:12px;color:var(--muted);margin:8px 0">One site per line: <span class="mono">code, latitude, longitude, radius</span> (radius optional). Copy the four columns from Excel and paste.</div>
-      <textarea id="ls-bulk" rows="6" style="width:100%;font-family:monospace;font-size:12px" placeholder="PF-PF-006-26, 30.04442, 31.23571, 300"></textarea>
-      <button class="btn btn-primary" id="ls-bulk-save" style="margin-top:8px">Save these sites</button> <span id="ls-bulk-note" style="font-size:12px;margin-left:8px"></span>
-    </details>
-  </div>
-
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title">Offices (check-ins without a project)</span>
-      <div class="toolbar-right"><button class="btn btn-ghost" id="wl-add">+ Add office</button></div></div>
-    <div style="font-size:12px;color:var(--muted);padding:0 18px 10px"><b>👥 Employees</b>: employees assigned to an office are always compared with their own office(s) — whatever project they choose for the time sheet. Away from it, the rule above applies (“Refuse it” = refused) and HR gets a phone notification; only the 🧭 list and approved missions are exempt.<br>Employees <b>not</b> assigned to an office are not compared with any office while the tick box “may check in anywhere” in Rules is on; when it is off, their check-ins without a project are compared with the nearest office.</div>
-    <div class="tbl-wrap"><table><thead><tr><th>Office</th><th>Latitude</th><th>Longitude</th><th>Radius (m)</th><th>Active</th><th>Employees</th><th></th></tr></thead><tbody id="wl-tbl"></tbody></table></div>
-  </div>
-</div>
+<div class="page" id="page-locations"><div id="react-locations"></div></div>   <!-- drawn by React: react/src/locations -->
 
 <!-- HR ALERTS -->
 <div class="page" id="page-hralerts"><div id="react-hralerts"></div></div>   <!-- drawn by React: react/src/hralerts -->
@@ -853,20 +786,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 
 <!-- MODAL: PROJECT -->
 <!-- MODAL: LOAN -->
-<!-- MODAL: EMPLOYEES FIXED TO AN OFFICE (67) -->
-<div class="overlay" id="m-wlemp"><div class="modal" style="max-width:760px">
-  <div class="modal-head"><div class="modal-title" id="wle-title">Employees of the office</div><button class="x" data-close="m-wlemp">×</button></div>
-  <div style="font-size:12px;color:var(--muted);margin-bottom:10px">These employees check in and out at this office. Away from it the tap follows Location checks → Rules: refused when the rule is “Refuse it” (unless HR approved a mission that day), otherwise accepted, marked “Away from his office”, and HR is notified. They still pick projects for the time sheet. An employee can belong to more than one office.</div>
-  <div class="grid2">
-    <div class="field"><label>Add a whole department or unit</label><div style="display:flex;gap:6px;flex-wrap:wrap"><select class="sel" id="wle-dept" style="flex:1;min-width:150px"></select><select class="sel" id="wle-unit" style="flex:1;min-width:150px"></select><button class="btn btn-ghost btn-sm" id="wle-dept-add">+ Add all</button></div>
-      <div id="wle-dept-n" style="font-size:12px;color:var(--muted);margin-top:4px"></div></div>
-    <div class="field"><label>Add by employee codes (paste a column from Excel, or 101, 102 …)</label><div style="display:flex;gap:6px"><textarea id="wle-codes" rows="2" style="flex:1"></textarea><button class="btn btn-primary btn-sm" id="wle-codes-add">+ Add</button></div></div>
-  </div>
-  <div id="wle-note" style="font-size:12px;margin:6px 0"></div>
-  <div style="display:flex;gap:8px;align-items:center;margin:8px 0"><b id="wle-count"></b><input class="inp" id="wle-q" placeholder="Search…" style="margin-left:auto;width:200px"></div>
-  <div class="tbl-wrap" style="max-height:340px;overflow:auto"><table><thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Other offices</th><th></th></tr></thead><tbody id="wle-tbl"></tbody></table></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-wlemp">Close</button></div>
-</div></div>
 
 <!-- MODAL: OUTSIDE MISSION — self-service (66) -->
 <div class="overlay" id="m-smis"><div class="modal" style="max-width:640px">
@@ -1093,6 +1012,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=af118fcc6a9a"></script>
-<script src="react.js?v=e8851d244e9e"></script>
+<script src="app.js?v=a513eb34be2a"></script>
+<script src="react.js?v=4c40a6a00c69"></script>
 </body></html>

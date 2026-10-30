@@ -915,17 +915,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </div>
 
 <!-- PUBLIC HOLIDAYS -->
-<div class="page" id="page-holidays">
-  <div class="page-header"><div><div class="page-title">Public holidays</div><div class="page-sub" id="hd-sub"></div></div>
-    <button class="btn btn-primary" data-act="new-hol">+ Add holiday</button></div>
-  <div id="hd-missing"></div>
-  <div class="alert a-info">Holidays apply to the whole company: they are not counted as leave days, nobody is marked missing or absent, and there is no late/early deduction. Anyone who works on a holiday is paid extra for that day (see Settings).</div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title">Holiday calendar</span>
-      <div class="toolbar-right"><select class="sel" id="hd-year"></select></div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Day</th><th>Holiday</th><th>Payroll</th><th class="num">Employees who worked</th><th></th></tr></thead><tbody id="hd-tbl"></tbody></table></div>
-  </div>
-</div>
+<div class="page" id="page-holidays"><div id="react-holidays"></div></div>   <!-- drawn by React: react/src/holidays -->
 
 <!-- USERS & ROLES -->
 <div class="page" id="page-users">
@@ -1360,17 +1350,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </div></div>
 
 <!-- MODAL: HOLIDAY -->
-<div class="overlay" id="m-hol"><div class="modal" style="max-width:440px">
-  <div class="modal-head"><div class="modal-title">Add public holiday</div><button class="x" data-close="m-hol">×</button></div>
-  <div class="grid2">
-    <div class="field"><label>Date</label><input type="date" id="hd-date"></div>
-    <div class="field"><label>Days (for multi-day holidays)</label><input type="number" min="1" max="10" value="1" id="hd-days"></div>
-    <div class="field full"><label>Holiday name</label><input id="hd-name" placeholder="e.g. Eid al-Adha"></div>
-  </div>
-  <div id="hd-hint" style="font-size:12px;margin-top:10px;color:var(--muted)"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-hol">Cancel</button><button class="btn btn-primary" id="hd-save">Save</button></div>
-</div></div>
-
 <!-- MODAL: NEW PERMISSION -->
 <div class="overlay" id="m-perm"><div class="modal">
   <div class="modal-head"><div class="modal-title">New permission request</div><button class="x" data-close="m-perm">×</button></div>
@@ -1635,5 +1614,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=6a8dabb3a8fe"></script>
+<script src="app.js?v=95b95542dac5"></script>
+<script src="react.js?v=9dae5d799133"></script>
 </body></html>

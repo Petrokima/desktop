@@ -1526,7 +1526,6 @@ document.addEventListener('click', async ev => {
     if (a==='new-perm') return openPerm();
     if (a==='new-leave') return openLeave(null);
     if (a==='new-pen') return openPen(null);
-    if (a==='new-hol') return openHol();
     if (a==='myprofile') return showSelf(ME, { email: ME.email });
     if (a==='new-var') return openNewVar();
     if (a==='goto-current') return gotoCurrentPeriod();
@@ -2327,48 +2326,16 @@ $('pn-date').addEventListener('change', () => { $('pn-period').value = cycleOf($
 $('pn-save').addEventListener('click', savePen);
 
 // ═════════════════════════════════════════════════════════
-//  PUBLIC HOLIDAYS
+//  PUBLIC HOLIDAYS — the page is React now (react/src/holidays, 30 Oct 2026). The old code keeps the loaded
+//  data: React hands every change to the two functions below, which update S.holidays + the holiday list used
+//  by leaves, attendance and payroll, and redraw the screens that depend on holidays.
 // ═════════════════════════════════════════════════════════
-function renderHolidays(){
-  $('hd-missing').innerHTML = holTableMissing ? '<div class="alert a-warn">The holidays table does not exist yet. Run <b>absence-penalties-holidays.sql</b> in the database SQL Editor, then click ⟳ Refresh.</div>' : '';
-  const years = [...new Set([settings.period.slice(0,4), String(Number(settings.period.slice(0,4))+1), ...S.holidays.map(h=>h.date.slice(0,4))])].sort();
-  const cur = $('hd-year').value || settings.period.slice(0,4);
-  $('hd-year').innerHTML = years.map(y=>`<option ${y===cur?'selected':''}>${y}</option>`).join('');
-  const list = S.holidays.filter(h=>h.date.startsWith(cur)).sort((a,b)=>a.date.localeCompare(b.date));
-  $('hd-sub').textContent = `${list.length} holiday day${list.length===1?'':'s'} in ${cur}`;
-  $('hd-tbl').innerHTML = list.map(h => { const worked = new Set(S.attendance.filter(a=>a.date===h.date && (a.status==='Present'||a.status==='Half Day')).map(a=>a.emp_id)).size;
-    const inLoaded = h.date>=periodStart(settings.period) && h.date<=periodEnd(settings.period);
-    return `<tr><td class="mono">${esc(h.date)}</td><td>${DAYS[dObj(h.date).getDay()]}</td><td class="strong">${esc(h.name)}</td><td class="mono">${cycleOf(h.date)}</td>
-      <td class="num">${inLoaded ? (worked||'—') : '<span style="color:var(--muted)">other period</span>'}</td>
-      <td><button class="icon-btn" data-del-hol="${h.id}" title="Delete">🗑</button></td></tr>`; }).join('')
-    || `<tr><td colspan="6" class="empty">No public holidays entered for ${cur}</td></tr>`;
-}
-function holHint(){
-  const d=$('hd-date').value, n=Math.max(1,Math.min(10,num($('hd-days').value)||1)); if(!d){ $('hd-hint').textContent=''; return; }
-  const dates=[]; const o=dObj(d); for(let i=0;i<n;i++){ dates.push(dStr(o)); o.setDate(o.getDate()+1); }
-  const dup=dates.filter(x=>isHoliday(x));
-  $('hd-hint').innerHTML = `Adds: ${dates.map(x=>`${x} (${DAYS[dObj(x).getDay()]})`).join(', ')}` + (dup.length?`<br><span class="neg">Already a holiday: ${dup.join(', ')} — these will be skipped.</span>`:'');
-}
-function openHol(){
-  if (holTableMissing) return toast('Run absence-penalties-holidays.sql first','warn');
-  $('hd-date').value=''; $('hd-days').value=1; $('hd-name').value=''; holHint(); openM('m-hol');
-}
-async function saveHol(){
-  const d=$('hd-date').value, name=$('hd-name').value.trim(), n=Math.max(1,Math.min(10,num($('hd-days').value)||1));
-  if(!d||!name) return toast('Date and name are required','warn');
-  const rows=[]; const o=dObj(d); for(let i=0;i<n;i++){ const s=dStr(o); if(!isHoliday(s)) rows.push({ date:s, name }); o.setDate(o.getDate()+1); }
-  if(!rows.length) return toast('Those dates are already holidays','warn');
-  const { data, error } = await sb.from('public_holidays').insert(rows).select();
-  if (error) return toast(error.message,'err');
-  S.holidays.push(...data); holidaySet = new Set(S.holidays.map(h=>h.date)); $('hd-year').value = d.slice(0,4);
-  closeM('m-hol'); afterHolChange(); toast(`${data.length} holiday day${data.length>1?'s':''} added`);
-}
+function renderHolidays(){ if (typeof PKR !== 'undefined') PKR.render(); }   // React draws the page from the current data
+/** @param {Holiday[]} rows  new holiday days saved by the React page */
+function holidaysAdded(rows){ S.holidays.push(...rows); holidaySet = new Set(S.holidays.map(h=>h.date)); afterHolChange(); }
+/** @param {string} id  a holiday deleted by the React page */
+function holidayDeleted(id){ S.holidays = S.holidays.filter(h=>h.id!==id); holidaySet = new Set(S.holidays.map(h=>h.date)); afterHolChange(); }
 function afterHolChange(){ renderHolidays(); renderLeaves(); renderAttendance(); renderPayroll(); renderDashboard(); renderReports(); }
-$('hd-year').addEventListener('change', renderHolidays);
-['hd-date','hd-days'].forEach(id=>$(id).addEventListener('input', holHint));
-$('hd-save').addEventListener('click', saveHol);
-$('hd-tbl').addEventListener('click', e => { const x=/** @type {PageEl} */ (e.target).closest('[data-del-hol]');
-  if (x){ const id=x.dataset.delHol; confirmDel('Delete this public holiday? Leave day counts already saved are not changed.', async()=>{ await del('public_holidays',id); S.holidays=S.holidays.filter(h=>h.id!==id); holidaySet=new Set(S.holidays.map(h=>h.date)); afterHolChange(); toast('Deleted'); }); } });
 
 let SUPER = {};
 let ACCT_FLAGS = {};
@@ -7361,7 +7328,7 @@ new MutationObserver(list => list.forEach(m => m.addedNodes.forEach(n => { if (n
 
 // while typing: only digits and separators; when a complete date is typed it is shown as 26/10/2026 and the screen updates at once
 document.addEventListener('input', e => {
-  const el = /** @type {PageEl} */ (e.target); if (!el || !el.dataset || !el.dataset.dmy) return;
+  const el = /** @type {PageEl} */ (e.target); if (!el || !el.dataset || el.dataset.dmy !== '1') return;   // '1' = converted here (React boxes: 'react')
   const raw = DMY_NATIVE.get.call(el), clean = raw.replace(/[^\d\/.\-\s]/g, '');
   if (clean !== raw) DMY_NATIVE.set.call(el, clean);
   const p = dmyParse(clean);
@@ -7373,14 +7340,14 @@ document.addEventListener('input', e => {
 }, true);
 // leaving the box: tidy it or mark it red
 document.addEventListener('blur', e => {
-  const el = /** @type {PageEl} */ (e.target); if (!el || !el.dataset || !el.dataset.dmy) return;
+  const el = /** @type {PageEl} */ (e.target); if (!el || !el.dataset || el.dataset.dmy !== '1') return;
   const raw = DMY_NATIVE.get.call(el), p = dmyParse(raw);
   if (p) { DMY_NATIVE.set.call(el, dmyShow(p)); el.classList.remove('dmy-bad'); }
   else el.classList.toggle('dmy-bad', p === null);
 }, true);
 // the native "change" of a text box fires on blur — skip it when nothing really changed
 document.addEventListener('change', e => {
-  const el = /** @type {PageEl} */ (e.target); if (!el || !el.dataset || !el.dataset.dmy || !e.isTrusted) return;
+  const el = /** @type {PageEl} */ (e.target); if (!el || !el.dataset || el.dataset.dmy !== '1' || !e.isTrusted) return;
   const v = el.value;
   if (el._dmyLast === v) { e.stopImmediatePropagation(); return; }
   el._dmyLast = v;

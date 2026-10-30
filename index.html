@@ -958,23 +958,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </div>
 
 <!-- AUDIT LOG -->
-<div class="page" id="page-audit">
-  <div class="page-header"><div><div class="page-title">Audit log</div><div class="page-sub">Who changed what, and when — salaries, employees, bank details, logins and roles, payroll, loans, penalties, settings. Nobody can edit or delete these lines.</div></div>
-    <button class="btn btn-ghost" id="au-load">⟳ Refresh</button></div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title" id="au-count">Changes</span>
-      <div class="toolbar-right">
-        <label style="font-size:12px;color:var(--muted)">From</label><input class="inp" type="date" id="au-from">
-        <label style="font-size:12px;color:var(--muted)">To</label><input class="inp" type="date" id="au-to">
-        <select class="sel" id="au-area"><option value="">All areas</option></select>
-        <select class="sel" id="au-act"><option value="">Any action</option><option value="INSERT">Added</option><option value="UPDATE">Changed</option><option value="DELETE">Deleted</option></select>
-        <input class="inp" id="au-emp" style="width:120px" placeholder="Employee code">
-        <input class="inp" id="au-q" placeholder="Search who / field / value…">
-      </div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>When</th><th>Who</th><th>Area</th><th>Action</th><th>Record</th><th>Employee</th><th>What changed</th></tr></thead><tbody id="au-tbl"></tbody></table></div>
-    <div class="foot" id="au-foot">Shows up to 2,000 lines for the chosen dates — narrow the dates or filters to see older lines.</div>
-  </div>
-</div>
+<div class="page" id="page-audit"><div id="react-audit"></div></div>   <!-- drawn by React: react/src/audit -->
 
 <!-- LOCATION CHECKS -->
 <div class="page" id="page-locations">
@@ -1614,6 +1598,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=95b95542dac5"></script>
-<script src="react.js?v=9dae5d799133"></script>
+<script src="app.js?v=841dd73cd4f1"></script>
+<script src="react.js?v=6900f3cb51bd"></script>
 </body></html>

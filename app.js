@@ -1509,6 +1509,7 @@ function showPage(name){
   document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active', p.id==='page-'+name));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.page===name));
   window.scrollTo(0,0);
+  if (typeof PKR !== 'undefined') PKR.pageShown(name);   // React screens that load fresh data when opened
 }
 
 document.addEventListener('click', async ev => {
@@ -5019,72 +5020,8 @@ $('us-tbl').addEventListener('click', e => {
 });
 
 // ═════════════════════════════════════════════════════════
-//  AUDIT LOG (admin only)
+//  AUDIT LOG (admin only) — the page is React now (react/src/audit, 30 Oct 2026); it loads when opened.
 // ═════════════════════════════════════════════════════════
-const AUDIT_AREAS = {
-  employees:'Employees', employee_salary_elements:'Fixed package (salary elements)', salary_elements:'Salary element list', app_users:'Logins & roles',
-  payroll_period_elements:'Monthly entries', payroll_runs:'Payroll approval', salary_change_requests:'Basic salary requests', manager_actions:'Manager penalty / incentive requests',
-  employee_loans:'Loans', employee_penalties:'Penalties', employment_history:'Employment history', project_allowance_rules:'Project allowance rules',
-  public_holidays:'Public holidays', settings:'Settings', attendance:'Attendance (staff edits)', employee_leaves:'Vacations (staff edits)',
-  attendance_permissions:'Permissions (staff edits)', two_step_sign_in:'Two-step sign-in' };
-const AUDIT_ACT = { INSERT:['Added','c-green'], UPDATE:['Changed','c-blue'], DELETE:['Deleted','c-red'] };
-/** @type {Row<'audit_log'>[]} — the change log */
-let AUDIT = [];
-(function initAuditFilters(){
-  const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  const t = new Date(), f = new Date(); f.setDate(f.getDate() - 30);
-  $('au-from').value = ymd(f); $('au-to').value = ymd(t);
-  $('au-tbl').innerHTML = '<tr><td colspan="7" class="empty">Click ⟳ Refresh</td></tr>';
-  $('au-area').innerHTML = '<option value="">All areas</option>' + Object.entries(AUDIT_AREAS).map(([k,v]) => `<option value="${k}">${esc(v)}</option>`).join('');
-})();
-function auditVal(v){
-  if (v === null || v === undefined || v === '') return '<span style="color:var(--muted)">(empty)</span>';
-  let s = typeof v === 'object' ? JSON.stringify(v) : String(v);
-  if (s.length > 80) s = s.slice(0, 77) + '…';
-  return esc(s);
-}
-function auditWhat(a){
-  if (a.action === 'UPDATE' && a.changed) return a.changed.map(c => `<div><b>${esc(c.replace(/_/g,' '))}</b>: ${auditVal((a.old_data||{})[c])} → ${auditVal((a.new_data||{})[c])}</div>`).join('');
-  const d = a.action === 'DELETE' ? a.old_data : a.new_data; if (!d) return '';
-  const keys = ['name_en','name_ar','full_name','role','element_code','element_name','amount','new_amount','installment','loan_amount','penalty_type','quantity','status','date','name','user','factors_removed'].filter(k => d[k] !== undefined && d[k] !== null && d[k] !== '');
-  return keys.slice(0,5).map(k => `<span style="margin-right:10px"><b>${esc(k.replace(/_/g,' '))}</b>: ${auditVal(d[k])}</span>`).join('');
-}
-async function loadAudit(){
-  if (!ME || ME.role !== 'admin') return;
-  const from = $('au-from').value, to = $('au-to').value;
-  $('au-tbl').innerHTML = '<tr><td colspan="7" class="empty">Loading…</td></tr>';
-  let q = sb.from('audit_log').select('*').order('at', { ascending:false }).limit(2000);
-  // dates are the viewer's own calendar days (Cairo time on company PCs)
-  if (from) q = q.gte('at', new Date(from + 'T00:00:00').toISOString());
-  if (to) { const d = new Date(to + 'T00:00:00'); d.setDate(d.getDate() + 1); q = q.lt('at', d.toISOString()); }
-  const area = $('au-area').value; if (area) q = q.eq('tbl', area);
-  if ($('au-act').value) q = q.eq('action', $('au-act').value);
-  if ($('au-emp').value.trim()) q = q.eq('emp_id', $('au-emp').value.trim());
-  const { data, error } = await q;
-  if (error) { AUDIT = []; $('au-count').textContent = 'Changes';
-    $('au-tbl').innerHTML = `<tr><td colspan="7" class="empty">${/audit_log/.test(error.message) ? 'The audit log is not available yet — run database update 40-two-step-audit-tidyup.sql' : esc(error.message)}</td></tr>`; return; }
-  AUDIT = data || []; renderAudit();
-}
-function renderAudit(){
-  const qq = $('au-q').value.trim().toLowerCase();
-  const list = AUDIT.filter(a => !qq || [a.user_name, a.user_role, a.row_key, a.emp_id, (a.changed||[]).join(' '), JSON.stringify(a.old_data||''), JSON.stringify(a.new_data||'')].join(' ').toLowerCase().includes(qq));
-  $('au-count').textContent = `${list.length.toLocaleString()} change${list.length === 1 ? '' : 's'}${AUDIT.length >= 2000 ? ' (first 2,000 — narrow the dates)' : ''}`;
-  $('au-tbl').innerHTML = list.map(a => { const [lbl, cls] = AUDIT_ACT[a.action] || [a.action, 'c-blue'];
-    const e = a.emp_id ? empById(a.emp_id) : null;
-    return `<tr><td class="mono" style="white-space:nowrap">${esc(new Date(a.at).toLocaleString('en-GB', { timeZone:'Africa/Cairo', day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }))}</td>
-      <td>${esc(a.user_name || '')}${a.user_role ? ` <span class="chip c-blue">${esc(ROLE_LABEL[a.user_role] || a.user_role)}</span>` : ''}${a.aal === 'aal2' ? ' <span title="signed in with the 6-digit code">🔐</span>' : ''}</td>
-      <td>${esc(AUDIT_AREAS[a.tbl] || a.tbl)}</td><td><span class="chip ${cls}">${lbl}</span></td>
-      <td class="mono">${esc(a.tbl === 'app_users' || a.tbl === 'two_step_sign_in' || /^[0-9a-f-]{36}$/.test(a.row_key || '') ? '' : (a.row_key || ''))}</td>
-      <td>${a.emp_id ? esc(a.emp_id + (e ? ' — ' + empName(e) : '')) : ''}</td>
-      <td style="font-size:12px;line-height:1.6;max-width:520px">${auditWhat(a)}</td></tr>`; }).join('')
-    || '<tr><td colspan="7" class="empty">No changes recorded for these filters</td></tr>';
-}
-$('au-load').addEventListener('click', loadAudit);
-['au-from','au-to','au-act'].forEach(id => $(id).addEventListener('change', loadAudit));
-$('au-area').addEventListener('change', loadAudit);
-$('au-emp').addEventListener('change', loadAudit);
-$('au-q').addEventListener('input', renderAudit);
-document.querySelector('[data-page="audit"]')?.addEventListener('click', loadAudit);
 document.querySelector('[data-page="users"]')?.addEventListener('click', () => setTimeout(loadTwoStepAdmin, 400));
 $('us-refresh').addEventListener('click', () => setTimeout(loadTwoStepAdmin, 400));
 

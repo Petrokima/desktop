@@ -547,18 +547,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   </div>
 </div>
 
-<div class="page" id="page-missions">
-  <div class="page-header"><div><div class="page-title">Outside missions</div><div class="page-sub" id="ms-sub"></div></div></div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title">Missions — final approval by HR</span>
-      <div class="toolbar-right">
-        <select class="sel" id="ms-status"><option value="Waiting for HR">Waiting for HR</option><option value="open">All open (manager / employee / HR)</option><option value="Approved">Approved</option><option value="Rejected">Rejected</option><option value="Cancelled">Cancelled</option><option value="">All</option></select>
-        <select class="sel" id="ms-dept"><option value="">All departments</option></select>
-        <input class="inp" id="ms-q" placeholder="Search employee, place, project…"></div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Sent</th><th>Employee</th><th>When</th><th>Place · purpose</th><th>Project</th><th>Manager step</th><th>Status</th><th></th></tr></thead><tbody id="ms-tbl"></tbody></table></div>
-    <div class="foot" id="ms-foot"></div>
-  </div>
-</div>
+<div class="page" id="page-missions"><div id="react-missions"></div></div>
 
 <div class="page" id="page-hrreq">
   <div class="page-header"><div><div class="page-title">HR requests</div><div class="page-sub" id="hq-sub"></div></div></div>
@@ -1502,6 +1491,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=8c4ea9db5115"></script>
-<script src="react.js?v=5a188232575c"></script>
+<script src="app.js?v=a675262465a0"></script>
+<script src="react.js?v=af01d23ce125"></script>
 </body></html>

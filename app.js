@@ -453,7 +453,7 @@ function buildLists(){
   const depts = [...new Set(S.employees.map(e=>e.department).filter(Boolean))].sort();
   const units = [...new Set(S.employees.map(e=>e.unit).filter(Boolean))].sort();
   const dOpts = '<option value="">All departments</option>' + depts.map(d=>`<option>${esc(d)}</option>`).join('');
-  ['emp-dept','mon-dept','pay-dept','rep-dept','lv-dept','ex-dept','rl-dept','ms-dept','dq-dept','co-dept','loan-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
+  ['emp-dept','mon-dept','pay-dept','rep-dept','lv-dept','ex-dept','rl-dept','dq-dept','co-dept','loan-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
   const uv=$('emp-unit').value; $('emp-unit').innerHTML='<option value="">All units</option>'+units.map(u=>`<option>${esc(u)}</option>`).join(''); $('emp-unit').value=uv;
   const mEls = S.elements.filter(e => e.input_method==='Monthly' && e.active!==false);
   const mv=$('mon-el').value;
@@ -6013,72 +6013,26 @@ renderDashboard = function(){
 
 // ═════════════════════════════════════════════════════════
 //  OUTSIDE MISSIONS — HR final approval page (66, 22 Oct 2026)
-//  The employee asks (→ direct manager → HR) or the manager assigns (→ employee acknowledges → HR) on the phone.
-//  HR / HR officers give the final approval here. An approved mission day: no late / early deduction,
-//  no "outside the site" warning, and the mission's project is allowed for check-in.
+//  The page is React now (react/src/missions, 30 Oct 2026); it loads fresh every time it is opened.
+//  Kept here: the menu badge (missions waiting for HR, refreshed after the period data loads) and what an HR decision
+//  changes elsewhere: an approved mission day has no late / early deduction → the payroll month is reloaded.
 // ═════════════════════════════════════════════════════════
-/** @type {{ rows: Mission[], loaded: boolean, error?: string | null, t?: any }} — missions page */
-let MS = { rows: [], loaded: false };
-const msStatusChip = s => `<span class="chip ${({'Waiting for HR':'c-orange','Waiting for manager':'c-blue','Waiting for employee':'c-blue',Approved:'c-green',Rejected:'c-red',Cancelled:'c-grey'})[s] || 'c-grey'}">${esc(s)}</span>`;
-const msWhen = m => `${m.date_from}${m.date_to !== m.date_from ? ' → ' + m.date_to : ''}${m.time_from ? ` · ${String(m.time_from).slice(0,5)}–${String(m.time_to).slice(0,5)}` : ''}`;
-async function loadMissions(){
-  const { data, error } = await sb.from('employee_missions').select('*').order('created_at', { ascending: false }).limit(1000);
-  if (error) { MS.rows = []; MS.error = /does not exist|schema cache/i.test(error.message) ? 'missing' : error.message; return; }
-  MS.rows = data || []; MS.error = null; MS.loaded = true;
-  const n = MS.rows.filter(m => m.status === 'Waiting for HR').length, b = $('ms-badge');
-  if (b) { b.style.display = n ? '' : 'none'; b.textContent = n; }
+/** @param {number} n */
+function setMissionsBadge(n){ const b = $('ms-badge'); if (b) { b.style.display = n ? '' : 'none'; b.textContent = String(n); } }
+async function loadMissionsBadge(){
+  const { count, error } = await sb.from('employee_missions').select('id', { count: 'exact', head: true }).eq('status', 'Waiting for HR');
+  if (!error) setMissionsBadge(count || 0);
 }
-async function renderMissions(){
-  await loadMissions();
-  if (MS.error) { $('ms-tbl').innerHTML = `<tr><td colspan="9" class="empty">${MS.error === 'missing' ? 'Missions are not set up yet — run database file 66-outside-missions.sql in the database SQL Editor.' : esc(MS.error)}</td></tr>`; return; }
-  const st = $('ms-status').value, q = $('ms-q').value.trim().toLowerCase();
-  const rows = MS.rows.filter(m => {
-    if (st === 'open' ? !['Waiting for HR', 'Waiting for manager', 'Waiting for employee'].includes(m.status) : st && m.status !== st) return false;
-    const e = empOrBlank(m.emp_id);
-    if (!orgMatch(e, 'ms')) return false;
-    return !q || [m.emp_id, e.name_en, e.name_ar, m.place, m.purpose, m.project_code].some(v => String(v || '').toLowerCase().includes(q));
-  });
-  const wait = MS.rows.filter(m => m.status === 'Waiting for HR').length;
-  $('ms-sub').textContent = `${wait} waiting for HR approval · ${MS.rows.length} in total`;
-  $('ms-tbl').innerHTML = rows.map(m => { const e = empById(m.emp_id) || /** @type {Employee} */ ({ id: m.emp_id, name_en: m.emp_name }), mg = m.manager_id ? empById(m.manager_id) : null;
-    const step = m.origin === 'manager'
-      ? `Assigned by ${esc(mg ? empName(mg) : m.manager_id)}${m.no_app ? ' · <span class="chip c-grey">employee does not use the app</span>' : m.ack_at ? ` · <span class="pos">✔ acknowledged ${esc(String(m.ack_at).slice(0,16).replace('T',' '))}</span>` : ' · not acknowledged yet'}`
-      : (m.manager_id ? `Asked by the employee · manager ${m.manager_by ? (m.status === 'Rejected' && !m.hr_by ? '✕ rejected' : '✔ approved') + ' by ' + esc(m.manager_by) : esc(mg ? empName(mg) : m.manager_id) + ' — not decided'}` : 'Asked by the employee · no direct manager');
-    return `<tr><td class="mono" style="white-space:nowrap">${esc(String(m.created_at).slice(0,10))}</td>
-      <td class="strong">${esc(empName(e) || m.emp_id)} <span class="mono" style="color:var(--muted)">${esc(m.emp_id)}</span><div style="font-size:11px;color:var(--muted)">${esc(e.department || '')}</div></td>
-      <td class="mono" style="white-space:nowrap">${esc(msWhen(m))}</td>
-      <td style="white-space:normal;max-width:260px"><b>${esc(m.place)}</b>${m.purpose ? `<div style="font-size:12px;color:var(--muted)">${esc(m.purpose)}</div>` : ''}</td>
-      <td class="mono">${esc(m.project_code || '—')}</td>
-      <td style="white-space:normal;max-width:260px;font-size:12px">${step}${m.manager_note ? `<div>💬 ${esc(m.manager_note)}</div>` : ''}</td>
-      <td>${msStatusChip(m.status)}${m.hr_by ? `<div style="font-size:11px;color:var(--muted)">${esc(m.hr_by)}</div>` : ''}${m.hr_note ? `<div style="font-size:11px">💬 ${esc(m.hr_note)}</div>` : ''}</td>
-      <td style="white-space:nowrap">${m.status === 'Waiting for HR' ? `<button class="btn btn-success btn-sm" data-ms-ok="${m.id}">✓ Approve</button> <button class="btn btn-ghost btn-sm" data-ms-no="${m.id}">✕ Reject</button>` : ''}</td></tr>`; }).join('')
-    || '<tr><td colspan="8" class="empty">No missions match</td></tr>';
-  $('ms-foot').textContent = `${rows.length} shown. Approving makes the day(s) count without late / early deductions; the employee still checks in and out on the phone.`;
-}
-async function msDecide(id, ok){
-  let note = null;
-  if (!ok) { note = prompt('Reason for rejecting (the employee and his manager will see it):'); if (note === null) return; if (!note.trim()) return toast('Write the reason', 'warn'); }
-  const { error } = await sb.rpc('hr_decide_mission', { p_id: id, p_approve: ok, p_note: note });
-  if (error) return toast(error.message, 'err');
-  toast(ok ? 'Mission approved — the employee and his manager are notified' : 'Mission rejected — the employee and his manager are notified');
-  await renderMissions();
+/** called by the React page after HR approved or rejected a mission @param {boolean} approved */
+async function missionDecided(approved){
+  if (!approved) return;
   // fix 25 Oct: loadPeriodData() shows the "Loading period…" cover — always hide it again (it stayed on screen for ever)
-  if (ok) { try { await loadPeriodData(); } catch(e){ toast('Reload error — ' + e.message, 'err'); } finally { loader(false); } DIRTY.add('payroll'); DIRTY.add('reports'); }
+  try { await loadPeriodData(); } catch(e){ toast('Reload error — ' + /** @type {Error} */ (e).message, 'err'); } finally { loader(false); }
+  DIRTY.add('payroll'); DIRTY.add('reports');
 }
-PAGE_RENDER.missions = () => renderMissions();
-$('ms-tbl').addEventListener('click', e => {
-  const a = /** @type {PageEl} */ (e.target).closest('[data-ms-ok]'); if (a) { a.disabled = true; return msDecide(a.dataset.msOk, true); }
-  const r = /** @type {PageEl} */ (e.target).closest('[data-ms-no]'); if (r) return msDecide(r.dataset.msNo, false);
-});
-['ms-status', 'ms-dept'].forEach(id => $(id).addEventListener('change', renderMissions));
-$('ms-q').addEventListener('input', () => { clearTimeout(MS.t); MS.t = setTimeout(renderMissions, 250); });
 const _loadPeriodDataMs = loadPeriodData;
 // @ts-expect-error — loadPeriodData is deliberately extended here (the new version wraps the earlier one)
-loadPeriodData = async function(){ const r = await _loadPeriodDataMs.apply(this, arguments); loadMissions().catch(() => {}); return r; };
-// always fresh when the page is opened (new requests arrive from phones all day)
-const _showPageMs = showPage;
-// @ts-expect-error — showPage is deliberately extended here (the new version wraps the earlier one)
-showPage = function(name){ const r = _showPageMs.apply(this, arguments); if (name === 'missions') renderMissions(); return r; };
+loadPeriodData = async function(){ const r = await _loadPeriodDataMs.apply(this, arguments); loadMissionsBadge().catch(() => {}); return r; };
 
 // ═════════════════════════════════════════════════════════
 //  OUTSIDE MISSIONS in desktop SELF-SERVICE (66/68, 22 Oct 2026) — same rules as the phone:

@@ -516,17 +516,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div class="page" id="page-reporting"><div id="react-reporting"></div></div>
 
 <!-- PAYROLL HISTORY -->
-<div class="page" id="page-history">
-  <div class="page-header"><div><div class="page-title">Payroll history</div><div class="page-sub">Approved payroll months — permanent records that nobody can change or delete</div></div></div>
-  <div id="hs-missing"></div>
-  <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Payroll</th><th class="num">Employees</th><th class="num">Gross</th><th class="num">Deductions</th><th class="num">Net</th><th>Approved by</th><th>Approved on</th><th></th></tr></thead><tbody id="hs-tbl"></tbody></table></div></div>
-  <div class="card" id="hs-view" style="display:none">
-    <div class="toolbar"><span class="toolbar-title" id="hs-title"></span>
-      <div class="toolbar-right"><input class="inp" id="hs-q" placeholder="Search employee…"><button class="btn btn-ghost btn-sm" id="hs-export">⬇ Export CSV</button></div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Bank</th><th class="num">Gross</th><th class="num">Deductions</th><th class="num">Net</th></tr></thead><tbody id="hs-lines"></tbody></table></div>
-    <div class="foot" id="hs-foot"></div>
-  </div>
-</div>
+<div class="page" id="page-history"><div id="react-history"></div></div>
 
 <!-- NET ↔ GROSS CALCULATOR -->
 <div class="page" id="page-calc">
@@ -1313,6 +1303,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=5c20d868b1b4"></script>
-<script src="react.js?v=377eea9f0888"></script>
+<script src="app.js?v=5bc3d02717d8"></script>
+<script src="react.js?v=6d6e0896885f"></script>
 </body></html>

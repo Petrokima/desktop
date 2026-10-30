@@ -2503,33 +2503,9 @@ $('ap-type').addEventListener('keydown', e => { if (e.key==='Enter') doApprove()
 // ═════════════════════════════════════════════════════════
 //  PAYROLL HISTORY
 // ═════════════════════════════════════════════════════════
-/** @type {{ period: string | null, lines: PayrollRunLine[] }} — the approved month being looked at (Payroll history) */
-let HIST = { period:null, lines:[] };
-function renderHistory(){
-  $('hs-missing').innerHTML = runsTableMissing ? '<div class="alert a-warn">The payroll history tables do not exist yet. Run <b>managers-and-payroll-history.sql</b>, then click ⟳ Refresh.</div>' : '';
-  const runs = [...S.runs].sort((a,b)=>String(b.period).localeCompare(String(a.period)));
-  $('hs-tbl').innerHTML = runs.map(r => `<tr class="click" data-hist="${esc(r.period)}"><td class="strong">🔒 ${esc(periodLabel(r.period))}</td><td class="num">${r.headcount}</td>
-    <td class="num">${fmt(r.gross)}</td><td class="num neg">${fmt(r.deductions)}</td><td class="num pos strong">${fmt(r.net)}</td>
-    <td>${esc(r.approved_by)}</td><td class="mono">${esc(String(r.approved_at).slice(0,16).replace('T',' '))}</td><td><button class="btn btn-ghost btn-sm">Open</button></td></tr>`).join('')
-    || '<tr><td colspan="8" class="empty">No payroll month has been approved yet. Approve one from the Payroll Run page.</td></tr>';
-  if (HIST.period) renderHistLines();
-}
-async function openHistory(p){
-  HIST = { period:p, lines: p===settings.period && S.runLines.length ? S.runLines : await fetchAll('payroll_run_lines','emp_id', q=>q.eq('period', p)) };
-  $('hs-view').style.display=''; $('hs-q').value=''; renderHistLines();
-  if ($('hs-view').scrollIntoView) $('hs-view').scrollIntoView({block:'start'});
-}
-function renderHistLines(){
-  const r = S.runs.find(x=>x.period===HIST.period); if (!r) return;
-  const q=$('hs-q').value.trim().toLowerCase();
-  const list = HIST.lines.filter(l => orgMatch({ department:l.department, unit:l.unit },'hs') && (!q || [l.emp_id,l.name_en,l.name_ar,l.department].some(v=>String(v||'').toLowerCase().includes(q))))
-                         .sort((a,b)=>String(a.emp_id).localeCompare(String(b.emp_id),undefined,{numeric:true}));
-  $('hs-title').textContent = `🔒 ${periodLabel(HIST.period)} — approved by ${r.approved_by}`;
-  $('hs-lines').innerHTML = list.map(l => `<tr class="click" data-hslip="${esc(l.emp_id)}"><td class="mono">${esc(l.emp_id)}</td><td class="strong">${esc(l.name_en||l.name_ar||'')}</td>
-    <td>${esc(l.department||'')}</td><td>${esc(l.payment_method||'')}${l.bank_branch?' · '+esc(l.bank_branch):''}</td>
-    <td class="num">${fmt(l.gross)}</td><td class="num neg">${fmt(l.deductions)}</td><td class="num pos strong">${fmt(l.net)}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">No match</td></tr>';
-  $('hs-foot').textContent = `${list.length} of ${HIST.lines.length} payslips · click a row for the full payslip · this record is permanent`;
-}
+// The page itself moved to React 30 Oct 2026 (react/src/history). Kept here: the approved payslip window and the CSV export
+// (both also used by the Payroll Run page; the React page calls them through the bridge).
+function renderHistory(){ if (typeof PKR !== 'undefined') PKR.render(); }
 function showSnapSlip(line, period){
   const r = snapToResult(line);
   $('slip-title').textContent = `${line.name_en||line.name_ar||line.emp_id} — ${periodLabel(period)} 🔒`;
@@ -2557,10 +2533,6 @@ function exportRunCsv(run, period){
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download=`petrokima-payroll-${period}${S.runs.some(x=>x.period===period)?'-approved':'-draft'}.csv`; a.click(); toast('Payroll exported');
 }
-$('hs-tbl').addEventListener('click', e => { const r=/** @type {PageEl} */ (e.target).closest('[data-hist]'); if(r) openHistory(r.dataset.hist); });
-$('hs-lines').addEventListener('click', e => { const r=/** @type {PageEl} */ (e.target).closest('[data-hslip]'); if(r){ const l=HIST.lines.find(x=>String(x.emp_id)===r.dataset.hslip); if(l) showSnapSlip(l, HIST.period); } });
-$('hs-q').addEventListener('input', renderHistLines);
-$('hs-export').addEventListener('click', () => exportRunCsv(HIST.lines.map(snapToResult), HIST.period));
 $('self-slips').addEventListener('click', e => { const b=/** @type {PageEl} */ (e.target).closest('[data-self-slip]'); if(b){ const l=(SD.slips||[]).find(x=>x.period===b.dataset.selfSlip); if(l) showSnapSlip(l, l.period); } });
 
 // Lock notices on pages whose data belongs to an approved cycle
@@ -3192,7 +3164,7 @@ $('aa-q').addEventListener('input', renderApprovals);
 // ═════════════════════════════════════════════════════════
 const ORG_PAGES = { emp:()=>renderEmployees(), att:()=>renderAttendance(), pn:()=>renderPenalties(),
   mon:()=>renderMonthly(), pay:()=>renderPayroll(), aa:()=>renderApprovals(),
-  hs:()=>renderHistLines(), loan:()=>renderLoans(), rep:()=>{ if (repCur) runReport(); } };
+  loan:()=>renderLoans(), rep:()=>{ if (repCur) runReport(); } };
 // does this employee match the department and unit chosen on page p?
 function orgMatch(e, p){
   const d = ($(p+'-dept') || {}).value || '', u = ($(p+'-unit') || {}).value || '';

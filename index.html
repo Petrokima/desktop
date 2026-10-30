@@ -122,6 +122,15 @@ td.num,th.num{text-align:right;font-family:'Inter',system-ui,'Segoe UI',Arial,sa
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent)}
 .field input[readonly]{opacity:.6}
 .field textarea{min-height:60px;resize:vertical}
+/* tick boxes keep their own size inside form fields (the rule above made them full width and pushed their text away) */
+.field input[type=checkbox],.field input[type=radio]{width:auto;padding:0;margin:0;flex:none}
+/* lists of tick boxes: one tidy row each — box, then its text, left-aligned in even columns */
+.check,.field label.check{display:flex;gap:8px;align-items:center;font-size:13px;font-weight:400;color:var(--text);cursor:pointer;line-height:1.35}
+.check input{width:auto;margin:0;flex:none}
+.checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px 18px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--rs);background:var(--surface)}
+.check-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:14px 0 6px}
+.check-head b{font-size:13px;color:var(--text)}
+.check-head span{font-size:12px;color:var(--muted);font-weight:400}
 .sec{font-size:11px;color:var(--link);letter-spacing:.6px;text-transform:uppercase;font-weight:600;margin:20px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
 .sec:first-child{margin-top:0}
 .modal-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:22px}
@@ -1423,6 +1432,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=a5277c27486a"></script>
-<script src="react.js?v=7bd11a6cf5ab"></script>
+<script src="app.js?v=6195a01f15e3"></script>
+<script src="react.js?v=3cd62192bd7b"></script>
 </body></html>

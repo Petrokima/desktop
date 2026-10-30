@@ -3414,7 +3414,7 @@ $('aa-q').addEventListener('input', renderApprovals);
 // ═════════════════════════════════════════════════════════
 const ORG_PAGES = { emp:()=>renderEmployees(), att:()=>renderAttendance(), perm:()=>renderPermissions(), lv:()=>renderLeaves(), pn:()=>renderPenalties(),
   ex:()=>renderExempt(), rl:()=>renderReporting(), mon:()=>renderMonthly(), pay:()=>renderPayroll(), aa:()=>renderApprovals(),
-  hs:()=>renderHistLines(), as:()=>renderAssign(), rep:()=>{ if (repCur) runReport(); } };
+  hs:()=>renderHistLines(), as:()=>renderAssign(), loan:()=>renderLoans(), rep:()=>{ if (repCur) runReport(); } };
 // does this employee match the department and unit chosen on page p?
 function orgMatch(e, p){
   const d = ($(p+'-dept') || {}).value || '', u = ($(p+'-unit') || {}).value || '';
@@ -6577,7 +6577,7 @@ function stFill(id, vals){
   return keep;
 }
 /** @type {[string, () => void][]} */ ([['lv-stf', () => renderLeaves()], ['att-status', () => renderAttendance()],
- ['par-status', () => renderParRules()], ['loan-status', () => renderLoans()], ['loan-dept', () => renderLoans()]])
+ ['par-status', () => renderParRules()], ['loan-status', () => renderLoans()]])   // loan-dept / loan-unit: part19 ORG_PAGES
   .forEach(([id, fn]) => { const el = $(id); if (el) el.addEventListener('change', fn); });
 if ($('loan-q')) $('loan-q').addEventListener('input', () => renderLoans());
 

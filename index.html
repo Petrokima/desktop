@@ -894,44 +894,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div class="page" id="page-holidays"><div id="react-holidays"></div></div>   <!-- drawn by React: react/src/holidays -->
 
 <!-- USERS & ROLES -->
-<div class="page" id="page-users">
-  <div class="page-header"><div><div class="page-title">Users &amp; roles</div><div class="page-sub">Who can sign in, and what each person can do</div></div>
-    <button class="btn btn-ghost" id="us-refresh">⟳ Refresh list</button></div>
-  <div class="alert a-info" style="line-height:1.8"><b>To add a user:</b> database dashboard → <b>Authentication</b> → <b>Users</b> → <b>Add user</b> → <b>Create new user</b> → enter their email and a temporary password → tick <b>Auto Confirm User</b> → <b>Create user</b>. Then click <b>⟳ Refresh list</b> here, choose their role and click <b>Save</b>.<br>
-    <b>To reset a password:</b> database dashboard → Authentication → Users → click the user → <b>Reset password</b>, or delete and re-create them. <b>To remove access</b> untick Active — it takes effect immediately.</div>
-  <div class="card" style="padding:18px" id="tfa-card">
-    <div class="sec" style="margin-top:0">🔐 Two-step sign-in (Admin, HR and HR Officer)</div>
-    <div style="font-size:13px;color:var(--label);line-height:1.7" id="tfa-status">Checking…</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-      <button class="btn btn-primary" id="tfa-setup-me">📱 Set up my two-step sign-in</button>
-      <button class="btn btn-success" id="tfa-on" style="display:none">Require two-step sign-in for all staff</button>
-      <button class="btn btn-ghost" id="tfa-off" style="display:none">Switch the requirement off</button>
-    </div>
-    <div style="font-size:12px;color:var(--muted);margin-top:10px;line-height:1.6">Each staff member installs a free authenticator app on their phone (Google Authenticator or Microsoft Authenticator), scans a QR code once,
-      and from then on types the 6-digit code from the app after their password. While the requirement is ON, a staff account that has not entered the code
-      only sees its own employee data — the database enforces this, not just the screen. Ordinary employee accounts are not affected.</div>
-  </div>
-  <div class="card" style="padding:18px">
-    <div class="sec" style="margin-top:0">Employee logins</div>
-    <div style="font-size:13px;color:var(--label);margin-bottom:12px;line-height:1.6" id="us-gap"></div>
-    <div class="grid3" style="align-items:end">
-      <div class="field"><label>Temporary password — leave EMPTY to give each employee the standard first password (see the HR procedure)</label><input id="us-temp" autocomplete="off" placeholder="(recommended: leave empty)"></div>
-      <div class="field"><label>Only this employee code (leave empty for all)</label><input id="us-only" list="dl-emp-all" placeholder="e.g. 615 — for a first test"></div>
-      <div class="field"><button class="btn btn-success" id="us-create">Create employee logins</button></div>
-    </div>
-    <div style="font-size:12px;color:var(--muted);margin-top:10px">Each employee signs in with their <b>employee code</b> and this password, then must confirm the last 4 digits of their national ID and choose their own password. The same temporary password is used for <b>Reset password</b> below.</div>
-  </div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title" id="us-count">Users</span>
-      <div class="toolbar-right">
-        <input class="inp" id="us-q" placeholder="Search code, name or email…">
-        <select class="sel" id="us-role"><option value="">All roles</option><option value="admin">Admin</option><option value="hr">HR</option><option value="hr_officer">HR Officer</option><option value="finance">Finance</option><option value="manager">Manager</option><option value="employee">Employee</option><option value="none">No access</option></select>
-        <select class="sel" id="us-state"><option value="">Any status</option><option value="pending">Has not set a password</option><option value="locked">Locked / inactive</option><option value="ready">Active</option></select>
-      </div></div>
-    <div class="tbl-wrap"><table><thead><tr><th title="What the person types to sign in: the employee code, or an e-mail address">Sign-in name</th><th>Full name</th><th>Role</th><th>Linked employee (optional)</th><th>Active</th><th title="Can open Project costs (totals per project, no names) from My requests">Project cost reports</th><th>Password</th><th title="Two-step sign-in (code from an authenticator app)">2-step</th><th>Last sign-in</th><th></th></tr></thead><tbody id="us-tbl"></tbody></table></div>
-    <div class="foot">Admin: everything · HR: employee and attendance data, payroll view-only · Finance: payroll, HR data view-only · Manager and Employee roles become active in Phase 2</div>
-  </div>
-</div>
+<div class="page" id="page-users"><div id="react-users"></div></div>
 
 <!-- AUDIT LOG -->
 <div class="page" id="page-audit"><div id="react-audit"></div></div>   <!-- drawn by React: react/src/audit -->
@@ -1476,15 +1439,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="modal-foot"><button class="btn btn-ghost" data-close="m-mbu">Close</button><button class="btn btn-primary" id="mbu-save">Save</button></div>
 </div></div>
 
-<!-- MODAL: ASSIGN REPORTS -->
-<div class="overlay" id="m-reps"><div class="modal" style="max-width:640px">
-  <div class="modal-head"><div class="modal-title" id="rp-title">Reports</div><button class="x" data-close="m-reps">×</button></div>
-  <div style="font-size:13px;color:var(--label);margin-bottom:12px" id="rp-note"></div>
-  <div style="display:flex;gap:8px;margin-bottom:10px"><button class="btn btn-ghost btn-sm" id="rp-all">Select all</button><button class="btn btn-ghost btn-sm" id="rp-none">Clear all</button></div>
-  <div id="rp-list" style="max-height:420px;overflow-y:auto"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-reps">Cancel</button><button class="btn btn-primary" id="rp-save">Save</button></div>
-</div></div>
-
 <!-- MODAL: THEME -->
 <div class="overlay" id="m-theme"><div class="modal" style="max-width:560px">
   <div class="modal-head"><div class="modal-title">Choose a theme</div><button class="x" data-close="m-theme">×</button></div>
@@ -1524,19 +1478,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="modal-foot"><button class="btn btn-ghost" id="code-cancel">Sign out</button><button class="btn btn-primary" id="code-ok">Continue</button></div>
 </div></div>
 
-<!-- MODAL: RANDOM PASSWORD (part12.js randomUser) -->
-<div class="overlay" id="m-rndpw"><div class="modal" style="max-width:460px">
-  <div class="modal-head"><div class="modal-title">🎲 New one-time password</div><button class="x" data-close="m-rndpw">×</button></div>
-  <p style="color:var(--label);margin:0 0 6px">For <b id="rp-who"></b></p>
-  <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px;align-items:center;margin:10px 0">
-    <span style="color:var(--label)">Sign-in name</span><b id="rp-code" style="font-variant-numeric:tabular-nums;font-size:18px"></b>
-    <span style="color:var(--label)">Password</span><b id="rp-pw" style="font-family:Consolas,'Courier New',monospace;font-size:24px;letter-spacing:1px;user-select:all"></b>
-  </div>
-  <p style="color:var(--label);font-size:13px">Give it to the employee privately. At the next sign-in they type this password, then their <b>year of birth</b>, then choose their own password. This window is the only time the password is shown — if it is lost, generate a new one.</p>
-  <p id="rp-note" style="color:#b45309;font-size:13px"></p>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-rndpw">Close</button><button class="btn btn-primary" id="rp-copy">📋 Copy message (English + Arabic)</button></div>
-</div></div>
-
 <!-- MODAL: IDLE WARNING (part29.js) -->
 <div class="overlay" id="m-idle"><div class="modal" style="max-width:400px">
   <div class="modal-head"><div class="modal-title">⏱ Are you still there?</div></div>
@@ -1561,6 +1502,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=647b7b5761fe"></script>
-<script src="react.js?v=497add7cf462"></script>
+<script src="app.js?v=8c4ea9db5115"></script>
+<script src="react.js?v=6ab105aa80ec"></script>
 </body></html>

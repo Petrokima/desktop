@@ -2317,179 +2317,13 @@ function holidaysAdded(rows){ S.holidays.push(...rows); holidaySet = new Set(S.h
 function holidayDeleted(id){ S.holidays = S.holidays.filter(h=>h.id!==id); holidaySet = new Set(S.holidays.map(h=>h.date)); afterHolChange(); }
 function afterHolChange(){ renderHolidays(); renderLeaves(); renderAttendance(); renderPayroll(); renderDashboard(); renderReports(); }
 
-let SUPER = {};
-let ACCT_FLAGS = {};
 // ═════════════════════════════════════════════════════════
-//  USERS & ROLES (admin only)
+//  USERS & ROLES (admin only) — the page is React now (react/src/users, 30 Oct 2026); it loads when opened.
+//  Kept here: the sign-in and change-password buttons.
 // ═════════════════════════════════════════════════════════
-/** @type {FnResult<'admin_list_users'>} — the sign-in accounts (Users page) */
-let USERS = [];
-async function loadUsers(){
-  if (!ME || ME.role!=='admin') return;
-  const { data, error } = await sb.rpc('admin_list_users');
-  if (error){ $('us-tbl').innerHTML = `<tr><td colspan="7" class="empty">${esc(error.message)}</td></tr>`; return; }
-  USERS = data || [];
-  const fl = await sb.from('app_users').select('id,acct_reports,super_admin');           // who may open Project cost reports · who is super admin
-  ACCT_FLAGS = Object.fromEntries((fl.data || []).map(x => [x.id, !!x.acct_reports]));
-  SUPER = Object.fromEntries((fl.data || []).map(x => [x.id, !!x.super_admin]));
-  renderUsers();
-}
-function renderUsers(){
-  const roles = ['','admin','hr','hr_officer','employee'];
-  const q=$('us-q').value.trim().toLowerCase(), rf=$('us-role').value, st=$('us-state').value;
-  const withLogin = new Set(USERS.map(u=>String(u.emp_id||'')).filter(Boolean));
-  const gap = S.employees.filter(e=>e.status!=='Inactive' && !withLogin.has(String(e.id))).length;
-  $('us-gap').innerHTML = gap ? `<b>${gap}</b> active employee${gap>1?'s':''} ha${gap>1?'ve':'s'} no login yet.` : 'Every active employee has a login.';
-  const list = USERS.filter(u => (!q || [u.email,u.full_name,u.emp_id].some(v=>String(v||'').toLowerCase().includes(q))) &&
-      (!rf || (rf==='none' ? !u.role : u.role===rf)) &&
-      (!st || (st==='pending' && u.active && u.must_change_password) || (st==='locked' && !u.active) || (st==='ready' && u.active && !u.must_change_password)));
-  const pend = USERS.filter(u=>u.active && u.must_change_password).length;
-  $('us-count').textContent = `${USERS.length} users · ${pend} still to set a password · showing ${Math.min(list.length,300)}${list.length>300?' of '+list.length:''}`;
-  $('us-tbl').innerHTML = list.slice(0,300).map(u => { const me = u.id===ME.id;
-    const pw = !u.active ? '<span class="chip c-red">locked</span>' : u.must_change_password ? '<span class="chip c-orange">not set yet</span>' : '<span class="chip c-green">set</span>';
-    return `<tr data-uid="${u.id}">
-      <td class="strong" title="${esc(u.email)}">${/@petrokima\.local$/i.test(u.email||'') ? esc(u.email.replace(/@petrokima\.local$/i,'')) + ' <span style="font-weight:400;font-size:11px;color:var(--label)">code</span>' : esc(u.email)}${me?' <span class="chip c-blue">you</span>':''}</td>
-      <td><input class="inp" style="width:170px" data-u="name" value="${esc(u.full_name||'')}"></td>
-      <td><select class="sel" data-u="role" ${me?'disabled':''}>${roles.map(r=>`<option value="${r}" ${r===(u.role||'')?'selected':''}>${r?ROLE_LABEL[r]:'— no access —'}</option>`).join('')}</select></td>
-      <td><input class="inp" style="width:200px" list="dl-emp-all" data-u="emp" placeholder="Code — name" value="${u.emp_id?esc(u.emp_id+' — '+empName(empById(u.emp_id))):''}"></td>
-      <td><input type="checkbox" data-u="active" ${u.active?'checked':''} ${me?'disabled':''}></td>
-      <td style="text-align:center"><input type="checkbox" data-u-acct="${u.id}" ${ACCT_FLAGS[u.id]?'checked':''} title="Project cost reports (totals per project, no names)"></td>
-      <td>${pw}</td>
-      <td style="white-space:nowrap">${typeof twoStepCell === 'function' ? twoStepCell(u) : ''}</td>
-      <td class="mono">${u.last_sign_in_at ? esc(String(u.last_sign_in_at).slice(0,16).replace('T',' ')) : '<span style="color:var(--muted)">never</span>'}</td>
-      <td style="white-space:nowrap"><button class="btn btn-primary btn-sm" data-u-save>Save</button>${me?'':` <button class="btn btn-ghost btn-sm" data-u-reset title="Reset to the temporary password">Reset password</button> <button class="btn btn-ghost btn-sm" data-u-random title="Give this person a new random one-time password (they then enter their year of birth and choose their own password)">🎲 Random password</button>`}${['hr','hr_officer'].includes(u.role) ? ` <button class="btn btn-ghost btn-sm" data-u-reps title="Choose which reports this user can open">📊 Reports (${Array.isArray(u.allowed_reports) ? u.allowed_reports.length : 'all'})</button>` : ''}</td></tr>`; }).join('')
-    || '<tr><td colspan="10" class="empty">No users match</td></tr>';
-  let dl = /** @type {HTMLDataListElement} */ (document.getElementById('dl-emp-all'));
-  if (!dl){ dl=document.createElement('datalist'); dl.id='dl-emp-all'; document.body.appendChild(dl); }
-  if (dl.options.length !== S.employees.length) dl.innerHTML = S.employees.map(e=>`<option value="${esc(e.id)} — ${esc(empName(e))}"></option>`).join('');
-}
-async function createLogins(){
-  const temp=$('us-temp').value, onlyTxt=$('us-only').value.trim(), only = onlyTxt ? onlyTxt.split(' — ')[0].trim() : null;
-  if (temp && temp.length < 8) return toast('A typed temporary password must be at least 8 characters — or leave the box empty to use the standard first password (HR procedure)','warn');
-  if (only && !empById(only)) return toast(`Employee "${only}" not found`,'warn');
-  const withLogin = new Set(USERS.map(u=>String(u.emp_id||'')).filter(Boolean));
-  const waiting = only ? 1 : S.employees.filter(e=>e.status!=='Inactive' && !withLogin.has(String(e.id))).length;
-  const target = only ? `employee ${only}` : `${waiting} active employee${waiting===1?'':'s'} without a login`;
-  confirmDel(`Create logins for ${target}? New logins start switched OFF: tick “Active” for an employee when you give him his login. They will sign in with their employee code and ${temp ? 'the temporary password you typed' : 'the standard first password from the HR procedure (employees without a national ID are skipped)'}, then must choose their own password. Logins are created in batches of 25 — keep this window open until it finishes.`, async () => {
-    const b=$('us-create'); b.disabled=true; let total=0, rounds=0;
-    try{
-      while (rounds++ < 200){
-        b.textContent = only ? 'Creating…' : (waiting > total ? `Creating… ${total} of ${waiting}` : `Creating… ${total} created`);
-        const { data, error } = await sb.rpc('create_employee_logins', { p_password: temp || null, p_only_emp: only, p_limit: 25 });
-        if (error) throw error;
-        total += num(data);
-        if (!num(data) || only) break;
-      }
-    } catch(e){
-      toast(`Stopped after ${total} login${total===1?'':'s'}: ${e.message}. Click the button again to continue — nothing is duplicated.`,'err');
-      b.disabled=false; b.textContent='Create employee logins'; await loadUsers(); return;
-    }
-    b.disabled=false; b.textContent='Create employee logins'; $('us-only').value='';
-    await loadUsers();
-    const left = only ? 0 : S.employees.filter(e=>e.status!=='Inactive' && !new Set(USERS.map(u=>String(u.emp_id||''))).has(String(e.id))).length;
-    toast(total ? `Created ${total} login${total>1?'s':''} — switched OFF until you tick “Active” when you hand the login to the employee${left?` · ${left} could not be created (a login with that code already exists)`:''}` : 'Nothing to create — they already have logins', left ? 'warn' : 'ok');
-  });
-  $('del-title').textContent='Please confirm'; $('del-ok').textContent='Create'; $('del-ok').className='btn btn-success';
-}
-async function resetUser(tr){
-  const u=USERS.find(x=>x.id===tr.dataset.uid), temp=$('us-temp').value; if (!u) return;   // the login is no longer in the list
-  if (temp && temp.length < 8) { $('us-temp').focus(); return toast('A typed temporary password must be at least 8 characters — or leave the box empty','warn'); }
-  confirmDel(`Reset ${u.email}? ${temp ? 'Their password becomes the one you typed.' : 'Their password goes back to the standard first password (HR procedure).'} They must choose a new password at next sign-in.`, async () => {
-    const { error } = await sb.rpc('admin_reset_password', { p_user:u.id, p_temp: temp || null });
-    if (error) throw error; toast(`${u.email} reset — ${temp ? 'tell them the temporary password' : 'they sign in with the standard first password (HR procedure)'}`); await loadUsers();
-  });
-  $('del-title').textContent='Please confirm'; $('del-ok').textContent='Reset'; $('del-ok').className='btn btn-danger';
-}
-// ── 🎲 random one-time password for one selected login (19 Oct 2026) ──
-// Same server rule as Reset password with a typed password: must_change_password = true, so at the next sign-in
-// the person enters the YEAR OF BIRTH (as usual) and must choose a new password.
-function makeRandomPassword(){
-  const L='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz', D='23456789', ALL=L+D;   // no 0/O, 1/l/I look-alikes
-  const pick = set => { const b=new Uint8Array(1), lim=256-(256%set.length); do crypto.getRandomValues(b); while(b[0]>=lim); return set[b[0]%set.length]; };
-  for(;;){
-    const chars=[]; for(let i=0;i<8;i++) chars.push(pick(ALL));
-    const pw=chars.slice(0,4).join('')+'-'+chars.slice(4).join('');
-    if (/[A-Za-z]/.test(pw) && /[0-9]/.test(pw)) return pw;
-  }
-}
-function randomUser(tr){
-  const u=USERS.find(x=>x.id===tr.dataset.uid); if(!u) return;
-  const who = (u.emp_id ? u.emp_id+' — '+empName(empById(u.emp_id)) : (u.full_name||u.email));
-  confirmDel(`Give ${who} a new random password? Their current password stops working at once. At the next sign-in they type the new password, then their year of birth, then choose their own password.`, async () => {
-    const pw = makeRandomPassword();
-    const { error } = await sb.rpc('admin_reset_password', { p_user:u.id, p_temp: pw });
-    if (error) throw error;
-    const e = u.emp_id ? empById(u.emp_id) : null, code = String(u.email||'').endsWith('@petrokima.local') ? u.email.split('@')[0] : u.email;
-    $('rp-who').textContent = who; $('rp-code').textContent = code; $('rp-pw').textContent = pw;
-    $('rp-note').textContent = (e && !e.birth_date) ? '⚠ This employee has no date of birth on record, so the year-of-birth question will NOT be asked. Add the date of birth on the employee window first if you want that check.' : '';
-    setTimeout(()=>openM('m-rndpw'), 0);
-    loadUsers();
-  });
-  $('del-title').textContent='🎲 Random password'; $('del-ok').textContent='Generate'; $('del-ok').className='btn btn-danger';
-}
-$('rp-copy') && $('rp-copy').addEventListener('click', async () => {
-  const t=`Sign-in: ${$('rp-code').textContent}\nTemporary password: ${$('rp-pw').textContent}\nAt first sign-in enter your year of birth, then choose your own password.\nاسم الدخول: ${$('rp-code').textContent}\nكلمة المرور المؤقتة: ${$('rp-pw').textContent}\nعند أول دخول اكتب سنة ميلادك ثم اختر كلمة مرور جديدة.`;
-  try { await navigator.clipboard.writeText(t); toast('Copied — paste it into WhatsApp or a message to the employee'); } catch(_) { toast('Copy failed — select the password and copy it by hand','warn'); }
-});
-async function saveUser(tr){
-  const u = USERS.find(x=>x.id===tr.dataset.uid); if(!u) return;
-  const role = tr.querySelector('[data-u="role"]').value, name = tr.querySelector('[data-u="name"]').value.trim();
-  const empTxt = tr.querySelector('[data-u="emp"]').value.trim(), emp = empTxt ? String(empTxt).split(' — ')[0].trim() : '';
-  if (emp && !empById(emp)) return toast(`Employee "${emp}" not found — pick from the list`,'warn');
-  const active = tr.querySelector('[data-u="active"]').checked;
-  const { error } = await sb.rpc('admin_set_user', { p_id:u.id, p_role: u.id===ME.id ? 'admin' : role, p_full_name:name, p_emp_id:emp, p_active: u.id===ME.id ? true : active });
-  if (error) return toast(error.message,'err');
-  // a new HR Officer starts with no reports until the admin assigns some
-  if (role==='hr_officer' && !Array.isArray(u.allowed_reports)) await sb.from('app_users').update({ allowed_reports: [] }).eq('id', u.id);
-  toast(`${u.email} saved${role?` as ${ROLE_LABEL[role]}`:' — no access'}${role==='hr_officer' && !Array.isArray(u.allowed_reports) ? ' — now choose their reports with 📊 Reports' : ''}`);
-  if (u.id===ME.id){ ME.full_name=name; $('me-name').textContent=name||ME.email; }
-  loadUsers();
-}
-$('us-tbl').addEventListener('click', e => { const b=/** @type {PageEl} */ (e.target).closest('[data-u-save]'); if(b) return saveUser(b.closest('tr'));
-  const r=/** @type {PageEl} */ (e.target).closest('[data-u-reset]'); if(r) return resetUser(r.closest('tr'));
-  const rn=/** @type {PageEl} */ (e.target).closest('[data-u-random]'); if(rn) return randomUser(rn.closest('tr'));
-  const rp=/** @type {PageEl} */ (e.target).closest('[data-u-reps]'); if(rp) return openReps(/** @type {PageEl} */ (rp.closest('tr')).dataset.uid); });
-// ── which reports each HR user may open (admin only) ──
-let repsUser = null;
-function openReps(uid){
-  const u = USERS.find(x=>x.id===uid); if (!u) return; repsUser = u;
-  const off = u.role==='hr_officer', cur = Array.isArray(u.allowed_reports) ? new Set(u.allowed_reports) : new Set(REPORTS.map(r=>r.id));
-  $('rp-title').textContent = `Reports for ${u.full_name || u.email} · ${ROLE_LABEL[u.role]}`;
-  $('rp-note').innerHTML = off ? 'Salary reports (Payroll group and labour cost) can never be opened by an HR Officer. In the other reports, pay rates and deduction amounts are hidden automatically.'
-                               : (Array.isArray(u.allowed_reports) ? '' : 'This user can currently open <b>all</b> reports. Untick the ones they should not see.');
-  $('rp-list').innerHTML = Object.entries(groupBy(REPORTS, r=>r.g)).map(([g,L]) => `<div class="sec" style="margin-top:6px">${esc(g)}</div>` +
-    L.map(r => { const blocked = off && MONEY_REPORT(r);
-      return `<label style="display:flex;gap:8px;align-items:center;padding:5px 2px;font-size:13px;${blocked?'opacity:.45;cursor:not-allowed':'cursor:pointer'}">
-        <input type="checkbox" data-rp="${r.id}" ${blocked?'disabled':''} ${!blocked && cur.has(r.id)?'checked':''}> ${esc(r.t)}${blocked?' <span style="font-size:11px;color:var(--muted)">(salary — not for HR Officers)</span>':''}</label>`; }).join('')).join('');
-  openM('m-reps');
-}
-async function saveReps(){
-  const ids = [...document.querySelectorAll('[data-rp]:checked')].map(c => /** @type {string} */ (c.dataset.rp));
-  const { data, error } = await sb.from('app_users').update({ allowed_reports: ids }).eq('id', repsUser.id).select();
-  if (error) return toast(error.message,'err'); if (!(data && data.length)) return toast(NOPERM,'err');
-  closeM('m-reps'); toast(`${repsUser.full_name || repsUser.email} can now open ${ids.length} report${ids.length===1?'':'s'}`); loadUsers();
-}
-$('rp-all').addEventListener('click', () => document.querySelectorAll('[data-rp]:not(:disabled)').forEach(c => c.checked = true));
-$('rp-none').addEventListener('click', () => document.querySelectorAll('[data-rp]').forEach(c => c.checked = false));
-$('rp-save').addEventListener('click', saveReps);
-$('us-create').addEventListener('click', createLogins);
-['us-q'].forEach(id=>$(id).addEventListener('input', renderUsers));
-['us-role','us-state'].forEach(id=>$(id).addEventListener('change', renderUsers));
-$('us-refresh').addEventListener('click', loadUsers);
 $('btn-login').addEventListener('click', doLogin);
 ['li-email','li-pass'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); }));
 $('pw-save').addEventListener('click', changePassword);
-document.querySelector('[data-page="users"]')?.addEventListener('click', loadUsers);
-
-// the "Project cost reports" permission (works for any user, including an employee account)
-document.addEventListener('change', async e => {
-  const c = /** @type {PageEl} */ (e.target).closest('[data-u-acct]'); if (!c) return;
-  const u = USERS.find(x => x.id === c.dataset.uAcct);
-  const { data, error } = await sb.from('app_users').update({ acct_reports: c.checked }).eq('id', /** @type {string} */ (c.dataset.uAcct)).select('id');
-  if (error || !(data && data.length)){ c.checked = !c.checked; return toast(error ? error.message : NOPERM, 'err'); }
-  ACCT_FLAGS[c.dataset.uAcct] = c.checked;
-  toast(`${(u && (u.full_name || u.email)) || 'User'} ${c.checked ? 'can now open Project costs (totals per project, no names)' : 'can no longer open Project costs'}`);
-});
 
 // employee screens: hours as hours and minutes (1.5 → "1 h 30 m"); payroll and reports keep decimal hours
 const fmtHM = v => { const tm = Math.round(num(v) * 60), h = Math.floor(tm / 60), m = tm % 60; return h && m ? `${h} h ${m} m` : h ? `${h} h` : `${m} m`; };
@@ -3982,13 +3816,6 @@ $('pc-xlsx').addEventListener('click', async () => {
 $('menu-btn').addEventListener('click', () => document.body.classList.toggle('nav-open'));
 $('nav-backdrop').addEventListener('click', () => document.body.classList.remove('nav-open'));
 document.addEventListener('click', e => { if (/** @type {PageEl} */ (e.target).closest('#app .sidebar .nav-item[data-page]')) document.body.classList.remove('nav-open'); });
-// users list: mark the super admin
-const _renderUsersSA = renderUsers;
-// @ts-expect-error — renderUsers is deliberately extended here (the new version wraps the earlier one)
-renderUsers = function(){ const r = _renderUsersSA.apply(this, arguments);
-  document.querySelectorAll('#us-tbl tr').forEach(tr => { const cb = tr.querySelector('[data-u-acct]'); if (cb && SUPER[cb.dataset.uAcct]){
-    const cell = tr.querySelector('td'); if (cell && !cell.querySelector('.sa-badge')) cell.insertAdjacentHTML('beforeend', ' <span class="chip c-red sa-badge" title="Full authority — only she can make or remove administrators">👑 Super admin</span>'); } });
-  return r; };
 
 // ═════════════════════════════════════════════════════════
 //  BULK UPLOAD — one page for every kind of data (template → upload → preview → save)
@@ -4906,63 +4733,12 @@ async function mfaAfterReauth(){
   return true;
 }
 
-// ── Users & roles: the two-step card and the 2-step column ──
-let MFA_USERS = {};
-async function loadTwoStepAdmin(){
-  await loadSecurity();
-  const st = $('tfa-status');
-  if (!SEC.ready) { st.innerHTML = '<span class="chip c-orange">not available yet</span> The database update <b>40-two-step-audit-tidyup.sql</b> has not been run.'; ['tfa-setup-me','tfa-on','tfa-off'].forEach(id => $(id).style.display = 'none'); return; }
-  const r = await sb.rpc('admin_mfa_status');
-  MFA_USERS = Object.fromEntries(((r && r.data) || []).map(x => [x.user_id, x]));
-  const staff = USERS.filter(u => STAFF_ROLES.includes(u.role) && u.active);
-  const missing = staff.filter(u => !MFA_USERS[u.id]);
-  st.innerHTML = (SEC.require_staff_mfa
-      ? '<span class="chip c-green">REQUIRED</span> Staff accounts get their staff powers only after the 6-digit code. '
-      : '<span class="chip c-orange">not required yet</span> Staff can set it up now; switch the requirement on when everyone is ready. ')
-    + `<br><b>${staff.length - missing.length} of ${staff.length}</b> active staff accounts have set it up.`
-    + (missing.length ? ` Still to set up: ${missing.map(u => esc(u.full_name || u.email)).join(', ')}.` : ' ✔ Everyone is ready.')
-    + (SEC.enrolled ? '<br>Your own account: <b>set up ✔</b>' + (SEC.aal === 'aal2' ? ' and signed in with the code.' : ' — sign out and in again with the code.') : '<br>Your own account: <b>not set up yet</b>.');
-  $('tfa-setup-me').style.display = SEC.enrolled ? 'none' : '';
-  $('tfa-on').style.display  = SEC.require_staff_mfa ? 'none' : '';
-  $('tfa-off').style.display = SEC.require_staff_mfa ? '' : 'none';
-  renderUsers();
-}
-function twoStepCell(u){
-  if (!STAFF_ROLES.includes(u.role)) return '<span style="color:var(--muted)">—</span>';
-  if (!SEC.ready) return '';
-  return MFA_USERS[u.id] ? `<span class="chip c-green">on</span>${u.id !== ME.id ? ` <button class="btn btn-ghost btn-sm" data-u-mfa title="Lost phone: remove the authenticator so they can set it up again">Reset</button>` : ''}`
-                         : '<span class="chip c-orange">not set up</span>';
-}
-$('tfa-setup-me').addEventListener('click', async () => {
-  if (await setupTwoStep()) { toast('Done — next time you sign in, type the code after your password'); loadTwoStepAdmin(); }
-});
-$('tfa-on').addEventListener('click', () => {
-  if (!SEC.enrolled) return toast('First set up your own two-step sign-in (📱 button), sign out and sign in again with the code', 'warn');
-  if (SEC.aal !== 'aal2') return toast('Sign out and sign in again with your 6-digit code first', 'warn');
-  const staff = USERS.filter(u => STAFF_ROLES.includes(u.role) && u.active), missing = staff.filter(u => !MFA_USERS[u.id]);
-  confirmDel(`Require two-step sign-in for all Admin, HR and HR Officer accounts?` + (missing.length
-      ? ` ${missing.length} of them (${missing.map(u => u.full_name || u.email).join(', ')}) have not set it up — they will be asked to scan the QR code at their next sign-in.` : ''),
-    async () => { const { error } = await sb.rpc('set_require_staff_mfa', { p_on:true }); if (error) throw error; toast('Two-step sign-in is now REQUIRED for staff'); loadTwoStepAdmin(); });
-  $('del-title').textContent = 'Please confirm'; $('del-ok').textContent = 'Require it'; $('del-ok').className = 'btn btn-success';
-});
-$('tfa-off').addEventListener('click', () => {
-  confirmDel('Switch the two-step requirement OFF? Staff accounts will again get their powers with the password alone. Only do this in an emergency.',
-    async () => { const { error } = await sb.rpc('set_require_staff_mfa', { p_on:false }); if (error) throw error; toast('Requirement switched off', 'warn'); loadTwoStepAdmin(); });
-  $('del-title').textContent = 'Please confirm'; $('del-ok').textContent = 'Switch off'; $('del-ok').className = 'btn btn-danger';
-});
-$('us-tbl').addEventListener('click', e => {
-  const b = /** @type {PageEl} */ (e.target).closest('[data-u-mfa]'); if (!b) return;
-  const u = USERS.find(x => x.id === b.closest('tr')?.dataset.uid); if (!u) return;
-  confirmDel(`Reset two-step sign-in for ${u.full_name || u.email}? Use this when they lost or changed their phone. At their next sign-in they scan a new QR code.`,
-    async () => { const { error } = await sb.rpc('admin_reset_mfa', { p_user:u.id }); if (error) throw error; toast('Two-step sign-in reset'); loadTwoStepAdmin(); });
-  $('del-title').textContent = 'Please confirm'; $('del-ok').textContent = 'Reset'; $('del-ok').className = 'btn btn-danger';
-});
+// ── Users & roles: the two-step card and the 2-step column are React now (react/src/users, 30 Oct 2026);
+//    it uses loadSecurity() and setupTwoStep() above through the bridge.
 
 // ═════════════════════════════════════════════════════════
 //  AUDIT LOG (admin only) — the page is React now (react/src/audit, 30 Oct 2026); it loads when opened.
 // ═════════════════════════════════════════════════════════
-document.querySelector('[data-page="users"]')?.addEventListener('click', () => setTimeout(loadTwoStepAdmin, 400));
-$('us-refresh').addEventListener('click', () => setTimeout(loadTwoStepAdmin, 400));
 
 // ═════════════════════════════════════════════════════════
 //  LOCATION CHECKS — site boundaries, fake GPS, suspicious check-ins   (database: 41-location-integrity.sql)

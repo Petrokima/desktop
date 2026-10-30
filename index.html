@@ -6,6 +6,7 @@
 <script id="theme-boot">try{document.documentElement.dataset.theme=localStorage.getItem('pk_theme')||'dark'}catch(e){}</script>
 <title>Petrokima HR — Attendance & Payroll</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="vendor/sentry.js?v=11.7.0"></script>
 <script src="vendor/supabase.js?v=2.117.3"></script>
 <style>
 :root{--bg:#0f1117;--surface:#181c27;--card:#1e2336;--border:#2a2f45;--accent:#3b6fd4;--accent2:#22c5a0;--warn:#e07b39;--danger:#d94f4f;--text:#e8ecf4;--muted:#7a839e;--label:#aeb5cc;--r:10px;--rs:6px;--link:#6fa3f7;--info:#89aaee;--hover:rgba(255,255,255,.025);--overlay:rgba(15,17,23,.85);color-scheme:dark}
@@ -1635,6 +1636,49 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div id="toast"></div>
 <script>
 // ═════════════════════════════════════════════════════════
+//  ERROR REPORTING (30 Oct 2026) — keep IDENTICAL in desktop/src/part0err.js and mobile/index.html (checked automatically)
+//  Unexpected errors on staff PCs and phones are reported to Sentry (EU), the standard error-monitoring service, through
+//  our Supabase function error-report (it adds the real Sentry address; until Mohammed sets it, reports are dropped).
+//  No personal data: no names, no e-mails, no ID numbers, no typed text, no page content; web addresses without their
+//  query part; the login is sent only as its internal number (UUID) and role. Off when the library is missing (on-prem copy).
+// ═════════════════════════════════════════════════════════
+const PK_ERR = (function(){
+  const lib = window.Sentry, off = { user(){}, capture(){} };
+  if (!lib || typeof lib.init !== 'function' || !/^https:$/.test(location.protocol) && location.hostname !== 'localhost') return off;
+  const scrub = s => typeof s !== 'string' ? s : s
+    .replace(/\b[23]\d{13}\b/g, '[id]').replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '[email]')
+    .replace(/eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}/g, '[token]').replace(/sb_(publishable|secret)_[\w-]+/g, '[key]');
+  const bare = u => { try { const x = new URL(u, location.href); return x.origin + x.pathname; } catch(e){ return ''; } };
+  try {
+    lib.init({
+      dsn: 'https://public@o0.ingest.sentry.io/0',                       // placeholder — the real address is added by error-report
+      tunnel: 'https://hckkrzghxxhauotyqlqr.supabase.co/functions/v1/error-report',
+      release: typeof APP_BUILD !== 'undefined' ? 'pk-phone@' + (APP_BUILD ? 'android-' + APP_BUILD : 'web') : 'pk-desktop@web',
+      environment: location.hostname === 'localhost' ? 'android-app' : location.hostname,
+      sendDefaultPii: false, maxBreadcrumbs: 30, attachStacktrace: true,
+      beforeBreadcrumb(b){
+        if (b.category === 'console' || b.category === 'ui.input') return null;          // never what people type or logs
+        if (b.data){ if (b.data.url) b.data.url = bare(b.data.url); if (b.data.from) b.data.from = bare(b.data.from); if (b.data.to) b.data.to = bare(b.data.to); }
+        if (b.message) b.message = scrub(b.message);
+        return b;
+      },
+      beforeSend(e){
+        if (e.request){ e.request = { url: bare(e.request.url || '') }; }
+        if (e.message) e.message = scrub(e.message);
+        (e.exception && e.exception.values || []).forEach(v => { v.value = scrub(v.value); });
+        if (e.user) e.user = { id: e.user.id };
+        delete e.extra;
+        return e;
+      }
+    });
+  } catch(e){ return off; }
+  return {
+    user(u){ try { lib.setUser(u && u.id ? { id: u.id } : null); lib.setTag('role', (u && u.role) || 'none'); } catch(e){} },
+    capture(err, where){ try { lib.withScope(s => { if (where) s.setTag('where', String(where)); lib.captureException(err); }); } catch(e){} }
+  };
+})();
+
+// ═════════════════════════════════════════════════════════
 //  STATE
 // ═════════════════════════════════════════════════════════
 let sb = null;
@@ -1881,6 +1925,7 @@ async function afterLogin(user){
   if (me.role==='employee') return showSelf(me, user);
   if (me.role==='manager') return stop(`Manager access to the desktop app arrives in Phase 2 with reporting lines. Your account is ready.`);
   ME = { ...me, email:user.email };
+  PK_ERR.user(ME);                                    // error reports carry only the login's number and role
   const r = me.role;
   document.body.classList.toggle('can-hr',    r==='admin' || r==='hr');
   document.body.classList.toggle('can-pay',   r==='admin' || r==='finance');

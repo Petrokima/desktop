@@ -172,7 +172,6 @@ body:not(.can-pay):not(.can-hr) :is([data-act="new-loan"],#l-save,[data-del-loan
 .lpp-chip button{border:0;background:none;cursor:pointer;color:inherit;padding:0 2px;font-size:12px}
 body:not(.can-var) :is(#mon-save,#mon-add-btn,#mon-pick,#mon-bulk,#mp-attended,#mp-fill,#mp-fill-go,[data-act="new-var"],[data-mon-add],[data-mon-rm]){display:none!important}
 body:not(.can-hr):not(.can-pay) :is(#par-new,[data-par-edit],[data-par-del]){display:none!important}
-body:not(.can-hr) :is(#as-add-box,#as-bulk-box,[data-as-rm],.as-chk){display:none!important}
 body:not(.can-pay) #pay-publish{display:none!important}
 body:not(.can-pay) :is(#cc-save,#cc-reset){display:none!important}
 body:not(.can-hr) .nav-item:is([data-page="news"],[data-page="voice"]){display:none!important}
@@ -652,26 +651,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </div>
 
 <!-- PROJECT ASSIGNMENTS -->
-<div class="page" id="page-assign">
-  <div class="page-header"><div><div class="page-title">Project assignments</div>
-    <div class="page-sub">An employee with assigned projects sees only those on the phone and can check in only there. Employees with none can check in at any project. Direct managers can also assign for their team from the phone or My requests.</div></div></div>
-  <div id="as-missing"></div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title">Employees</span>
-      <div class="toolbar-right"><select class="sel" id="as-show"><option value="">All active employees</option><option value="with">With assigned projects</option><option value="without">Without assigned projects</option></select>
-        <input class="inp" id="as-q" placeholder="Name or code…"></div></div>
-    <div id="as-bulk-box" class="toolbar" style="border-top:1px solid var(--border);padding-top:10px;gap:8px;flex-wrap:wrap">
-      <span style="font-size:13px;color:var(--label)">Add a project to the ticked employees:</span>
-      <input class="inp" id="as-bulk-proj" list="dl-proj" placeholder="Project code or name…" style="width:280px"><button class="btn btn-primary btn-sm" id="as-bulk-go">Add to ticked (0)</button></div>
-    <div class="tbl-wrap" style="max-height:420px"><table><thead><tr><th class="as-chk"><input type="checkbox" id="as-all"></th><th>Code</th><th>Employee</th><th>Department</th><th>Unit</th><th>Job</th><th>Direct manager</th><th class="num">Projects</th></tr></thead><tbody id="as-tbl"></tbody></table></div>
-    <div class="foot" id="as-foot"></div>
-  </div>
-  <div class="card" id="as-detail" style="display:none">
-    <div class="toolbar"><span class="toolbar-title" id="as-detail-title"></span>
-      <div class="toolbar-right" id="as-add-box"><input class="inp" id="as-add-proj" list="dl-proj" placeholder="Add a project — code or name…" style="width:300px"><button class="btn btn-primary btn-sm" id="as-add-go">+ Add</button></div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Name</th><th>Assigned by</th><th>When</th><th></th></tr></thead><tbody id="as-proj-tbl"></tbody></table></div>
-  </div>
-</div>
+<div class="page" id="page-assign"><div id="react-assign"></div></div>
 
 <!-- PROJECT ALLOWANCE RULES -->
 <div class="page" id="page-parrules">
@@ -1333,6 +1313,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=ad797d304a88"></script>
-<script src="react.js?v=e182c68c450f"></script>
+<script src="app.js?v=5c20d868b1b4"></script>
+<script src="react.js?v=377eea9f0888"></script>
 </body></html>

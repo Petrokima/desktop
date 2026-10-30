@@ -3192,7 +3192,7 @@ $('aa-q').addEventListener('input', renderApprovals);
 // ═════════════════════════════════════════════════════════
 const ORG_PAGES = { emp:()=>renderEmployees(), att:()=>renderAttendance(), pn:()=>renderPenalties(),
   mon:()=>renderMonthly(), pay:()=>renderPayroll(), aa:()=>renderApprovals(),
-  hs:()=>renderHistLines(), as:()=>renderAssign(), loan:()=>renderLoans(), rep:()=>{ if (repCur) runReport(); } };
+  hs:()=>renderHistLines(), loan:()=>renderLoans(), rep:()=>{ if (repCur) runReport(); } };
 // does this employee match the department and unit chosen on page p?
 function orgMatch(e, p){
   const d = ($(p+'-dept') || {}).value || '', u = ($(p+'-unit') || {}).value || '';
@@ -3267,61 +3267,14 @@ document.addEventListener('click', e => {
 });
 
 // ═════════════════════════════════════════════════════════
-//  PROJECT ASSIGNMENTS — HR / admin page
+//  PROJECT ASSIGNMENTS — moved to React 30 Oct 2026 (react/src/assign). The old code keeps the list (S.empProjects: employee
+//  window, reports, bulk import) and updates it after the React page changed something.
 // ═════════════════════════════════════════════════════════
-let asSel = null, asTicked = new Set();
-const asCount = id => S.empProjects.filter(x => String(x.emp_id) === String(id)).length;
-function renderAssign(){
-  $('as-missing').innerHTML = assignTableMissing ? '<div class="alert a-warn">The assignments table does not exist yet. Run <b>project-assignments.sql</b>, then click ⟳ Refresh.</div>' : '';
-  const q = $('as-q').value.trim().toLowerCase(), show = $('as-show').value;
-  const list = activeEmps().filter(e => orgMatch(e,'as') && (!q || [e.id, e.name_en, e.name_ar, e.job_name].some(v => String(v||'').toLowerCase().includes(q))))
-    .map(e => ({ e, n: asCount(e.id) })).filter(x => !show || (show==='with' ? x.n : !x.n))
-    .sort((a,b) => Number(b.n>0) - Number(a.n>0) || String(a.e.id).localeCompare(String(b.e.id), undefined, { numeric:true }));
-  $('as-tbl').innerHTML = list.slice(0, 400).map(({e,n}) => `<tr class="clickable${asSel===String(e.id)?' sel':''}" data-as-emp="${esc(e.id)}" style="cursor:pointer${asSel===String(e.id)?';background:var(--hover)':''}">
-      <td class="as-chk"><input type="checkbox" data-as-tick="${esc(e.id)}"${asTicked.has(String(e.id))?' checked':''}></td>
-      <td class="mono">${esc(e.id)}</td><td class="strong">${esc(empName(e))}</td><td>${esc(e.department||'')}</td><td>${esc(e.unit||'')}</td><td>${esc(e.job_name||'')}</td>
-      <td>${esc(empName(empById(e.manager_id)) || '')}</td><td class="num">${n ? `<b>${n}</b>` : '<span style="color:var(--muted)">any</span>'}</td></tr>`).join('')
-    || '<tr><td colspan="8" class="empty">No employees match</td></tr>';
-  const withN = new Set(S.empProjects.map(x => String(x.emp_id))).size;
-  $('as-foot').textContent = `${list.length} shown${list.length>400?' (first 400 — narrow the filters)':''} · ${withN} employee${withN===1?'':'s'} with assigned projects · ${S.empProjects.length} assignments in total`;
-  $('as-bulk-go').textContent = `Add to ticked (${asTicked.size})`;
-  renderAssignDetail();
-}
-function renderAssignDetail(){
-  if (!asSel){ $('as-detail').style.display = 'none'; return; }
-  const e = empById(asSel) || /** @type {Employee} */ ({ id: asSel }), rows = S.empProjects.filter(x => String(x.emp_id) === String(asSel)).sort((a,b) => String(a.project_code).localeCompare(String(b.project_code)));
-  $('as-detail').style.display = '';
-  $('as-detail-title').innerHTML = `📌 ${esc(empName(e))} <span class="mono" style="color:var(--muted)">${esc(e.id)}</span> — ${rows.length ? `${rows.length} project${rows.length>1?'s':''}: can check in only at these` : 'no projects: can check in at any project'}`;
-  $('as-proj-tbl').innerHTML = rows.map(r => `<tr><td class="mono">${esc(r.project_code)}</td><td>${esc(projName(r.project_code) || '')}</td>
-      <td>${esc(r.assigned_by || '')} <span class="chip c-grey">${esc(r.assigned_role || '')}</span></td><td class="mono">${esc(fmtSent(r.assigned_at))}</td>
-      <td><button class="icon-btn" data-as-rm="${esc(r.project_code)}" title="Remove">🗑</button></td></tr>`).join('')
-    || '<tr><td colspan="5" class="empty">No projects assigned — add one above</td></tr>';
-}
-async function assignProjects(empIds, code){
-  const recs = empIds.filter(id => !S.empProjects.some(x => String(x.emp_id)===String(id) && x.project_code===code)).map(id => ({ emp_id:String(id), project_code:code }));
-  if (!recs.length) return toast('Already assigned', 'warn');
-  const { data, error } = await sb.from('employee_projects').insert(recs).select();
-  if (error) return toast(error.message, 'err'); if (!(data && data.length)) return toast(NOPERM, 'err');
-  S.empProjects = S.empProjects.concat(data); renderAssign();
-  toast(`${projLabel(code)} added for ${data.length} employee${data.length>1?'s':''}`);
-}
-async function unassignProject(empId, code){
-  const { data, error } = await sb.from('employee_projects').delete().eq('emp_id', empId).eq('project_code', code).select();
-  if (error) return toast(error.message, 'err'); if (!(data && data.length)) return toast(NOPERM, 'err');
-  S.empProjects = S.empProjects.filter(x => !(String(x.emp_id)===String(empId) && x.project_code===code)); renderAssign(); toast('Project removed');
-}
-$('as-q').addEventListener('input', renderAssign);
-$('as-show').addEventListener('change', renderAssign);
-$('as-tbl').addEventListener('click', e => {
-  const tk = /** @type {PageEl} */ (e.target).closest('[data-as-tick]'); if (tk){ tk.checked ? asTicked.add(tk.dataset.asTick) : asTicked.delete(tk.dataset.asTick); $('as-bulk-go').textContent = `Add to ticked (${asTicked.size})`; return; }
-  const r = /** @type {PageEl} */ (e.target).closest('[data-as-emp]'); if (r){ asSel = r.dataset.asEmp; renderAssign(); }
-});
-$('as-all').addEventListener('change', () => { document.querySelectorAll('#as-tbl [data-as-tick]').forEach(c => { c.checked = $('as-all').checked; c.checked ? asTicked.add(c.dataset.asTick) : asTicked.delete(c.dataset.asTick); }); $('as-bulk-go').textContent = `Add to ticked (${asTicked.size})`; });
-$('as-add-go').addEventListener('click', () => { const c = parseProjInput($('as-add-proj').value); if (!c) return toast('Pick the project from the suggestions','warn'); assignProjects([asSel], c).then(() => $('as-add-proj').value=''); });
-$('as-bulk-go').addEventListener('click', () => { const c = parseProjInput($('as-bulk-proj').value); if (!c) return toast('Pick the project from the suggestions','warn'); if (!asTicked.size) return toast('Tick the employees first','warn');
-  confirmDel(`Add ${projLabel(c)} to ${asTicked.size} employee${asTicked.size>1?'s':''}?`, () => assignProjects([...asTicked], c));
-  $('del-title').textContent='Please confirm'; $('del-ok').textContent='Add'; $('del-ok').className='btn btn-primary'; });
-$('as-proj-tbl').addEventListener('click', e => { const rm = /** @type {PageEl} */ (e.target).closest('[data-as-rm]'); if (rm) confirmDel(`Remove ${projLabel(rm.dataset.asRm)} from ${empName(empById(asSel))}?`, () => unassignProject(asSel, rm.dataset.asRm)); });
+function renderAssign(){ if (typeof PKR !== 'undefined') PKR.render(); }
+/** @param {EmployeeProject[]} rows */
+function assignmentsAdded(rows){ S.empProjects = S.empProjects.concat(rows); renderAssign(); }
+/** @param {string} empId @param {string} code */
+function assignmentRemoved(empId, code){ S.empProjects = S.empProjects.filter(x => !(String(x.emp_id)===String(empId) && x.project_code===code)); renderAssign(); }
 
 // ── a manager on the desktop (My requests → Team approvals) ──
 let tprojEmp = null, tprojT;
@@ -3368,7 +3321,7 @@ openEmp = function(id){
     + ` <a href="#" data-goto-assign="${esc(id)}" style="color:var(--link);margin-inline-start:8px">Manage on the Project assignments page →</a>`;
 };
 document.addEventListener('click', e => { const g = /** @type {PageEl} */ (e.target).closest('[data-goto-assign]'); if (!g) return; e.preventDefault();
-  closeM('m-emp'); asSel = g.dataset.gotoAssign; showPage('assign'); renderAssign(); });
+  closeM('m-emp'); showPage('assign'); if (typeof PKR !== 'undefined') PKR.openAssign(g.dataset.gotoAssign || ''); });
 
 // ═════════════════════════════════════════════════════════
 //  ⬇ EXCEL — on every page (what the page shows, with its filters) and on every report (all rows)

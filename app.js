@@ -1507,7 +1507,6 @@ document.addEventListener('click', async ev => {
   if (act){ const a = act.dataset.act;
     if (a==='new-emp') return openEmp(null);
     if (a==='new-att') return openAtt(null);
-    if (a==='new-perm') return openPerm();
     if (a==='new-leave') return openLeave(null);
     if (a==='new-pen') return openPen(null);
     if (a==='myprofile') return showSelf(ME, { email: ME.email });
@@ -1974,85 +1973,22 @@ function monthOf(d){ return cycleOf(d); }   // quota follows the payroll cycle
 function permUsed(empId, month, exceptId){
   return S.permissions.filter(p => String(p.emp_id)===String(empId) && p.status==='Approved' && monthOf(p.date)===month && p.id!==exceptId).length;
 }
+// The page and its windows are React now (react/src/permissions, 30 Oct 2026). Kept here: the menu badge, the quota helpers above
+// (also used elsewhere) and what a saved / decided / deleted permission changes in the rest of the app.
 function renderPermissions(){
-  const limit = num(settings.permissionsPerMonth)||2;
-  $('perm-missing').innerHTML = permTableMissing ? '<div class="alert a-warn">The permissions table does not exist yet. Run <b>attendance-permissions.sql</b> in the database SQL Editor, then click ⟳ Refresh.</div>' : '';
   const pend = S.permissions.filter(readyForHR).length;
-  $('perm-badge').style.display = pend ? '' : 'none'; $('perm-badge').textContent = pend;
-  $('perm-sub').textContent = `Period ${periodLabel(settings.period)} · each employee may have ${limit} approved permission${limit>1?'s':''} per payroll cycle, up to ${settings.permissionMaxHours} h each · ${pend} pending`;
-  const st=$('perm-status').value, q=$('perm-q').value.trim().toLowerCase();
-  const list = S.permissions.filter(p => (!st || p.status===st) && orgMatch(empById(p.emp_id),'perm') &&
-      (!q || [p.emp_id, empName(empById(p.emp_id)), (empOrBlank(p.emp_id)).name_ar].some(v=>String(v||'').toLowerCase().includes(q))))
-    .sort((a,b)=> (a.status==='Pending'?0:1)-(b.status==='Pending'?0:1) || String(b.date).localeCompare(String(a.date)));
-  $('perm-tbl').innerHTML = list.map(p => { const e=empOrBlank(p.emp_id), used=permUsed(p.emp_id, monthOf(p.date));
-    return `<tr><td class="mono">${esc(p.date)}</td><td class="strong">${esc(empName(e)||p.emp_id)} <span class="mono" style="color:var(--muted)">${esc(p.emp_id)}</span></td>
-      <td>${esc(e.department)}</td><td>${esc(p.type)}</td><td class="num">${fmt(p.hours)}</td><td style="white-space:normal;min-width:140px">${esc(p.reason||'')}</td>
-      <td><span class="chip ${used>=limit?'c-red':'c-grey'}">${used} of ${limit}</span></td><td>${esc(p.source||'')}</td>
-      <td>${chip(p.status)}${mgrStep(p)}</td><td>${esc(p.decided_by||'')}${p.decision_note?`<div style="font-size:11px;color:var(--muted)">${esc(p.decision_note)}</div>`:''}</td>
-      <td>${readyForHR(p) ? `<button class="btn btn-ghost btn-sm" data-decide="${p.id}">Decide</button>` : ''}
-          <button class="icon-btn" data-del-perm="${p.id}" title="Delete">🗑</button></td></tr>`; }).join('')
-    || `<tr><td colspan="11" class="empty">No ${st?st.toLowerCase()+' ':''}requests this period</td></tr>`;
-  $('perm-foot').textContent = `${list.length} request${list.length===1?'':'s'} shown · approvals are limited by the database, so the mobile app follows the same rule`;
+  $('perm-badge').style.display = pend ? '' : 'none'; $('perm-badge').textContent = String(pend);
+  if (typeof PKR !== 'undefined') PKR.render();
 }
-function permQuotaHint(){
-  const emp=parseEmpInput($('pr-emp').value), d=$('pr-date').value, limit=num(settings.permissionsPerMonth)||2;
-  if(!emp||!d){ $('pr-quota').innerHTML=''; return; }
-  const used=permUsed(emp, monthOf(d));
-  $('pr-quota').innerHTML = used>=limit ? `<span class="neg">This employee has already used ${used} of ${limit} permissions in ${monthOf(d)} — it can be saved as Pending but cannot be approved.</span>`
-                                        : `<span class="pos">${used} of ${limit} permissions used in ${monthOf(d)}.</span>`;
+/** a permission saved (new) or decided in the React page @param {Permission} row */
+function permSaved(row){
+  const i = S.permissions.findIndex(x => x.id === row.id);
+  if (i >= 0) S.permissions[i] = row; else if (inPeriod(row.date)) S.permissions.push(row);
+  afterPermChange();
 }
-function openPerm(){
-  if (permTableMissing) return toast('Run attendance-permissions.sql first','warn');
-  $('pr-emp').value=''; $('pr-date').value=todayStr(); $('pr-type').value='Late arrival';
-  $('pr-hours').value=settings.permissionMaxHours; $('pr-max').textContent=`${settings.permissionMaxHours} h`; $('pr-status').value='Pending'; $('pr-reason').value='';
-  permQuotaHint(); openM('m-perm'); setTimeout(()=>$('pr-emp').focus(),50);
-}
-async function savePerm(){
-  const emp=parseEmpInput($('pr-emp').value); if(!emp) return toast('Pick an employee from the list','warn');
-  const date=$('pr-date').value, hours=num($('pr-hours').value), max=num(settings.permissionMaxHours)||2;
-  if(!date) return toast('Date is required','warn');
-  if(hours<=0 || hours>max) return toast(`Hours must be between 0.25 and ${max}`,'warn');
-  const rec={ emp_id:emp, date, type:$('pr-type').value, hours, reason:$('pr-reason').value.trim(), status:$('pr-status').value, source:'Desktop' };
-  if (rec.status==='Approved'){ rec.decided_by = localStorage.getItem('approver') || 'HR'; rec.decided_at = new Date().toISOString(); }
-  const { data, error } = await sb.from('attendance_permissions').insert(rec).select();
-  if (error) return toast(error.message.includes('duplicate') ? 'This employee already has an open request of that type on that date' : error.message, 'err');
-  if (!(data && data.length)) return toast(NOPERM,'err'); if (inPeriod(date)) S.permissions.push(data[0]);
-  closeM('m-perm'); afterPermChange(); toast(rec.status==='Approved' ? 'Permission approved' : 'Request saved as Pending');
-}
-let deciding = null;
-function openDecide(id){
-  const p=S.permissions.find(x=>x.id===id); if(!p) return; deciding=p;
-  const e=empOrBlank(p.emp_id), used=permUsed(p.emp_id, monthOf(p.date)), limit=num(settings.permissionsPerMonth)||2;
-  const att=S.attendance.find(a=>String(a.emp_id)===String(p.emp_id) && a.date===p.date), R=att?dayRules(att,e):null;
-  $('dc-body').innerHTML = `<b style="color:var(--text)">${esc(empName(e))}</b> (${esc(p.emp_id)}) · ${esc(e.department||'')}<br>
-    ${esc(p.type)} on <b>${esc(p.date)}</b> for <b>${fmt(p.hours)} h</b>${p.reason?` — “${esc(p.reason)}”`:''}<br>
-    ${att ? `Attendance that day: ${esc(att.check_in||'?')} → ${esc(att.check_out||'?')}, ${fmt(att.total_hours)} h${R?` · late ${fmt(R.lateRaw)} h · early ${fmt(R.earlyRaw)} h`:''}` : 'No attendance recorded for that day yet.'}<br>
-    Approved this month: <span class="chip ${used>=limit?'c-red':'c-green'}">${used} of ${limit}</span>${used>=limit?' — <span class="neg">limit reached, approval will be refused</span>':''}`;
-  $('dc-by').value = localStorage.getItem('approver') || ''; $('dc-note').value='';
-  openM('m-decide');
-}
-async function decide(status){
-  const by=$('dc-by').value.trim(); if(!by) return toast('Enter who is making the decision','warn');
-  localStorage.setItem('approver', by);
-  const upd={ status, decided_by:by, decided_at:new Date().toISOString(), decision_note:$('dc-note').value.trim()||null };
-  const { data, error } = await sb.from('attendance_permissions').update(upd).eq('id', deciding.id).select();
-  if (error) return toast(error.message.replace(/^.*?Monthly limit/,'Monthly limit'), 'err');
-  if (!(data && data.length)) return toast(NOPERM,'err'); const i=S.permissions.findIndex(x=>x.id===deciding.id); S.permissions[i]=data[0];
-  closeM('m-decide'); afterPermChange(); toast(status==='Approved' ? 'Approved — deduction waived' : 'Rejected');
-}
+/** @param {string} id */
+function permDeleted(id){ S.permissions = S.permissions.filter(p => p.id !== id); afterPermChange(); }
 function afterPermChange(){ renderPermissions(); renderAttendance(); renderPayroll(); renderDashboard(); renderReports(); }
-
-$('perm-status').addEventListener('change', renderPermissions);
-$('perm-q').addEventListener('input', renderPermissions);
-['pr-emp','pr-date'].forEach(id=>$(id).addEventListener('input', permQuotaHint));
-$('pr-save').addEventListener('click', savePerm);
-$('dc-approve').addEventListener('click', ()=>decide('Approved'));
-$('dc-reject').addEventListener('click', ()=>decide('Rejected'));
-$('perm-tbl').addEventListener('click', e => {
-  const d=/** @type {PageEl} */ (e.target).closest('[data-decide]'); if(d) return openDecide(d.dataset.decide);
-  const x=/** @type {PageEl} */ (e.target).closest('[data-del-perm]');
-  if(x){ const id=x.dataset.delPerm; confirmDel('Delete this permission request?', async()=>{ await del('attendance_permissions',id); S.permissions=S.permissions.filter(p=>p.id!==id); afterPermChange(); toast('Deleted'); }); }
-});
 
 // ═════════════════════════════════════════════════════════
 //  LEAVE HELPERS
@@ -3412,7 +3348,7 @@ $('aa-q').addEventListener('input', renderApprovals);
 // ═════════════════════════════════════════════════════════
 //  DEPARTMENT + UNIT FILTERS — on every page that lists employees
 // ═════════════════════════════════════════════════════════
-const ORG_PAGES = { emp:()=>renderEmployees(), att:()=>renderAttendance(), perm:()=>renderPermissions(), lv:()=>renderLeaves(), pn:()=>renderPenalties(),
+const ORG_PAGES = { emp:()=>renderEmployees(), att:()=>renderAttendance(), lv:()=>renderLeaves(), pn:()=>renderPenalties(),
   ex:()=>renderExempt(), rl:()=>renderReporting(), mon:()=>renderMonthly(), pay:()=>renderPayroll(), aa:()=>renderApprovals(),
   hs:()=>renderHistLines(), as:()=>renderAssign(), loan:()=>renderLoans(), rep:()=>{ if (repCur) runReport(); } };
 // does this employee match the department and unit chosen on page p?

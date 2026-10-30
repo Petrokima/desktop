@@ -549,28 +549,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 
 
 <!-- BULK UPLOAD -->
-<div class="page" id="page-bulk">
-  <div class="page-header"><div><div class="page-title">Bulk upload</div>
-    <div class="page-sub">Choose what to upload → download the template → fill it in Excel → upload → check the preview → save. Nothing is saved before you click Save.</div></div></div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title">1 · What are you uploading?</span>
-      <div class="toolbar-right"><select class="sel" id="bu-type" style="min-width:260px"></select><button class="btn btn-ghost btn-sm" id="bu-template">⬇ Download template</button></div></div>
-    <div style="padding:0 16px 10px;color:var(--label);font-size:13px" id="bu-desc"></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Column</th><th></th><th>What to enter</th></tr></thead><tbody id="bu-cols"></tbody></table></div>
-  </div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title">2 · Upload the filled-in file (Excel or CSV)</span>
-      <div class="toolbar-right"><span id="bu-replace-box" style="font-size:13px"><label><input type="checkbox" id="bu-replace"> Replace existing records</label></span>
-        <input type="file" id="bu-file" accept=".xlsx,.xls,.csv"></div></div>
-  </div>
-  <div class="card" id="bu-preview" style="display:none">
-    <div class="toolbar"><span class="toolbar-title">3 · Check and save</span>
-      <div class="toolbar-right"><select class="sel" id="bu-filter"><option value="">All rows</option><option value="new">New</option><option value="update">Update</option><option value="problems">Problems &amp; skipped</option></select>
-        <button class="btn btn-ghost btn-sm" id="bu-errors">⬇ Download problems</button><button class="btn btn-primary btn-sm" id="bu-save">Save</button></div></div>
-    <div style="padding:0 16px 10px" id="bu-summary"></div>
-    <div class="tbl-wrap" style="max-height:460px"><table><thead><tr><th>Row</th><th>Result</th><th>What will be saved</th><th>Note</th></tr></thead><tbody id="bu-rows"></tbody></table></div>
-  </div>
-</div>
+<div class="page" id="page-bulk"><div id="react-bulk"></div></div>   <!-- drawn by React: react/src/bulk -->
 
 <!-- PROJECT ASSIGNMENTS -->
 <div class="page" id="page-assign"><div id="react-assign"></div></div>
@@ -1012,6 +991,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=a513eb34be2a"></script>
-<script src="react.js?v=4c40a6a00c69"></script>
+<script src="app.js?v=4ce561eab841"></script>
+<script src="react.js?v=f58a2292aa26"></script>
 </body></html>

@@ -513,18 +513,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </div>
 
 <!-- HR REQUESTS -->
-<div class="page" id="page-coreq">
-  <div class="page-header"><div><div class="page-title">Check-outs to record</div><div class="page-sub" id="co-sub">Employees who tried to check out away from their office or site, or left it while still checked in. Record the check-out with one click, or reject it.</div></div></div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title">Check-out requests</span>
-      <div class="toolbar-right">
-        <select class="sel" id="co-status"><option value="Waiting">Waiting for HR</option><option value="Recorded">Recorded</option><option value="Rejected">Rejected</option><option value="Checked out">Employee checked out himself</option><option value="">All</option></select>
-        <select class="sel" id="co-dept"><option value="">All departments</option></select>
-        <input class="inp" id="co-q" placeholder="Search employee or place…"></div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Day</th><th>Employee</th><th>What happened</th><th>When · where</th><th>Employee's message</th><th>Status</th><th>Check-out time</th><th></th></tr></thead><tbody id="co-tbl"></tbody></table></div>
-    <div class="foot" id="co-foot"></div>
-  </div>
-</div>
+<div class="page" id="page-coreq"><div id="react-coreq"></div></div>
 <div class="page" id="page-dreq">
   <div class="page-header"><div><div class="page-title">Data requests</div><div class="page-sub" id="dq-sub">Ask employees to update their own data on the phone. Personal mobile, e-mail and address are saved at once; everything else waits for your review here.</div></div>
     <div class="toolbar-right"><button class="btn btn-primary" id="dq-new">📝 New request</button></div></div>
@@ -1491,6 +1480,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=a675262465a0"></script>
-<script src="react.js?v=af01d23ce125"></script>
+<script src="app.js?v=f4cec4f06116"></script>
+<script src="react.js?v=666d432bd619"></script>
 </body></html>

@@ -453,7 +453,7 @@ function buildLists(){
   const depts = [...new Set(S.employees.map(e=>e.department).filter(Boolean))].sort();
   const units = [...new Set(S.employees.map(e=>e.unit).filter(Boolean))].sort();
   const dOpts = '<option value="">All departments</option>' + depts.map(d=>`<option>${esc(d)}</option>`).join('');
-  ['emp-dept','mon-dept','pay-dept','rep-dept','lv-dept','ex-dept','rl-dept','dq-dept','co-dept','loan-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
+  ['emp-dept','mon-dept','pay-dept','rep-dept','lv-dept','ex-dept','rl-dept','dq-dept','loan-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
   const uv=$('emp-unit').value; $('emp-unit').innerHTML='<option value="">All units</option>'+units.map(u=>`<option>${esc(u)}</option>`).join(''); $('emp-unit').value=uv;
   const mEls = S.elements.filter(e => e.input_method==='Monthly' && e.active!==false);
   const mv=$('mon-el').value;
@@ -6603,78 +6603,23 @@ loadDreqs = async function(){ const r = await _loadDreqsSc.apply(this, arguments
 
 // ═════════════════════════════════════════════════════════
 //  CHECK-OUTS TO RECORD (24 Oct 2026, 80-checkout-requests.sql)   ·   page 🚪 Check-outs to record (Workforce)
-//  · "Tried": the phone refused a check-out away from the employee's office/site (file 79) and sent the try here.
-//  · "Left": still checked in but found away from his office from 10 min after the check-in (Android background watch,
-//    or the app opened away from the office).
-//  HR records the check-out with one click at the time of the try (the time can be changed) → record_checkout_request
-//  closes the open period in the attendance record; or rejects it with a reason. The employee is notified either way.
-//  If the employee checks out normally later, the request closes by itself ("Employee checked out himself").
+//  The page is React now (react/src/checkouts, 30 Oct 2026); it loads fresh every time it is opened.
+//  Kept here: the menu badge (requests waiting for HR, refreshed after the period data loads) and the reload of the payroll
+//  month after HR recorded a check-out (the attendance record changed).
 // ═════════════════════════════════════════════════════════
-/** @type {{ rows: Row<'checkout_requests'>[], t: any, error?: string | null }} — check-outs to record */
-let CO = { rows: [], t: null };
-const coChip = s => `<span class="chip ${({ Waiting:'c-orange', Recorded:'c-green', Rejected:'c-red', 'Checked out':'c-grey' })[s] || 'c-grey'}">${esc(
-  ({ Waiting:'Waiting for HR', Recorded:'Recorded', Rejected:'Rejected', 'Checked out':'Employee checked out himself' })[s] || s)}</span>`;
-const coDist = m => m == null ? '' : m >= 1000 ? `${Math.round(m / 100) / 10} km` : `${m} m`;
-async function loadCoReqs(){
-  const { data, error } = await sb.from('checkout_requests').select('*').order('tried_at', { ascending: false }).limit(2000);
-  if (error) { CO.rows = []; CO.error = /does not exist|schema cache/i.test(error.message) ? 'missing' : error.message; }
-  else { CO.rows = data || []; CO.error = null; }
-  const n = CO.rows.filter(r => r.status === 'Waiting').length, b = $('co-badge');
-  if (b) { b.style.display = n ? '' : 'none'; b.textContent = n; }
+/** @param {number} n */
+function setCheckoutBadge(n){ const b = $('co-badge'); if (b) { b.style.display = n ? '' : 'none'; b.textContent = String(n); } }
+async function loadCheckoutBadge(){
+  const { count, error } = await sb.from('checkout_requests').select('id', { count: 'exact', head: true }).eq('status', 'Waiting');
+  if (!error) setCheckoutBadge(count || 0);
 }
-async function renderCoReqs(){
-  await loadCoReqs();
-  if (CO.error) { $('co-tbl').innerHTML = `<tr><td colspan="8" class="empty">${CO.error === 'missing' ? 'Not set up yet — run database file 80-checkout-requests.sql.' : esc(CO.error)}</td></tr>`; return; }
-  const st = $('co-status').value, q = $('co-q').value.trim().toLowerCase();
-  const rows = CO.rows.filter(r => (!st || r.status === st) && orgMatch(empOrBlank(r.emp_id), 'co')
-    && (!q || [r.emp_id, r.emp_name, r.place].some(v => String(v || '').toLowerCase().includes(q))));
-  const wait = CO.rows.filter(r => r.status === 'Waiting').length;
-  $('co-sub').textContent = `${wait} waiting for HR · employees who tried to check out away from their office or site, or left it while still checked in. Record the check-out with one click, or reject it.`;
-  $('co-tbl').innerHTML = rows.map(r => { const e = empById(r.emp_id) || /** @type {Employee} */ ({ id: r.emp_id, name_en: r.emp_name });
-    const what = r.kind === 'left'
-      ? `🚶 Left without checking out<div style="font-size:11px;color:var(--muted)">${r.how === 'background' ? 'found by the Android app' : 'found when he opened the app'}</div>`
-      : '🚪 Tried to check out away';
-    return `<tr><td class="mono" style="white-space:nowrap">${esc(r.att_date)}</td>
-      <td class="strong">${esc(empName(e) || r.emp_name || r.emp_id)} <span class="mono" style="color:var(--muted)">${esc(r.emp_id)}</span><div style="font-size:11px;color:var(--muted)">${esc(e.department || '')}</div></td>
-      <td style="font-size:12px">${what}<div style="font-size:11px;color:var(--muted)">checked in ${esc(r.seg_in)}${r.seg_code ? ' · ' + esc(r.seg_code) : ''}</div></td>
-      <td style="font-size:12px;white-space:nowrap"><b class="mono">${esc(r.local_time || '')}</b> · ${esc(coDist(r.distance_m))} from ${esc(r.place || '?')}${r.lat != null ? ` · <a href="https://www.google.com/maps?q=${Number(r.lat)},${Number(r.lng)}" target="_blank" rel="noopener">map</a>` : ''}</td>
-      <td style="white-space:normal;max-width:180px;font-size:12px">${r.message ? '💬 ' + esc(r.message) : '<span style="color:var(--muted)">—</span>'}</td>
-      <td>${coChip(r.status)}${r.reason ? `<div style="font-size:11px">💬 ${esc(r.reason)}</div>` : ''}${r.handled_by ? `<div style="font-size:11px;color:var(--muted)">${esc(r.handled_by)}</div>` : ''}</td>
-      <td>${r.status === 'Waiting' ? `<input type="time" class="inp" style="width:128px" data-co-time="${r.id}" value="${esc(r.local_time || '')}">` : `<span class="mono">${esc(r.out_time || '')}</span>`}</td>
-      <td style="white-space:nowrap">${r.status === 'Waiting' ? `<button class="btn btn-success btn-sm" data-co-ok="${r.id}">✓ Record</button><br><button class="btn btn-ghost btn-sm" data-co-no="${r.id}" style="margin-top:4px">✕ Reject</button>` : ''}</td></tr>`; }).join('')
-    || `<tr><td colspan="8" class="empty">${st === 'Waiting' ? 'Nothing waiting — every check-out has been handled' : 'Nothing here'}</td></tr>`;
-  $('co-foot').textContent = `${rows.length} shown. “Record” closes the open period in the attendance record at the time shown (you can change it). The employee is notified on the phone.`;
-}
-async function coRecord(id, btn){
-  const inp = document.querySelector(`[data-co-time="${id}"]`), t = inp ? inp.value : '';
-  if (!/^\d\d:\d\d$/.test(t)) { btn.disabled = false; return toast('Enter the check-out time', 'warn'); }
-  const { error } = await sb.rpc('record_checkout_request', { p_id: id, p_out: t });
-  btn.disabled = false;
-  if (error) return toast(error.message.replace(/^[A-Z_]+: ?/, ''), 'err');
-  toast(`Check-out recorded at ${t} — the employee is notified`);
+/** called by the React page after HR recorded a check-out */
+async function checkoutRecorded(){
   try { await loadPeriodData(); } catch(e){} finally { loader(false); }   // fix 25 Oct: hide the "Loading period…" cover
-  renderCoReqs();
 }
-async function coReject(id){
-  const why = prompt('Why is this check-out not recorded? (the employee sees this on his phone)');
-  if (why === null) return; if (!why.trim()) return toast('Write the reason', 'warn');
-  const { error } = await sb.rpc('reject_checkout_request', { p_id: id, p_reason: why.trim() });
-  if (error) return toast(error.message.replace(/^[A-Z_]+: ?/, ''), 'err');
-  toast('Rejected — the employee is notified'); renderCoReqs();
-}
-PAGE_RENDER.coreq = () => renderCoReqs();
-$('co-tbl').addEventListener('click', e => {
-  const a = /** @type {PageEl} */ (e.target).closest('[data-co-ok]'); if (a) { a.disabled = true; return coRecord(a.dataset.coOk, a); }
-  const r = /** @type {PageEl} */ (e.target).closest('[data-co-no]'); if (r) return coReject(r.dataset.coNo);
-});
-['co-status', 'co-dept'].forEach(id => $(id).addEventListener('change', renderCoReqs));
-$('co-q').addEventListener('input', () => { clearTimeout(CO.t); CO.t = setTimeout(renderCoReqs, 250); });
-const _showPageCo = showPage;
-// @ts-expect-error — showPage is deliberately extended here (the new version wraps the earlier one)
-showPage = function(name){ const r = _showPageCo.apply(this, arguments); if (name === 'coreq') renderCoReqs(); return r; };
 const _loadPeriodDataCo = loadPeriodData;
 // @ts-expect-error — loadPeriodData is deliberately extended here (the new version wraps the earlier one)
-loadPeriodData = async function(){ const r = await _loadPeriodDataCo.apply(this, arguments); loadCoReqs().catch(() => {}); return r; };
+loadPeriodData = async function(){ const r = await _loadPeriodDataCo.apply(this, arguments); loadCheckoutBadge().catch(() => {}); return r; };
 
 // ═════════════════════════════════════════════════════════
 //  TEAM ATTENDANCE — direct managers see their direct reports (database file 87: team_attendance)

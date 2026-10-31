@@ -171,6 +171,7 @@ body:not(.can-pay) :is(#pk-add,[data-del-fixed]){display:none!important}
 body:not(.can-hr) .nav-item:is([data-page="news"],[data-page="voice"]){display:none!important}
 body:not(.can-hr):not(.can-pay):not(.can-master) .nav-item[data-page="bulk"]{display:none!important}
 body:not(.can-hr):not(.can-master) :is([data-act="new-emp"],#emp-save){display:none!important}   /* HR officers edit master data too (49) */
+#emp-form .field.req-miss input,#emp-form .field.req-miss select,#emp-form .field.req-miss textarea{border-color:#d33;box-shadow:0 0 0 2px rgba(221,51,51,.18)}#emp-form .field.req-miss label{color:#d33}   /* boxes still empty after Save (employee window) */
 body.is-officer :is([data-page="payroll"],[data-page="history"],[data-page="loans"],[data-page="settings"],.no-officer){display:none!important}
 body:not(.can-hr):not(.can-pay) .ro-var{display:block}
 body:not(.can-set) :is(#set-save,#pay-approve,[data-act="goto-current"]){display:none!important}
@@ -459,28 +460,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div class="page" id="page-voice"><div id="react-voice"></div></div>   <!-- drawn by React: react/src/voice -->
 
 <div id="nav-backdrop"></div>
-<!-- MODAL: RE-EMPLOY / BLACKLIST / PAST PERIOD -->
-<div class="overlay" id="m-life"><div class="modal" style="max-width:500px">
-  <div class="modal-head"><div class="modal-title" id="ml-title"></div><button class="x" data-close="m-life">×</button></div>
-  <div id="ml-info" style="font-size:13px;line-height:1.6;margin-bottom:12px"></div>
-  <div class="grid3" id="ml-fields"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-life">Cancel</button><button class="btn btn-primary" id="ml-go">Save</button></div>
-</div></div>
-
-<!-- MODAL: BASIC SALARY CHANGE REQUEST -->
-<div class="overlay" id="m-salreq"><div class="modal" style="max-width:520px">
-  <div class="modal-head"><div class="modal-title">💼 Request basic salary change</div><button class="x" data-close="m-salreq">×</button></div>
-  <div class="alert a-info" style="margin-bottom:12px">Basic salary changes take effect only after the board member approves them. The change is then applied automatically.</div>
-  <div id="sr-who" style="font-size:14px;margin-bottom:10px"></div>
-  <div class="grid3">
-    <div class="field"><label>Current basic salary</label><input class="inp" id="sr-cur" disabled></div>
-    <div class="field"><label>New basic salary *</label><input class="inp" id="sr-new" type="number" min="1" step="0.01"></div>
-    <div class="field"><label>Effective from *</label><input class="inp" id="sr-from" type="date"></div>
-    <div class="field full"><label>Reason * (the board member sees it)</label><textarea class="inp" id="sr-reason" rows="3"></textarea></div>
-  </div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-salreq">Cancel</button><button class="btn btn-primary" id="sr-go">Send to the board member</button></div>
-</div></div>
-
 
 <!-- BULK UPLOAD -->
 <div class="page" id="page-bulk"><div id="react-bulk"></div></div>   <!-- drawn by React: react/src/bulk -->
@@ -629,42 +608,8 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </div>
 </div>
 
-<!-- MODAL: EMPLOYEE -->
-<div class="overlay" id="m-emp"><div class="modal wide">
-  <div class="modal-head"><div class="modal-title" id="emp-m-title">Employee</div><button class="x" data-close="m-emp">×</button></div>
-  <div id="emp-form"></div>
-  <div class="sec">Mobile app</div>
-  <div id="emp-dev" style="font-size:13px;color:var(--label)"></div>
-  <div class="sec no-officer">Fixed salary package</div>
-  <div id="emp-sal-pending" class="no-officer"></div>
-  <div id="emp-pkg" class="no-officer"></div>
-  <div class="sec" style="margin-top:16px">📌 Assigned projects</div>
-  <div id="emp-proj" style="font-size:13px"></div>
-  <div class="sec" style="margin-top:16px">📜 Employment history</div>
-  <div id="emp-life" style="font-size:13px"></div>
-  <div class="sec" style="margin-top:16px">🌴 Annual leave balance</div>
-  <div id="emp-lbal" style="font-size:13px"></div>
-  <div class="sec" style="margin-top:16px">🎓 Certificates</div>
-  <div id="emp-certs" style="font-size:13px"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-emp">Cancel</button><button class="btn btn-primary" id="emp-save">Save employee</button></div>
-</div></div>
-
-<!-- MODAL: CERTIFICATE -->
-<div class="overlay" id="m-cert"><div class="modal" style="max-width:640px">
-  <div class="modal-head"><div class="modal-title" id="cert-title">Certificate</div><button class="x" data-close="m-cert">×</button></div>
-  <div class="grid2">
-    <div class="field full"><label>Certificate name *</label><input id="cert-name" placeholder="e.g. Safety officer — NEBOSH IGC"></div>
-    <div class="field"><label>Issued by</label><input id="cert-issuer"></div>
-    <div class="field"><label>Certificate number</label><input id="cert-no"></div>
-    <div class="field"><label>Issue date</label><input type="date" id="cert-issue"></div>
-    <div class="field"><label>Expiry date (blank = does not expire)</label><input type="date" id="cert-exp"></div>
-    <div class="field full"><label>Scan (PDF or picture, optional, up to 10 MB)</label><input type="file" id="cert-file" accept=".pdf,image/*"><div id="cert-file-now" style="font-size:12px;color:var(--muted);margin-top:4px"></div></div>
-    <div class="field full"><label>Notes</label><textarea id="cert-notes" rows="2"></textarea></div>
-  </div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-cert">Cancel</button><button class="btn btn-primary" id="cert-save">Save certificate</button></div>
-</div></div>
-
-
+<!-- THE EMPLOYEE WINDOW (with its salary request, employment history and certificate windows) — drawn by React: react/src/employee -->
+<div id="react-empwin"></div>
 
 <!-- MODAL: PROJECT -->
 <!-- MODAL: LOAN -->
@@ -827,6 +772,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=4306c0228842"></script>
-<script src="react.js?v=040258dd19de"></script>
+<script src="app.js?v=707c9a1b36f0"></script>
+<script src="react.js?v=0ec688759dc2"></script>
 </body></html>

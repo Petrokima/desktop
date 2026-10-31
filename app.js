@@ -804,7 +804,7 @@ function renderDashboard(){
 function renderEmployees(){ if (typeof PKR !== 'undefined') PKR.render(); }
 
 // ═════════════════════════════════════════════════════════
-//  EMPLOYEE MODAL
+//  EMPLOYEE WINDOW — the boxes (React draws the window: react/src/employee)
 // ═════════════════════════════════════════════════════════
 /** the employee window: [section, [[field, label, kind, options?], …]] @type {Array<[string, any[][]]>} */
 const EMP_FIELDS = [
@@ -832,135 +832,23 @@ const EMP_FIELDS = [
   ['Education', [['university','University','pick','univ'],['college','College','pick','coll'],['certification','Certification','text'],['graduation_date','Graduation date','date']]],
   ['Notes', [['notes','Notes','textarea']]]
 ];
-let editingEmp = null;
-
-// Next employee code: highest numeric code on record (active or not) + 1. Falls back to prefix + number patterns.
-function nextEmpCode(ids){
-  ids = (ids || S.employees.map(e=>String(e.id))).map(String);
-  const nums = ids.filter(x=>/^\d+$/.test(x)).map(Number);
-  if (nums.length) return String(Math.max(...nums) + 1);
-  /** @type {{p:string, n:number, w:number} | null} */ let best=null; ids.forEach(x=>{ const m=x.match(/^(.*?)(\d+)$/); if(m){ const n=+m[2]; if(!best||n>best.n) best={p:m[1],n,w:m[2].length}; } });
-  const b = /** @type {{p:string, n:number, w:number} | null} */ (best);
-  return b ? b.p + String(b.n+1).padStart(b.w,'0') : '1';
+// The employee WINDOW is React since 31 Oct 2026 (react/src/employee — the form, Save with its checks, phone, salary package,
+// basic salary requests, projects, employment history, leave balance, certificates). Kept here: the list of boxes above (also
+// used by self-service, Bulk upload and reports) and what the React window tells the old code after a change.
+/** opens the employee window (rows, dashboard, reports, "+ Add Employee"); no id = a new employee @param {string | null} id */
+function openEmp(id){ if (typeof PKR !== 'undefined') PKR.openEmployee(id == null || id === '' ? null : String(id)); }
+/** a save in the React window: the loaded record, pick-lists, Employees, Payroll, Dashboard; leave balances read again and the
+ *  HR alerts follow (the database may have filled in dates: probation, contract end) @param {Employee} row */
+function employeeSaved(row){
+  const i = S.employees.findIndex(e => String(e.id) === String(row.id));
+  if (i >= 0) S.employees[i] = row; else S.employees.push(row);
+  LB.clear(); buildLists(); renderEmployees(); renderPayroll(); renderDashboard();
+  if (canHRA()) loadHRAlerts().then(hraBadge, () => {});
 }
-function openEmp(id){
-  const e = id ? empById(id) : null; editingEmp = e ? e.id : null;
-  $('emp-m-title').textContent = e ? `${empName(e)} — ${e.id}` : 'New employee';
-  $('emp-form').innerHTML = EMP_FIELDS.map(([sec, fields]) => `<div class="sec">${sec}</div><div class="grid3">` +
-    fields.map(([k,label,type,opt]) => {
-      const v = e ? (e[k] ?? '') : (k==='status'?'Active':k==='entity'?'Petrokima Egypt HQ':k==='id'?nextEmpCode():'');
-      const ro = (k==='id') ? 'readonly' : '';
-      if (k==='id' && !e) label = 'Code (automatic — next in sequence)';
-      const dir = opt==='ar' ? 'dir="rtl"' : '';
-      let ctl;
-      if (type==='manager'){
-        const m = v ? empById(v) : null;
-        ctl = `<input data-f="manager_id" list="dl-emp-mgr" placeholder="Type code or name…" value="${m ? esc(m.id+' — '+empName(m)) : esc(v)}">
-          <label style="display:flex;gap:6px;align-items:center;font-size:12px;margin-top:6px;color:var(--label);cursor:pointer"><input type="checkbox" id="emp-top" ${e&&e.top_of_org?'checked':''}> Top of the organisation (no manager)</label>`;
-        label = e ? 'Direct manager' : 'Direct manager — required';
-      }
-      else if (type==='bool') ctl = `<select data-f="${k}"><option ${v===true?'':'selected'}>No</option><option ${v===true?'selected':''}>Yes</option></select>`;
-      else if (type==='select'){ const opts=[...opt]; if (v && !opts.includes(v)) opts.push(v);
-        ctl = `<select data-f="${k}">${opts.map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select>`; }
-      else if (type==='pick') ctl = pickSelect(k, opt, v, opt==='unit' ? pickNorm(e ? e.department : '') : '');
-      else if (type==='textarea') ctl = `<textarea data-f="${k}">${esc(v)}</textarea>`;
-      else ctl = `<input type="${type}" data-f="${k}" value="${esc(v)}" ${ro} ${dir}>`;
-      return `<div class="field ${type==='textarea'?'full':''}"><label>${label}</label>${ctl}</div>`;
-    }).join('') + `</div>`).join('');
-  if (e && !e.manager_id && !e.top_of_org && e.status!=='Inactive')
-    $('emp-form').insertAdjacentHTML('afterbegin','<div class="alert a-warn" style="margin-bottom:6px">This employee has no direct manager yet — set one in the Organisation section.</div>');
-  if (isOfficer()) PAY_FIELDS.forEach(k => { const f = document.querySelector(`#emp-form [data-f="${k}"]`); if (f) f.closest('.field')?.remove(); });
-  renderEmpDevice();
-  renderPackage();
-  openM('m-emp');
-}
-
-function renderPackage(){
-  const box = $('emp-pkg');
-  if (!editingEmp){ box.innerHTML = '<div style="font-size:12px;color:var(--muted)">Save the employee first, then reopen to assign salary elements.</div>'; return; }
-  const all = S.fixed.filter(r => String(r.emp_id)===String(editingEmp)).sort((a,b)=>num(a.element_code)-num(b.element_code) || String(a.effective_from).localeCompare(String(b.effective_from)));
-  const fixedEls = S.elements.filter(e => e.input_method==='Fixed' && e.active!==false);
-  const p = settings.period, ps = periodStart(p), pe = periodEnd(p);
-  // amounts that ended before this payroll period are history — kept for past payrolls, shown separately
-  const ended = r => r.effective_to && r.effective_to < ps;
-  const current = all.filter(r => !ended(r)), history = all.filter(ended).sort((a,b)=>String(b.effective_to).localeCompare(String(a.effective_to)));
-  const row = (r, old) => { const el = elOrBlank(r.element_code);
-    const state = old ? '<span class="chip c-grey">Ended</span>' : r.effective_from > pe ? `<span class="chip c-blue">Starts ${esc(r.effective_from)}</span>` : fixedActive(r,p) ? '<span class="chip c-green">Yes</span>' : '<span class="chip c-grey">No</span>';
-    return `<tr${old?' style="opacity:.6"':''}><td class="mono">${r.element_code}</td><td class="strong">${esc(el.name_en||'?')}</td><td>${el.element_type==='Deduction'?'<span class="neg">Deduction</span>':'<span class="pos">Addition</span>'}</td>
-      <td class="num">${fmt(r.amount)}${el.calc_method==='PercentOfBasic'?' %':''}</td><td class="mono">${esc(r.effective_from)}</td><td class="mono">${esc(r.effective_to||'—')}</td>
-      <td>${state}</td><td><button class="icon-btn" data-del-fixed="${r.id}" title="Close (a reason is required)">⊘</button></td></tr>`; };
-  const head = `<thead><tr><th>Code</th><th>Element</th><th>Type</th><th class="num">Amount</th><th>From</th><th>To</th><th>In period</th><th></th></tr></thead>`;
-  box.innerHTML = `<div class="tbl-wrap"><table>${head}<tbody>
-    ${current.map(r => row(r, false)).join('') || '<tr><td colspan="8" class="empty" style="padding:18px">No current fixed elements</td></tr>'}
-    </tbody></table></div>
-    ${history.length ? `<details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">Previous amounts — history (${history.length}) · kept so earlier payrolls stay correct</summary>
-      <div class="tbl-wrap" style="margin-top:6px"><table>${head}<tbody>${history.map(r => row(r, true)).join('')}</tbody></table></div></details>` : ''}
-    <div class="grid3" style="margin-top:12px;align-items:end">
-      <div class="field"><label>Element</label><select id="pk-el">${fixedEls.map(e=>`<option value="${e.code}">${e.code} · ${esc(e.name_en)}</option>`).join('')}</select></div>
-      <div class="field"><label>Amount</label><input type="number" id="pk-amt"></div>
-      <div class="field"><label>Effective from</label><input type="date" id="pk-from" value="${ps}"></div>
-      <div class="field"><label>Effective to (optional)</label><input type="date" id="pk-to"></div>
-      <div class="field"><button class="btn btn-ghost" id="pk-add">+ Add element</button></div>
-    </div>`;
-}
-
-async function addPackageRow(){
-  const code = num($('pk-el').value), amt = $('pk-amt').value, from = $('pk-from').value, to = $('pk-to').value;
-  if (!code || amt==='' || !from) return toast('Element, amount and start date are required','warn');
-  if ((elOrBlank(code)).is_basic) return openSalaryRequest(editingEmp, code, num(amt), from);   // basic salary → board approval
-  const rec = { emp_id: editingEmp, element_code: code, amount: num(amt), effective_from: from, effective_to: to || null };
-  const { data, error } = await sb.from('employee_salary_elements').insert(rec).select();
-  if (error) return toast(error.message.includes('duplicate') ? 'This element already starts on that date for this employee' : error.message, 'err');
-  if (!(data && data.length)) return toast(NOPERM,'err'); S.fixed.push(data[0]); renderPackage(); renderPayroll(); renderDashboard();
-  const sv = data[0];   // 85: the database moves dates to whole pay cycles
-  toast(sv.effective_from !== from || (to && sv.effective_to !== to)
-    ? `Element added — salary changes apply to whole pay cycles, so it runs from ${sv.effective_from}${sv.effective_to ? ' to ' + sv.effective_to : ''}` : 'Element added');
-}
-
-async function saveEmp(){
-  const rec = {};
-  document.querySelectorAll('#emp-form [data-f]').forEach(el => {
-    const k = el.dataset.f; let v = /** @type {string | number | boolean | null} */ (el.value.trim());
-    const def = EMP_FIELDS.flatMap(s=>s[1]).find(f=>f[0]===k);
-    if (def && def[2]==='manager') v = v ? String(v).split(' — ')[0].trim() : null;
-    else if (def && def[2]==='bool') v = (v==='Yes');
-    else if (def && (def[2]==='date' || def[2]==='number') && v==='') v = null;
-    else if (def && def[2]==='number') v = num(v);
-    rec[k] = v;
-  });
-  if (!rec.id) return toast('Code is required','warn');
-  if (!rec.name_ar && !rec.name_en) return toast('Enter an Arabic or English name','warn');
-  rec.top_of_org = !!($('emp-top') && $('emp-top').checked);
-  if (rec.top_of_org) rec.manager_id = null;
-  const mgrBox = /** @type {HTMLInputElement} */ (document.querySelector('#emp-form [data-f="manager_id"]'));
-  if (rec.manager_id && !empById(rec.manager_id)) { mgrBox.focus(); return toast(`Manager “${rec.manager_id}” not found — pick from the suggestions`,'warn'); }
-  if (rec.manager_id && editingEmp && String(rec.manager_id)===String(editingEmp)) { mgrBox.focus(); return toast('An employee cannot be their own manager','warn'); }
-  if (rec.manager_id && empOrBlank(rec.manager_id).status==='Inactive') { mgrBox.focus(); return toast('That manager is inactive — choose an active employee','warn'); }
-  if (!editingEmp && !rec.manager_id && !rec.top_of_org) { mgrBox.focus(); mgrBox.scrollIntoView && mgrBox.scrollIntoView({block:'center'});
-    return toast('Choose the new employee’s direct manager (or tick “Top of the organisation”)','warn'); }
-  if (!editingEmp && empById(rec.id)) rec.id = nextEmpCode();
-  const btn=$('emp-save'); btn.disabled=true; btn.textContent='Saving…';
-  let res, bumped = false;
-  if (editingEmp) res = await sb.from('employees').update(rec).eq('id', editingEmp).select();
-  else {
-    for (let attempt = 0; attempt < 4; attempt++){
-      res = await sb.from('employees').insert(rec).select();
-      if (!res.error || !/duplicate|already exists|23505/i.test(`${res.error.message} ${res.error.code||''}`)) break;
-      // someone else took this code a moment ago — fetch the latest codes and take the next one
-      const fresh = await fetchAll('employees','id'); rec.id = nextEmpCode(fresh.map(x=>String(x.id))); bumped = true;
-    }
-  }
-  btn.disabled=false; btn.textContent='Save employee';
-  const { data, error } = /** @type {NonNullable<typeof res>} — the save above always runs at least once */ (res);
-  if (error) return toast(error.message.replace(/^.*?(This would create|An employee cannot)/,'$1'),'err');
-  if (!(data && data.length)) return toast(NOPERM,'err');
-  const i = S.employees.findIndex(e => String(e.id)===String(rec.id));
-  if (i>=0) S.employees[i] = data[0]; else S.employees.push(data[0]);
-  const wasNew = !editingEmp; editingEmp = rec.id;
-  buildLists(); renderEmployees(); renderPayroll(); renderDashboard();
-  toast(wasNew ? `Employee created with code ${rec.id}${bumped?' (the previous number had just been taken)':''} — you can now add salary elements below` : 'Employee saved');
-  if (wasNew) openEmp(rec.id); else closeM('m-emp');
-}
+/** a fixed salary element added / closed in the window: payroll and dashboard follow @param {Row<'employee_salary_elements'>} row */
+function fixedAdded(row){ S.fixed.push(row); renderPayroll(); renderDashboard(); }
+/** @param {string} id */
+function fixedClosed(id){ S.fixed = S.fixed.filter(r => r.id !== id); renderPayroll(); renderDashboard(); }
 
 // ═════════════════════════════════════════════════════════
 //  ATTENDANCE
@@ -1141,14 +1029,10 @@ document.addEventListener('click', async ev => {
     if (a==='chpass') return openM('m-pass');
     if (a==='disconnect'){ ev.preventDefault(); return disconnect(); }
   }
-  const er = t.closest('[data-emp]'); if (er) return openEmp(er.dataset.emp);
-  const df = t.closest('[data-del-fixed]');
-  if (df){ const id=/** @type {string} */ (df.dataset.delFixed); return askReason('Close salary element', 'Close this salary element for the employee? It is kept in the register of closed records with your reason.', 'Close element', async reason=>{ await closeRecords('employee_salary_elements', [{ id }], reason); S.fixed=S.fixed.filter(r=>r.id!==id); renderPackage(); renderPayroll(); renderDashboard(); toast('Element closed'); }); }
+  const er = t.closest('[data-emp]'); if (er) return openEmp(er.dataset.emp || null);
 });
 
 // inputs
-$('emp-save').addEventListener('click', saveEmp);
-$('emp-pkg').addEventListener('click', e => { if (/** @type {PageEl} */ (e.target).id==='pk-add') addPackageRow(); });
 $('set-save').addEventListener('click', saveSettings);
 $('btn-connect').addEventListener('click', connectFromForm);
 document.addEventListener('keydown', e => { if (e.key==='Escape') document.querySelectorAll('.overlay.open').forEach(o=>o.classList.remove('open')); });
@@ -2052,25 +1936,8 @@ async function gotoCurrentPeriod(){
 // ═════════════════════════════════════════════════════════
 function mapUrl(c){ return (c && c.lat != null && c.lng != null) ? `https://www.google.com/maps?q=${c.lat},${c.lng}` : null; }
 
-function renderEmpDevice(){
-  const box = $('emp-dev'); if (!box) return;
-  if (!editingEmp){ box.textContent = 'The employee registers their phone the first time they sign in to the mobile app.'; return; }
-  const d = S.devices.find(x => String(x.emp_id)===String(editingEmp));
-  box.innerHTML = d
-    ? `📱 <b style="color:var(--text)">${esc(d.device_label || 'Phone')}</b> registered ${esc(String(d.registered_at).slice(0,10))} · last used ${esc(String(d.last_seen).slice(0,16).replace('T',' '))}
-       <button class="btn btn-ghost btn-sm" data-dev-reset="${esc(editingEmp)}" style="margin-inline-start:10px">Reset phone</button>
-       <div style="font-size:12px;color:var(--muted);margin-top:4px">Reset only when the employee has genuinely changed or lost their phone. Their next sign-in registers the new phone.</div>`
-    : 'No phone registered yet — it is registered automatically the first time the employee signs in to the mobile app.';
-}
-async function resetDevice(empId){
-  const e = empById(empId);
-  askReason('Reset phone', `Reset the registered phone of ${empName(e)} (${empId})? They will be able to sign in on a new phone, and the old phone will stop working for them. The old phone stays on record.`, 'Reset phone', async reason => {
-    await closeRecords('employee_devices', [{ emp_id: String(empId) }], reason);
-    S.devices = S.devices.filter(x => String(x.emp_id)!==String(empId)); renderEmpDevice(); renderReports();
-    toast(`${empName(e)} can now register a new phone`);
-  });
-}
-document.addEventListener('click', e => { const b = /** @type {HTMLElement | null} */ (/** @type {HTMLElement} */ (e.target).closest('[data-dev-reset]')); if (b) resetDevice(b.dataset.devReset); });
+/** a phone reset in the employee window (React): forgotten here; reports follow @param {string} empId */
+function deviceReset(empId){ S.devices = S.devices.filter(x => String(x.emp_id) !== String(empId)); renderReports(); }
 
 // ═════════════════════════════════════════════════════════
 //  COLOUR THEMES
@@ -2301,23 +2168,7 @@ document.addEventListener('click', e => {
   const tr = /** @type {PageEl} */ (e.target).closest('[data-tproj-rm]'); if (tr) return teamProjChangeDesk(tr.dataset.tprojRm, false);
 });
 
-// ═════════════════════════════════════════════════════════
-//  EMPLOYEE RECORD — the projects this employee may check in at
-// ═════════════════════════════════════════════════════════
-const _openEmpWithProjects = openEmp;
-// @ts-expect-error — openEmp is deliberately extended here (the new version wraps the earlier one)
-openEmp = function(id){
-  _openEmpWithProjects.apply(this, arguments);
-  const box = $('emp-proj'); if (!box) return;
-  if (!id){ box.innerHTML = '<span style="color:var(--muted)">Save the employee first.</span>'; return; }
-  const rows = S.empProjects.filter(x => String(x.emp_id) === String(id)).sort((a,b) => String(a.project_code).localeCompare(String(b.project_code)));
-  box.innerHTML = (rows.length ? `<div style="margin-bottom:6px;color:var(--label)">Can check in <b>only</b> at these ${rows.length} project${rows.length>1?'s':''}:</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">${rows.map(r => `<span class="tag" title="Assigned by ${esc(r.assigned_by||'')} · ${esc(fmtSent(r.assigned_at))}">${esc(r.project_code)}${projName(r.project_code) ? ' · ' + esc(projName(r.project_code)) : ''}</span>`).join('')}</div>`
-    : '<span style="color:var(--muted)">No projects assigned — can check in at any project.</span>')
-    + ` <a href="#" data-goto-assign="${esc(id)}" style="color:var(--link);margin-inline-start:8px">Manage on the Project assignments page →</a>`;
-};
-document.addEventListener('click', e => { const g = /** @type {PageEl} */ (e.target).closest('[data-goto-assign]'); if (!g) return; e.preventDefault();
-  closeM('m-emp'); showPage('assign'); if (typeof PKR !== 'undefined') PKR.openAssign(g.dataset.gotoAssign || ''); });
+// (the employee window's "📌 Assigned projects" is React now — react/src/employee)
 
 // ═════════════════════════════════════════════════════════
 //  ⬇ EXCEL — on every page (what the page shows, with its filters) and on every report (all rows)
@@ -2643,137 +2494,8 @@ async function voiceChanged(){
   if (typeof isBoardViewer === 'function' && isBoardViewer() && await loadBoardRequests(true)) renderBoardRequests();
 }
 
-// ═════════════════════════════════════════════════════════
-//  BASIC SALARY CHANGES — only after the board member approves
-// ═════════════════════════════════════════════════════════
-let SR_CUR = null;
-function currentBasic(empId, onDate){
-  const rows = (S.fixed || []).filter(r => String(r.emp_id) === String(empId) && (elOrBlank(r.element_code)).is_basic
-    && r.effective_from <= onDate && (!r.effective_to || r.effective_to >= onDate)).sort((a,b) => String(b.effective_from).localeCompare(String(a.effective_from)));
-  return rows.length ? num(rows[0].amount) : null;
-}
-function openSalaryRequest(empId, code, amount, from){
-  const e = empById(empId); if (!e) return toast('Save the employee first','warn');
-  SR_CUR = { empId, code };
-  $('sr-who').innerHTML = `<b>${esc(empName(e))}</b> (${esc(empId)}) · ${esc((elOrBlank(code)).name_en || 'Basic salary')}`;
-  const f = from || todayISO(); $('sr-from').value = f;
-  const cur = currentBasic(empId, f); $('sr-cur').value = cur == null ? '—' : fmt(cur);
-  $('sr-new').value = amount || ''; $('sr-reason').value = '';
-  openM('m-salreq');
-}
-$('sr-from').addEventListener('change', () => { if (SR_CUR){ const c = currentBasic(SR_CUR.empId, $('sr-from').value); $('sr-cur').value = c == null ? '—' : fmt(c); } });
-$('sr-go').addEventListener('click', async () => {
-  const amt = num($('sr-new').value), from = $('sr-from').value, reason = $('sr-reason').value.trim();
-  if (!(amt > 0) || !from || !reason) return toast('Enter the new basic salary, the date and the reason','warn');
-  const { data, error } = await sb.from('salary_change_requests').insert({ emp_id: SR_CUR.empId, element_code: SR_CUR.code, new_amount: amt, effective_from: from, reason }).select();
-  if (error || !(data && data.length)) return toast(error ? error.message : NOPERM, 'err');
-  closeM('m-salreq');
-  const sf = data[0].effective_from;   // 85: whole pay cycles
-  toast(sf !== from ? `Sent to the board member — salary changes apply to whole pay cycles, so it starts ${sf} once approved` : 'Sent to the board member for approval — the new basic salary applies once approved');
-  renderSalaryPending(SR_CUR.empId);
-});
-async function renderSalaryPending(empId){
-  const box = $('emp-sal-pending'); if (!box) return; box.innerHTML = '';
-  if (!empId || !(ME && ['admin','hr','finance'].includes(ME.role))) return;
-  const { data } = await sb.from('salary_change_requests').select('*').eq('emp_id', empId).order('created_at', { ascending:false }).limit(3);
-  const w = (data || []).find(r => r.status === 'Waiting for board'), last = (data || []).find(r => r.status !== 'Waiting for board' && r.status !== 'Cancelled');
-  box.innerHTML = (w ? `<div class="alert a-warn" style="margin:10px 0">💼 Basic salary change to <b>${fmt(w.new_amount)}</b> from ${esc(w.effective_from)} is <b>waiting for the board member's approval</b> (requested by ${esc(w.requested_by || '')}).</div>` : '')
-    + (last && !w ? `<div style="font-size:12px;color:var(--muted);margin:8px 0">Last basic salary request: ${fmt(last.new_amount)} from ${esc(last.effective_from)} — ${esc(last.status)}${last.board_by ? ' by ' + esc(last.board_by) : ''}</div>` : '')
-    + `<button class="btn btn-ghost btn-sm" style="margin:6px 0" data-sal-req="${esc(empId)}">💼 Request basic salary change</button>`;
-}
-document.addEventListener('click', e => { const b = /** @type {PageEl} */ (e.target).closest('[data-sal-req]'); if (!b) return;
-  const basic = (S.elements || []).find(x => x.is_basic && x.active !== false); openSalaryRequest(b.dataset.salReq, basic ? basic.code : null, null, null); });
-const _openEmpSal = openEmp;
-// @ts-expect-error — openEmp is deliberately extended here (the new version wraps the earlier one)
-openEmp = function(id){ const r = _openEmpSal.apply(this, arguments); renderSalaryPending(id); return r; };
-// ═════════════════════════════════════════════════════════
-//  RESIGNATION · RE-EMPLOYMENT · EMPLOYMENT HISTORY · BLACKLIST (employee window)
-// ═════════════════════════════════════════════════════════
-const ff = k => document.querySelector(`#emp-form [data-f="${k}"]`);
-// resignation date and Inactive go together
-document.addEventListener('change', e => {
-  const f = /** @type {PageEl} */ (e.target).closest('#emp-form [data-f]'); if (!f) return;
-  if (f.dataset.f === 'resignation_date' && f.value && ff('status') && /** @type {PageEl} */ (ff('status')).value !== 'Inactive'){
-    /** @type {PageEl} */ (ff('status')).value = 'Inactive'; toast('Status set to Inactive — a resignation date always goes with Inactive');
-  }
-  if (f.dataset.f === 'status' && f.value === 'Inactive' && ff('resignation_date') && !/** @type {PageEl} */ (ff('resignation_date')).value){
-    /** @type {PageEl} */ (ff('resignation_date')).focus(); toast('Enter the resignation date — it is required when making an employee Inactive', 'warn');
-  }
-});
-const _saveEmpLife = saveEmp;
-// @ts-expect-error — saveEmp is deliberately extended here (the new version wraps the earlier one)
-saveEmp = async function(){
-  const st = ff('status'), rd = ff('resignation_date');
-  if (st && rd){
-    const e = editingEmp && empById(editingEmp);
-    if (e && e.status === 'Inactive' && st.value === 'Active'){ st.value = 'Inactive'; return openRehire(e.id); }   // re-employment has its own window
-    if (st.value === 'Inactive' && !rd.value){ rd.focus(); return toast('Enter the resignation date when making an employee Inactive','warn'); }
-    if (rd.value && st.value !== 'Inactive') st.value = 'Inactive';
-  }
-  return _saveEmpLife.apply(this, arguments);
-};
-// the Save button was linked to the original function — link it to the checked one
-$('emp-save').removeEventListener('click', _saveEmpLife);
-$('emp-save').addEventListener('click', () => saveEmp());
-let ML = null;
-async function renderEmpLife(id){
-  const box = $('emp-life'); if (!box) return; box.innerHTML = '';
-  if (!id) return void (box.innerHTML = '<span style="color:var(--muted)">Save the employee first.</span>');
-  const e = empById(id); if (!e) return;
-  const { data } = await sb.from('employment_history').select('*').eq('emp_id', id).order('employment_date', { ascending:true });
-  const rows = (data || []).map(h => `<tr><td class="mono">${esc(h.employment_date || '—')}</td><td class="mono">${esc(h.resignation_date || '—')}</td><td>${esc(h.job_name || '')}</td><td>${esc(h.department || '')}</td><td style="color:var(--muted);font-size:12px">${esc(h.note || '')}</td></tr>`);
-  rows.push(`<tr style="background:var(--hover)"><td class="mono">${esc(e.employment_date || '—')}</td><td class="mono">${e.status === 'Inactive' ? esc(e.resignation_date || '—') : '<b>current</b>'}</td><td>${esc(e.job_name || '')}</td><td>${esc(e.department || '')}</td><td style="font-size:12px">${e.status === 'Inactive' ? 'Last period' : 'Current period'}</td></tr>`);
-  const canHR = ME && ['admin','hr','hr_officer'].includes(ME.role), sup = !!(ME && ME.super_admin);
-  box.innerHTML = (e.blacklisted ? `<div class="alert a-alarm" style="margin:6px 0 10px">⛔ <b>On the blacklist — cannot be re-employed.</b> ${esc(e.blacklist_reason || '')}${e.blacklisted_by ? ` <span style="color:var(--muted)">(${esc(e.blacklisted_by)}${e.blacklisted_at ? ', ' + esc(String(e.blacklisted_at).slice(0,10)) : ''})</span>` : ''}</div>` : '')
-    + `<div class="tbl-wrap"><table><thead><tr><th>Employed from</th><th>Resigned on</th><th>Job</th><th>Department</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
-    + `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">`
-    + (canHR && e.status === 'Inactive' && !e.blacklisted ? `<button class="btn btn-primary btn-sm" data-life="rehire">↩ Re-employ under this code</button>` : '')
-    + (canHR ? `<button class="btn btn-ghost btn-sm" data-life="past">＋ Add a past period</button>` : '')
-    + (sup ? (e.blacklisted ? `<button class="btn btn-ghost btn-sm" data-life="unblack">Remove from blacklist</button>` : `<button class="btn btn-danger btn-sm" data-life="black">⛔ Add to blacklist</button>`) : '')
-    + `</div>`;
-}
-function lifeModal(kind, title, info, fields){
-  ML = { kind, id: editingEmp }; $('ml-title').textContent = title; $('ml-info').innerHTML = info;
-  $('ml-fields').innerHTML = fields.map(([k, l, t, v]) => `<div class="field${t==='textarea' ? ' full' : ''}"><label>${l}</label>${t === 'textarea' ? `<textarea class="inp" id="ml-${k}" rows="3">${esc(v || '')}</textarea>` : `<input class="inp" id="ml-${k}" type="${t}" value="${esc(v || '')}">`}</div>`).join('');
-  openM('m-life');
-}
-function openRehire(id){
-  const e = empById(id); if (!e) return; editingEmp = id;
-  lifeModal('rehire', '↩ Re-employ under the same code', `<b>${esc(empName(e))}</b> (${esc(id)}) left on <b>${esc(e.resignation_date || '—')}</b>. The previous period (${esc(e.employment_date || '—')} → ${esc(e.resignation_date || '—')}, ${esc(e.job_name || '')}) is saved to the employment history automatically.`,
-    [['from','New employment date *','date',''], ['job','Job name','text', e.job_name], ['dept','Department','text', e.department]]);
-}
-document.addEventListener('click', e => {
-  const b = /** @type {PageEl} */ (e.target).closest('[data-life]'); if (!b) return; const emp = empById(editingEmp); if (!emp) return;
-  const k = b.dataset.life;
-  if (k === 'rehire') return openRehire(emp.id);
-  if (k === 'past') return lifeModal('past', '＋ Add a past period', 'For an earlier period with Petrokima under this code (from the old files).', [['from','Employed from','date',''], ['to','Resigned on','date',''], ['job','Job name','text',''], ['dept','Department','text',''], ['note','Note','textarea','']]);
-  if (k === 'black') return lifeModal('black', '⛔ Add to blacklist', `<b>${esc(empName(emp))}</b> (${esc(emp.id)}) will never be re-employed — not under this code and not under a new one with the same national ID.`, [['reason','Reason * (kept on his record)','textarea','']]);
-  if (k === 'unblack') return lifeModal('unblack', 'Remove from blacklist', `Remove <b>${esc(empName(emp))}</b> (${esc(emp.id)}) from the blacklist? He could then be re-employed.`, []);
-});
-$('ml-go').addEventListener('click', async () => {
-  if (!ML) return; const id = ML.id, v = k => ($('ml-' + k) ? $('ml-' + k).value.trim() : '');
-  let res;
-  if (ML.kind === 'rehire'){
-    if (!v('from')) return toast('Enter the new employment date','warn');
-    res = await sb.from('employees').update({ status:'Active', resignation_date:null, employment_date:v('from'), job_name:v('job') || null, department:v('dept') || null }).eq('id', id).select();
-  } else if (ML.kind === 'past'){
-    if (!v('from') && !v('to')) return toast('Enter at least one date','warn');
-    res = await sb.from('employment_history').insert({ emp_id:id, employment_date:v('from') || null, resignation_date:v('to') || null, job_name:v('job') || null, department:v('dept') || null, note:v('note') || 'Added by hand', recorded_by:(ME && (ME.full_name || ME.email)) || 'HR' }).select();
-  } else if (ML.kind === 'black'){
-    if (!v('reason')) return toast('Write the reason','warn');
-    res = await sb.from('employees').update({ blacklisted:true, blacklist_reason:v('reason') }).eq('id', id).select();
-  } else {
-    res = await sb.from('employees').update({ blacklisted:false }).eq('id', id).select();
-  }
-  if (res.error || !(res.data && res.data.length)) return toast(res.error ? res.error.message : NOPERM, 'err');
-  if (ML.kind !== 'past'){ const i = S.employees.findIndex(x => String(x.id) === String(id)); if (i >= 0) S.employees[i] = { ...S.employees[i], ...res.data[0] }; }
-  closeM('m-life');
-  toast({ rehire:'Re-employed under the same code — the previous period is in his employment history', past:'Past period added', black:'Added to the blacklist', unblack:'Removed from the blacklist' }[ML.kind]);
-  if (ML.kind === 'rehire' || ML.kind === 'black' || ML.kind === 'unblack'){ openEmp(id); if (typeof renderEmployees === 'function') renderEmployees(); } else renderEmpLife(id);
-});
-const _openEmpLife = openEmp;
-// @ts-expect-error — openEmp is deliberately extended here (the new version wraps the earlier one)
-openEmp = function(id){ const r = _openEmpLife.apply(this, arguments); renderEmpLife(id); return r; };
+// ── Basic salary changes (only after the board member approves), resignation ↔ Inactive, re-employment, employment history
+//    and the blacklist: all in the employee window, React since 31 Oct 2026 (react/src/employee).
 
 // ═════════════════════════════════════════════════════════
 //  TWO-STEP SIGN-IN (TOTP) + AUDIT LOG   — database: 40-two-step-audit-tidyup.sql
@@ -3090,10 +2812,6 @@ let HRA = { list:[], loaded:false, loading:false, missing:false };
 let HR_RULES = JSON.parse(JSON.stringify(HR_RULES_DEF));
 const canHRA = () => !!(ME && ['admin','hr','hr_officer'].includes(ME.role));
 const canHRW = () => !!(ME && ['admin','hr'].includes(ME.role));                      // leave / alert rules
-const canEditMaster = () => !!(ME && ['admin','hr','hr_officer'].includes(ME.role));   // employee master data (HR officers too — 49)
-// same as the database: one year later; 29 Feb → 28 Feb
-function addYearISO(s, n = 1){ const [y, m, d] = s.split('-').map(Number), x = new Date(y + n, m - 1, d); if (x.getMonth() !== m - 1) x.setDate(0);
-  return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
 
 async function loadHRAlerts(){
   if (!canHRA()) return;
@@ -3225,93 +2943,8 @@ openReport = function(id){
   return r;
 };
 
-// ═════════════ EMPLOYEE WINDOW: leave balance + certificates ═════════════
-async function renderEmpLeave(id){
-  const box = $('emp-lbal'); if (!box) return;
-  if (!id){ box.innerHTML = '<span style="color:var(--muted)">Save the employee first.</span>'; return; }
-  box.innerHTML = '<span style="color:var(--muted)">Loading…</span>';
-  const y = todayStr().slice(0, 4), b = await getLB(id, y, true);
-  if (String(editingEmp) !== String(id)) return;
-  if (!b){ box.innerHTML = '<span style="color:var(--muted)">Not available — database update 47 has not been run yet.</span>'; return; }
-  const L = HR_RULES.leave_rules;
-  box.innerHTML = `<div class="grid3" style="gap:10px">
-      <div><div style="color:var(--muted);font-size:12px">${y} balance</div><div style="font-size:20px;font-weight:700" class="${num(b.remaining) < 0 ? 'neg' : ''}">${fmt(b.remaining)} days</div>
-        <div style="font-size:12px">${fmt(b.entitlement)} earned${num(b.carry_in) ? ` · ${fmt(b.carry_in)} from last year` : ''} · ${fmt(b.taken)} taken${num(b.pending) ? ` · ${fmt(b.pending)} pending` : ''}${num(b.carry_in) > 0 && b.this_year_left != null ? `<br>left: ${fmt(b.this_year_left)} this year's + ${fmt(b.carry_left)} carried (used last)` : ''}</div></div>
-      <div><div style="color:var(--muted);font-size:12px">Emergency leave ${y}</div><div style="font-size:20px;font-weight:700">${fmt(Math.max(0, num(b.emergency_cap) - num(b.emergency_taken)))} left</div>
-        <div style="font-size:12px">${fmt(b.emergency_cap)} allowed · ${fmt(b.emergency_taken)} taken</div></div>
-      <div><div style="color:var(--muted);font-size:12px">Earning now</div><div style="font-size:20px;font-weight:700">${fmt(b.rate_today)} days / year</div>
-        <div style="font-size:12px">${b.override != null ? 'special case set on this employee' : `${fmt(L.normal_days)} from ${esc(b.normal_from || '—')}${b.senior_from ? ` · ${fmt(L.senior_days)} from ${esc(b.senior_from)}${b.senior_reason === 'age' ? ` (age ${L.senior_age || 50})` : b.senior_reason === 'insurance' ? ` (${L.senior_insured_years} insured years)` : ''}` : ` · ${fmt(L.senior_days)} after ${L.senior_insured_years} insured years or age ${L.senior_age || 50}`}`}</div></div>
-    </div>
-    <div style="font-size:12px;margin-top:8px;color:${b.eligible_from > todayStr() && !b.early_ok ? 'var(--warn)' : 'var(--muted)'}">May request annual / emergency leave from <b>${esc(b.eligible_from || '—')}</b>${b.early_ok ? ' — HR exception: allowed before that' : ''}.</div>`;
-}
-/** @type {Row<'employee_certificates'>[]} — certificates */
-let CERTS = [], CERT_EDIT = null;
-async function renderCerts(id){
-  const box = $('emp-certs'); if (!box) return;
-  if (!id){ box.innerHTML = '<span style="color:var(--muted)">Save the employee first.</span>'; return; }
-  const { data, error } = await sb.from('employee_certificates').select('*').eq('emp_id', id).order('expiry_date', { ascending:true, nullsFirst:false });
-  if (String(editingEmp) !== String(id)) return;
-  if (error){ box.innerHTML = '<span style="color:var(--muted)">Not available — database update 47 has not been run yet.</span>'; return; }
-  CERTS = data || [];
-  const today = todayStr(), soon = addDaysISO(today, num(HR_RULES.hr_alerts.cert_days) || 30);
-  box.innerHTML = (CERTS.length ? `<div class="tbl-wrap"><table><thead><tr><th>Certificate</th><th>Issued by</th><th>Number</th><th>Issued</th><th>Expires</th><th>Scan</th><th></th></tr></thead><tbody>${CERTS.map(c => `<tr>
-      <td class="strong">${esc(c.name)}${c.notes ? `<div style="font-size:12px;color:var(--muted);font-weight:400">${esc(c.notes)}</div>` : ''}</td><td>${esc(c.issuer || '')}</td><td class="mono">${esc(c.cert_no || '')}</td>
-      <td class="mono">${esc(c.issue_date || '')}</td>
-      <td class="mono">${c.expiry_date ? esc(c.expiry_date) + (c.expiry_date < today ? ' <span class="chip c-red">expired</span>' : c.expiry_date <= soon ? ' <span class="chip c-orange">soon</span>' : '') : '<span style="color:var(--muted)">no expiry</span>'}</td>
-      <td>${c.file_path ? `<a href="#" data-cert-file="${esc(c.file_path)}">📎 open</a>` : '—'}</td>
-      <td style="white-space:nowrap">${canEditMaster() ? `<button class="icon-btn" data-cert-edit="${c.id}" title="Edit">✎</button><button class="icon-btn" data-cert-del="${c.id}" title="Close (a reason is required)">⊘</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
-    : '<span style="color:var(--muted)">No certificates recorded.</span>')
-    + (canEditMaster() ? `<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" id="cert-add">＋ Add certificate</button></div>` : '');
-}
-function addDaysISO(s, n){ const [y, m, d] = s.split('-').map(Number), x = new Date(y, m - 1, d + n);
-  return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
-function openCert(c){
-  CERT_EDIT = c ? c.id : null;
-  $('cert-title').textContent = c ? 'Edit certificate' : 'Add certificate';
-  $('cert-name').value = c ? c.name || '' : ''; $('cert-issuer').value = c ? c.issuer || '' : ''; $('cert-no').value = c ? c.cert_no || '' : '';
-  $('cert-issue').value = c ? c.issue_date || '' : ''; $('cert-exp').value = c ? c.expiry_date || '' : ''; $('cert-notes').value = c ? c.notes || '' : '';
-  $('cert-file').value = ''; $('cert-file-now').textContent = c && c.file_path ? 'A scan is attached — choose a new file only to replace it.' : '';
-  openM('m-cert'); setTimeout(() => $('cert-name').focus(), 50);
-}
-document.addEventListener('click', async e => {
-  if (/** @type {PageEl} */ (e.target).closest('#cert-add')) return openCert(null);
-  const ed = /** @type {PageEl} */ (e.target).closest('[data-cert-edit]'); if (ed) return openCert(CERTS.find(c => c.id === ed.dataset.certEdit));
-  const dl = /** @type {PageEl} */ (e.target).closest('[data-cert-del]');
-  if (dl){ const c = CERTS.find(x => x.id === dl.dataset.certDel); if (!c) return;
-    return askReason('Close certificate', `Close the certificate “${c.name}”? It and its scan are kept on record with your reason.`, 'Close certificate', async reason => {
-      await closeRecords('employee_certificates', [{ id: c.id }], reason);
-      toast('Certificate closed'); renderCerts(editingEmp); loadHRAlerts().then(hraBadge); }); }
-  const f = /** @type {PageEl} */ (e.target).closest('[data-cert-file]');
-  if (f){ e.preventDefault(); const { data, error } = await sb.storage.from('certificates').createSignedUrl(/** @type {string} */ (f.dataset.certFile), 600);
-    if (error || !data) return toast(error ? error.message : 'Could not open the file', 'err'); window.open(data.signedUrl, '_blank'); }
-});
-$('cert-save').addEventListener('click', async () => {
-  const id = editingEmp; if (!id) return;
-  const rec = { emp_id:String(id), name:$('cert-name').value.trim(), issuer:$('cert-issuer').value.trim() || null, cert_no:$('cert-no').value.trim() || null,
-                issue_date:$('cert-issue').value || null, expiry_date:$('cert-exp').value || null, notes:$('cert-notes').value.trim() || null };
-  if (!rec.name) return toast('Enter the certificate name', 'warn');
-  if (rec.issue_date && rec.expiry_date && rec.expiry_date < rec.issue_date) return toast('The expiry date is before the issue date', 'warn');
-  const file = $('cert-file').files[0];
-  if (file && file.size > 10 * 1024 * 1024) return toast('The file is larger than 10 MB', 'warn');
-  const btn = $('cert-save'); btn.disabled = true;
-  try {
-    if (file){ const path = `${id}/${Date.now()}-${file.name.replace(/[^A-Za-z0-9._-]+/g, '_')}`;
-      const up = await sb.storage.from('certificates').upload(path, file, { upsert:false });
-      if (up.error) throw up.error; rec.file_path = path; }
-    if (!CERT_EDIT) rec.created_by = (ME && (ME.full_name || ME.email)) || null;
-    const res = CERT_EDIT ? await sb.from('employee_certificates').update(rec).eq('id', CERT_EDIT).select() : await sb.from('employee_certificates').insert(rec).select();
-    if (res.error) throw res.error; if (!(res.data && res.data.length)) throw new Error(NOPERM);
-    closeM('m-cert'); toast('Certificate saved'); renderCerts(id); loadHRAlerts().then(hraBadge);
-  } catch (err){ toast(err.message || String(err), 'err'); }
-  btn.disabled = false;
-});
-const _openEmp26 = openEmp;
-// @ts-expect-error — openEmp is deliberately extended here (the new version wraps the earlier one)
-openEmp = function(id){ const r = _openEmp26.apply(this, arguments); renderEmpLeave(id); renderCerts(id); return r; };
-// after an employee is saved, dates may have been filled in by the database (probation, contract end) — alerts follow
-const _saveEmp26 = saveEmp;
-// @ts-expect-error — saveEmp is deliberately extended here (the new version wraps the earlier one)
-saveEmp = async function(){ const r = await _saveEmp26.apply(this, arguments); LB.clear(); if (canHRA()) loadHRAlerts().then(hraBadge); return r; };
+// (the employee window's leave balance and certificates are React now — react/src/employee; after a save there the bridge
+//  employeeSaved clears LB and reloads the HR alerts)
 // the original hint functions were attached directly — attach the new ones too (they run last and replace the text)
 ['sl-type','sl-days'].forEach(id => $(id).addEventListener('input', () => slHint()));
 
@@ -3368,25 +3001,7 @@ afterLogin = async function(){ const r = await _afterLogin27b.apply(this, argume
 
 // ── HR officers: penalties in days / hours show no money — handled in the React Penalties page (bridge penaltyValue).
 
-// ── employee window: show the contract end as soon as the start is typed (the database applies the same rule on Save)
-function contractEndPreview(ev){
-  const f = k => document.querySelector(`#emp-form [data-f="${k}"]`);
-  const type = f('contract_type'), start = f('contract_start_date'), end = f('contract_end_date'); if (!type || !start || !end) return;
-  const box = /** @type {HTMLElement} — the contract-end box always has a parent */ (end.parentElement);
-  let note = /** @type {HTMLElement | null} */ (box.querySelector('.ce-note'));
-  if (!note){ note = document.createElement('div'); note.className = 'ce-note'; note.style.cssText = 'font-size:11px;margin-top:4px;color:var(--muted)'; box.appendChild(note); }
-  if (type.value === 'Permanent'){ note.textContent = 'Permanent contract — no end date and no renewal alert. Choose Temporary or Contract for a one-year contract.'; return; }
-  if (start.value && (!end.value || end.dataset.auto === '1') && (ev && (ev.target === start || /** @type {PageEl} */ (ev.target) === type))){
-    end.value = addYearISO(addDaysISO(start.value, -1)); end.dataset.auto = '1';          // 1 Sep 2026 → 31 Aug 2027
-  }
-  note.textContent = start.value ? 'One year after the start, ending the day before.' : 'Enter the contract start — the end fills in by itself.';
-}
-document.addEventListener('input', e => { if (/** @type {PageEl} */ (e.target).closest && /** @type {PageEl} */ (e.target).closest('#emp-form') && /^(contract_type|contract_start_date)$/.test(/** @type {PageEl} */ (e.target).dataset.f || '')) contractEndPreview(e); });
-document.addEventListener('change', e => { if (/** @type {PageEl} */ (e.target).closest && /** @type {PageEl} */ (e.target).closest('#emp-form') && /^(contract_type|contract_start_date|contract_end_date)$/.test(/** @type {PageEl} */ (e.target).dataset.f || '')){
-  if (/** @type {PageEl} */ (e.target).dataset.f === 'contract_end_date') /** @type {PageEl} */ (e.target).dataset.auto = ''; else contractEndPreview(e); } });
-const _openEmp27 = openEmp;
-// @ts-expect-error — openEmp is deliberately extended here (the new version wraps the earlier one)
-openEmp = function(){ const r = _openEmp27.apply(this, arguments); contractEndPreview(null); return r; };
+// ── the employee window's contract end preview is React now (react/src/employee — same rule as the database on Save)
 
 // ═════════════════════════════════════════════════════════
 //  FIT TO SCREEN WIDTH (16 Oct 2026)
@@ -3483,47 +3098,6 @@ showLogin = function(msg){
 // buttons of the "still there?" window (no onclick= in the page: the security policy forbids code inside the page)
 $('idle-out').addEventListener('click', () => idleSignOut());
 $('idle-stay').addEventListener('click', () => idleTouch());
-
-// ═════════════════════════════════════════════════════════
-//  DROP-DOWN LISTS for the employee window (21 Oct 2026)
-//  University and College: the lists HR provided (Universities.xlsx, Faculty.xlsx) + any value already used on an
-//  employee. Department: values in use. Unit: units already used in the chosen department. Every list ends with
-//  "➕ Other…" to type a new value (it then appears in the list for everyone).
-// ═════════════════════════════════════════════════════════
-const PICK_UNIVERSITIES = ["جامعة القاهرة", "معهد الجزيرة العالى", "دبلوم المدارس الثانوية الفنية التجارية", "جامعة حلوان", "جامعة عين شمس", "الاكاديمية المصرية للهندسة و التكنولوجيا المتقدمة", "الاكاديمية العربية للعلووم والتكنولوجيا والنقل البحري", "جامعة 6 أكتوبر", "مودرن اكاديمى بالمعادى", "جامعة المنيا", "دبلوم المدارس الفنية الصناعية", "معهد العالى للإدارة و التكنولوجيا - شبرامنت", "شهادة قياس مستوى المهارة", "معهد الجزيرة العالى للحاسب الالى و نظم المعلومات الادارية", "معهد العباسية للحاسبات الآلية و العلوم التجارية", "ثانوية عامة", "دبلوم المدارس الثانوية الفنية للإدارة و الخدمات", "معهد القاهرة العالى للغات و الترجمه الفورية و العلوم الادارية", "جامعة المنوفية", "جامعة طنطا", "محو امية", "دبلوم المدارس الثانوية الفنية الزراعية", "مرحلة التعليم الاساسي", "معهد طيبة العالي لتكنولوجيا الادارة و المعلومات", "معهد الفراعنة العالي للحاسب الالي و نظم المعلومات و الادارة", "المعهد العالي للدراسات النوعية", "دبلوم المدارس الثانوية الفنية للشئون الفندقية والخدمات السياحية", "بدون مؤهل", "جامعة بنها", "الجامعة العمالية", "المعهد العالى للحاسبات و المعلومات و تكنولوجيا الادارة", "المعهد العالى للدراسات المتطورة", "جامعة المنصورة", "المعهد العالى للهندسة و التكنولوجيا", "الاكاديمية العربية للعلوم و التكنولوجيا و النقل البحرى", "معهد هندسة و تكنولوجيا الطيران", "المعهد الفنى الصناعى", "وزارة الانتاج الحربى", "المجمع التكنولوجى المتكامل", "المعهد الفني التجاري بالروضة", "معهد المدينة العالى للهندسة و التكنولوجيا - شبرامنت", "الازهر الشريف", "المعهد الفنى التجارى", "الجامعة الالمانية بالقاهرة", "المعهد العالى للدراسات التعاونية و الادارية", "الجهاز القومى لتنظيم الاتصالات", "جامعة الاهرام الكندية", "معهد طيبة العالى للهندسة", "جامعة الزقازيق", "جامعة الفيوم", "جامعة الاسكندرية", "المعهد التكنولوجى العالى", "جامعة بورسعيد", "جامعة مصر للعلوم و التكنولوجيا", "جامعة اكتوبر للعلوم الحديثة والاداب", "الجامعة الامريكية بالقاهرة", "جامعة السويس", "المعهد العالي للهندسة والتكنولوجيا بطنطا", "جامعة النيل", "جامعة سيجي الماليزية", "معهد اكتوبر العالى للهندسة و التكنولوجيا", "دبلوم التلمذة الصناعية", "معهد فني صناعي", "جامعة الازهر", "المعهد العالى للتعاون الزراعى", "المعهد العالي للهندسة بالشروق", "معهد القاهرة الجديدة للعلوم الاداربة و الحاسب الالي", "معهد الاهرامات العالي للهندسة والتكنولوجيا", "معهد الجيزة العالى للهندسة و التكنولوجيا", "ثانوي فني للصم و ضعاف السمع", "التكنولوجيا بالصحافة", "معهد الشروق", "جامعة حورس", "جاممة جنوب الوادي", "المعهد العالي للدراسات التعاونية و الادارية", "جامعة اسوان", "معهد الفراعنة العالي للسياحة و الفادق", "وزارة التجارة و الصناعه", "المعهد الفني التجاري", "معهد فني تجاري"];
-const PICK_COLLEGES = ["نظم معلومات", "دبلوم تجارة", "بكالوريوس هندسة القوى و الالات الكهربية", "بكالوريوس فى الهندسة الميكانيكية", "بكالوريوس تجارة", "بكالوريوس الهندسة فى الميكاترونيات", "بكالوريوس فى الهندسة و التكنولوجيا", "دبلوم صنايع", "نظم المعلومات الادارية", "كهربائى", "بكالوريوس اعلام", "بكالوريوس فى التعليم الصناعى", "ليسانس حقوق", "دبلوم شئون فندقية", "ليسانس آداب", "ليسانس الالسن", "بكالوريوس فى الهندسة الإلكترونية", "بكالوريوس فى العلوم فى الهندسة الكهربائية", "محو امية", "دبلوم زراعة", "الاعدادية", "بكالوريوس العلوم التجارية", "الابتدائية", "دبلوم سياحة وفنادق", "بكالوريوس إدارة صناعية", "بكالوريوس فى الهندسة الكهربية و التحكم الآلى", "دبلوم المعاهد الفنيه الصناعية", "بكالوريوس هندسة الالكترونيات و الاتصالات الكهربية", "دبلوم تدريب مهنى", "بكالوريوس فى تكنولوجيا الكهرباء و الالكترونيات", "بكالوريوس الهندسة الكهربية و الحاسبات", "ثانوى ازهرى", "بكالوريوس اخصائى رقابة الجودة", "دبلوم المعاهد الفنية التجارية", "مشغل لاسلكى", "بكالوريوس ادارة", "بكالوريوس هندسة الحاسبات و الالكترونيات", "بكالوريوس هندسة اتصالات و كهروفيزياء", "بكالوريوس حاسبات و معلومات", "بكالوريوس فى العلوم شعبه فيزياء", "بكالوريوس في تكنولوجيا المعلومات", "بكالوريوس فى علوم الحاسب", "بكالوريوس ادارة الأعمال", "بكالوريوس هندسة انتاج", "بكالوريوس زراعه", "بكالوريوس تربية رياضية", "ليسانس اداب", "بكالوريوس هندسة الكهروميكانيكا", "بكالوريوس فى هندسة الاتصالات و الالكترونيات", "دبلوم الثانوي الفني للصم و ضعاف السمع", "معهد فني صناعي", "المعهد الدولي العالي للاعلام", "بكالوريوس الدراسات التعاونية و الادارية", "ادارة الاعمال السياحية", "دبلوم التلمذة الصناعية"];
-const PICK_OTHER = '__other__';
-const pickNorm = v => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
-function pickOptions(src, dept){
-  const used = k => (S.employees || []).map(e => pickNorm(e[k]));
-  let list = src === 'univ' ? [...PICK_UNIVERSITIES, ...used('university')]
-           : src === 'coll' ? [...PICK_COLLEGES, ...used('college')]
-           : src === 'dept' ? used('department')
-           : (S.employees || []).filter(e => !dept || pickNorm(e.department) === dept).map(e => pickNorm(e.unit));
-  list = [...new Set(list.filter(Boolean))];
-  const ar = src === 'univ' || src === 'coll';
-  return list.sort((a, b) => a.localeCompare(b, ar ? 'ar' : 'en'));
-}
-function pickSelect(k, src, v, dept){
-  v = pickNorm(v);
-  const opts = pickOptions(src, dept); if (v && !opts.includes(v)) opts.unshift(v);
-  const dir = (src === 'univ' || src === 'coll') ? ' dir="rtl"' : '';
-  return `<select data-f="${k}" data-pick="${src}"${dir}><option value="">—</option>${opts.map(o => `<option${o === v ? ' selected' : ''}>${esc(o)}</option>`).join('')}`
-       + `<option value="${PICK_OTHER}">➕ Other — type a new one…</option></select>`;
-}
-// choosing "Other" turns the list into a text box; changing the department refreshes the unit list
-document.addEventListener('change', e => {
-  const el = /** @type {PageEl} */ (e.target); if (!el.closest || !el.closest('#emp-form') || !el.dataset || !el.dataset.pick) return;
-  if (el.value === PICK_OTHER) {
-    const inp = document.createElement('input'); inp.type = 'text'; inp.dataset.f = el.dataset.f;
-    inp.placeholder = 'Type the new ' + String((el.closest('.field')?.querySelector('label') || {}).textContent).toLowerCase() + '…';
-    if (el.dir) inp.dir = el.dir; el.replaceWith(inp); inp.focus(); return;
-  }
-  if (el.dataset.pick === 'dept') {
-    const u = document.querySelector('#emp-form [data-f="unit"]');
-    if (u && u.tagName === 'SELECT') { const keep = pickOptions('unit', el.value).includes(u.value) ? u.value : ''; u.outerHTML = pickSelect('unit', 'unit', keep, el.value); }   // a unit of another department is cleared
-  }
-});
 
 // ═════════════════════════════════════════════════════════
 //  BOARD MEMBER DASHBOARD — pending requests from managers, in three groups (22 Oct 2026)
@@ -3787,7 +3361,7 @@ REPORTS.push({ id:'att-returns', g:'Attendance', t:'Returns after check-out and 
 // ═════════════════════════════════════════════════════════
 //  BIRTH DATE FROM THE EGYPTIAN NATIONAL ID (23 Oct 2026, with 73-birth-date-from-national-id.sql)
 //  ID (14 digits): 1st digit 2 = 1900s, 3 = 2000s; digits 2–7 = YYMMDD. The database fills an EMPTY birth date on save;
-//  the employee window fills it as soon as the ID is typed (only when the birth date box is empty), and the report
+//  the employee window (React) fills it as soon as the ID is typed (only when the birth date box is empty), and the report
 //  "Birth date different from national ID" lists records where the two disagree, for HR to check against the ID card.
 // ═════════════════════════════════════════════════════════
 function birthFromNid(nid){
@@ -3798,21 +3372,6 @@ function birthFromNid(nid){
   if (m < 1 || m > 12 || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
-document.addEventListener('input', e => {
-  const f = /** @type {PageEl} */ (e.target).closest && /** @type {PageEl} */ (e.target).closest('#emp-form [data-f="national_id"]'); if (!f) return;
-  const b = document.querySelector('#emp-form [data-f="birth_date"]'); if (!b) return;
-  const v = birthFromNid(f.value), field = /** @type {PageEl} — the birth-date box always sits in a .field */ (b.closest('.field'));
-  let note = /** @type {HTMLElement | null} */ (field.querySelector('.bd-note'));
-  if (v && (!b.value || b.dataset.auto === '1')) {
-    b.value = v; b.dataset.auto = '1';
-    if (!note) { note = document.createElement('div'); note.className = 'bd-note'; note.style.cssText = 'font-size:11px;color:var(--muted);margin-top:4px'; field.appendChild(note); }
-    note.textContent = 'Filled from the national ID';
-  } else if (!v && b.dataset.auto === '1') { b.value = ''; delete b.dataset.auto; if (note) note.textContent = ''; }
-});
-document.addEventListener('input', e => {                    // HR typed the birth date himself → stop auto-filling it
-  const b = /** @type {PageEl} */ (e.target).closest && /** @type {PageEl} */ (e.target).closest('#emp-form [data-f="birth_date"]'); if (!b) return;
-  delete b.dataset.auto; const n = b.closest('.field')?.querySelector('.bd-note'); if (n) n.textContent = '';
-});
 REPORTS.push({ id:'emp-birth-id', g:'HR', t:'Birth date different from national ID',
   d:'Employees whose recorded birth date does not match the date written in their Egyptian national ID (digits 2–7). Check the ID card: either the birth date or the ID number was typed wrong. A wrong birth date affects the leave entitlement at age 50, the first-sign-in question and the birthday greeting.',
   build:() => {
@@ -3825,49 +3384,22 @@ REPORTS.push({ id:'emp-birth-id', g:'HR', t:'Birth date different from national 
       rows: rows.sort((a, b) => String(a.code).localeCompare(String(b.code), undefined, { numeric:true })) };
   } });
 
-// ── National ID: exactly 14 digits (with 74-national-id-14-digits.sql) ──
-// The box keeps digits only (spaces / dashes / letters typed are dropped), stops at 14, and shows "n / 14 digits".
-// Saving is refused in the window AND in the database when it is not exactly 14 digits.
-function nidHint(f){
-  const field = f.closest('.field'); let h = field.querySelector('.nid-hint');
-  if (!h) { h = document.createElement('div'); h.className = 'nid-hint'; h.style.cssText = 'font-size:11px;margin-top:4px'; field.appendChild(h); }
-  const n = f.value.length; h.textContent = `${n} / 14 digits`; h.style.color = n === 14 ? 'var(--muted)' : 'var(--warn)';
-}
-document.addEventListener('input', e => {
-  const f = /** @type {PageEl} */ (e.target).closest && /** @type {PageEl} */ (e.target).closest('#emp-form [data-f="national_id"]'); if (!f) return;
-  const clean = f.value.replace(/\D/g, '').slice(0, 14); if (clean !== f.value) f.value = clean;
-  nidHint(f);
-}, true);                                                     // runs before the birth-date filler above
-const _openEmpNid = openEmp;
-// @ts-expect-error — openEmp is deliberately extended here (the new version wraps the earlier one)
-openEmp = function(){
-  const r = _openEmpNid.apply(this, arguments);
-  const f = document.querySelector('#emp-form [data-f="national_id"]');
-  if (f) { f.setAttribute('maxlength', '14'); f.setAttribute('inputmode', 'numeric'); f.setAttribute('autocomplete', 'off'); nidHint(f); }
-  return r;
-};
-const _saveEmpNid = saveEmp;
-// @ts-expect-error — saveEmp is deliberately extended here (the new version wraps the earlier one)
-saveEmp = async function(){
-  const f = document.querySelector('#emp-form [data-f="national_id"]');
-  if (f && !/^\d{14}$/.test(f.value.replace(/[\s-]/g, ''))) {
-    f.focus(); f.scrollIntoView && f.scrollIntoView({ block:'center' });
-    return toast(`The national ID must be exactly 14 digits — it has ${f.value.replace(/\D/g, '').length}`, 'warn');
-  }
-  return _saveEmpNid.apply(this, arguments);
-};
+// ── National ID: exactly 14 digits (with 74-national-id-14-digits.sql) — the employee window (React) keeps digits only, stops at 14,
+// shows "n / 14 digits" and refuses Save otherwise; the database refuses it too.
 
 // ═════════════════════════════════════════════════════════
 //  EMPLOYEE WINDOW — no field may be skipped when it applies (23 Oct 2026, with 75-employee-required-fields.sql)
-//  Same rule as the database function employee_missing(); the database refuses NEW employees with gaps, this window
-//  refuses Save for any employee (new or existing) until his gaps are filled, marks the empty boxes in red and lists them.
-//  Always-required boxes get a red *. Report "Missing employee data" lists every active employee with gaps.
+//  Same rule as the database function employee_missing(); the database refuses NEW employees with gaps, the employee window
+//  (React — react/src/employee, bridge employeeMissing / requiredFields) refuses Save for any employee until his gaps are filled,
+//  marks the empty boxes in red and lists them; always-required boxes get a red *. Report "Missing employee data" lists every
+//  active employee with gaps.
 // ═════════════════════════════════════════════════════════
 const REQ_ALWAYS = [['name_ar','Arabic name'],['name_en','English name'],['department','Department'],['unit','Unit'],['entity','Entity'],
   ['job_name','Job name'],['job_type','Job type'],['mobile','Personal mobile'],['personal_email','Personal e-mail'],['address','Address'],['contract_type','Contract type'],
   ['employment_date','Employment date'],['birth_date','Birth date'],['gender','Gender'],['marital_status','Marital status'],
   ['religion','Religion'],['nationality','Nationality'],['national_id','National ID'],['national_id_expiry','National ID expiry'],
   ['insurance','Insurance'],['payment_method','Payment method'],['university','University'],['college','College'],['graduation_date','Graduation date']];
+const PICK_OTHER = '__other__';    // the drop-downs' "➕ Other" choice (React window) never counts as filled in
 const reqBlank = v => v === null || v === undefined || String(v).trim() === '' || String(v) === PICK_OTHER;
 function employeeMissing(r, withPay){
   const m = [];
@@ -3891,49 +3423,6 @@ function employeeMissing(r, withPay){
   }
   return m;
 }
-function empFormRecord(){
-  const e = editingEmp ? (empOrBlank(editingEmp)) : /** @type {Employee} */ ({}), r = { ...e };
-  document.querySelectorAll('#emp-form [data-f]').forEach(el => {
-    const k = /** @type {string} */ (el.dataset.f), def = EMP_FIELDS.flatMap(s => s[1]).find(f => f[0] === k);
-    r[k] = def && def[2] === 'bool' ? el.value === 'Yes' : el.value;
-  });
-  r.top_of_org = !!($('emp-top') && $('emp-top').checked);
-  return r;
-}
-function reqMark(){
-  REQ_ALWAYS.forEach(([k]) => { const f = document.querySelector(`#emp-form [data-f="${k}"]`), lab = f && f.closest('.field')?.querySelector('label');
-    if (lab && !lab.querySelector('.req')) lab.insertAdjacentHTML('beforeend', ' <span class="req" style="color:var(--danger,#d33)">*</span>'); });
-}
-const _openEmpReq = openEmp;
-// @ts-expect-error — openEmp is deliberately extended here (the new version wraps the earlier one)
-openEmp = function(){
-  const r = _openEmpReq.apply(this, arguments);
-  reqMark();
-  if (editingEmp) { const miss = employeeMissing(empFormRecord(), !isOfficer());
-    if (miss.length) $('emp-form').insertAdjacentHTML('afterbegin', `<div class="alert a-warn req-banner" style="margin-bottom:6px">Missing data (${miss.length}): ${esc(miss.map(x => x[1]).join(', '))} — fill these in before saving.</div>`); }
-  return r;
-};
-document.addEventListener('input', e => { const f = /** @type {PageEl} */ (e.target).closest && /** @type {PageEl} */ (e.target).closest('#emp-form .field.req-miss'); if (f) f.classList.remove('req-miss'); }, true);
-document.addEventListener('change', e => { const f = /** @type {PageEl} */ (e.target).closest && /** @type {PageEl} */ (e.target).closest('#emp-form .field.req-miss'); if (f) f.classList.remove('req-miss'); }, true);
-const _saveEmpReq = saveEmp;
-// @ts-expect-error — saveEmp is deliberately extended here (the new version wraps the earlier one)
-saveEmp = async function(){
-  const pe = document.querySelector('#emp-form [data-f="personal_email"]');
-  if (pe) { pe.value = pe.value.replace(/\s/g, '').toLowerCase();
-    if (pe.value && !/^[^@]+@[^@]+\.[a-z]{2,}$/.test(pe.value)) { pe.closest('.field')?.classList.add('req-miss'); pe.focus();
-      return toast('The personal e-mail is not a valid e-mail address (example: name@gmail.com)', 'warn'); } }
-  const miss = employeeMissing(empFormRecord(), !isOfficer());
-  document.querySelectorAll('#emp-form .field.req-miss').forEach(f => f.classList.remove('req-miss'));
-  if (miss.length) {
-    /** @type {PageEl | null} */ let first = null;
-    miss.forEach(([k]) => { const el = document.querySelector(`#emp-form [data-f="${k}"]`); if (el) { el.closest('.field')?.classList.add('req-miss'); first = first || el; } });
-    const fst = /** @type {PageEl | null} — set inside forEach above */ (first);
-    if (fst) { fst.focus(); fst.scrollIntoView && fst.scrollIntoView({ block:'center' }); }
-    return toast(`Fill in before saving (${miss.length}): ${miss.map(x => x[1]).join(', ')}`, 'warn');
-  }
-  return _saveEmpReq.apply(this, arguments);
-};
-document.head.insertAdjacentHTML('beforeend', '<style>#emp-form .field.req-miss input,#emp-form .field.req-miss select,#emp-form .field.req-miss textarea{border-color:#d33;box-shadow:0 0 0 2px rgba(221,51,51,.18)}#emp-form .field.req-miss label{color:#d33}</style>');
 REPORTS.push({ id:'emp-missing', g:'HR', t:'Missing employee data',
   d:'Active employees with empty fields that apply to them. HR cannot save an employee until these are filled; new employees cannot be added with gaps.',
   build:() => {
@@ -3948,7 +3437,7 @@ REPORTS.push({ id:'emp-missing', g:'HR', t:'Missing employee data',
 //  DATA REQUESTS — HR asks employees to update their own data on the phone (23 Oct 2026, 77 + 78)
 //  The page and the "📝 New request" window are React now (react/src/datareq, 30 Oct 2026).
 //  Kept here: the menu badge (answers waiting for review + changes employees made that nobody has seen yet, refreshed after
-//  the period data loads) and the employee window's "📝 Ask employee to update data" button, which opens the React window.
+//  the period data loads).
 // ═════════════════════════════════════════════════════════
 /** @param {number} n */
 function setDataRequestsBadge(n){ const b = $('dq-badge'); if (b) { b.style.display = n ? '' : 'none'; b.textContent = String(n); } }
@@ -3961,21 +3450,7 @@ async function loadDataRequestsBadge(){
 const _loadPeriodDataDq = loadPeriodData;
 // @ts-expect-error — loadPeriodData is deliberately extended here (the new version wraps the earlier one)
 loadPeriodData = async function(){ const r = await _loadPeriodDataDq.apply(this, arguments); loadDataRequestsBadge().catch(() => {}); return r; };
-
-// ── Employee window: "📝 Ask employee to update data" (this employee, his missing fields ticked) ──
-const _openEmpDq = openEmp;
-// @ts-expect-error — openEmp is deliberately extended here (the new version wraps the earlier one)
-openEmp = function(){
-  const r = _openEmpDq.apply(this, arguments);
-  const foot = $('emp-save') && $('emp-save').parentElement;
-  if (foot && !foot.querySelector('#emp-dq')) foot.insertAdjacentHTML('afterbegin', '<button class="btn btn-ghost" id="emp-dq" style="margin-right:auto">📝 Ask employee to update data</button>');
-  const b = $('emp-dq'); if (b) b.style.display = editingEmp && canHRA() ? '' : 'none';
-  return r;
-};
-document.addEventListener('click', e => {
-  if (!/** @type {PageEl} */ (e.target).closest || !/** @type {PageEl} */ (e.target).closest('#emp-dq')) return;
-  if (editingEmp && typeof PKR !== 'undefined') PKR.openDataRequest(String(editingEmp));
-});
+// (the employee window's "📝 Ask employee to update data" button is React now — react/src/employee)
 
 // ═════════════════════════════════════════════════════════
 //  CHECK-OUTS TO RECORD (24 Oct 2026, 80-checkout-requests.sql)   ·   page 🚪 Check-outs to record (Workforce)

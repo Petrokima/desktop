@@ -766,33 +766,9 @@ function computeAll(){
 // ═════════════════════════════════════════════════════════
 //  RENDER — DASHBOARD
 // ═════════════════════════════════════════════════════════
-function renderDashboard(){
-  const today = todayStr(), act = S.employees.filter(e=>e.status!=='Inactive');
-  $('dash-date').textContent = new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  $('st-emp').textContent = act.length; $('st-emp-sub').textContent = `${S.employees.length - act.length} inactive on file`;
-  const tAtt = S.attendance.filter(a=>a.date===today);
-  $('st-today').textContent = tAtt.length; $('st-today-sub').textContent = act.length ? `${(tAtt.length/act.length*100).toFixed(1)}% of active staff` : '';
-  $('st-proj').textContent = S.projects.length.toLocaleString();
-  updateBadges();
-  const pP = S.permissions.filter(readyForHR).length, pL = S.leaves.filter(readyForHR).length,
-        pR = S.hrreq.filter(r=>r.status==='Pending'||r.status==='In progress').length;
-  const al = (n, what, page, icon) => n ? `<div class="alert a-warn" style="cursor:pointer;margin-bottom:10px" data-nav="${page}">${icon} <b>${n}</b> ${what}${n>1?'s':''} waiting — click to review</div>` : '';
-  const pAA = S.allowAppr.filter(a => a.status==='Pending HR').length;
-  const pPA = S.phoneAlerts.filter(a => !a.reviewed && a.kind==='other_employee_phone').length;
-  const pC = S.clocks.filter(c => c.offline && (c.applied===false || c.clock_suspect || /corrected/.test(c.time_method || ''))).length;
-  $('dash-alert').innerHTML = al(pL,'vacation request','leaves','🌴') + al(pP,'permission request','permissions','✋') + al(pR,'HR request','hrreq','📨')
-    + al(pAA,'project allowance approval','approvals','✅')
-    + (pPA ? `<div class="alert a-alarm" style="margin-bottom:10px;cursor:pointer" data-open-phal="1">🚨 <b>${pPA}</b> attempt${pPA>1?'s':''} to sign in on <b>another employee's phone</b> — click to review</div>` : '')
-    + (pC ? `<div class="alert a-warn" style="margin-bottom:10px;cursor:pointer" data-open-report="att-review">📴 <b>${pC}</b> offline check-in${pC>1?'s':''} need${pC>1?'':'s'} review — click to open the report</div>` : '');
-  $('st-net').textContent = fmt(computeAll().reduce((s,r)=>s+r.net,0));
-  const map = {};
-  tAtt.forEach(a => (a.projects||[]).forEach(x => { map[x.code] = map[x.code] || {h:0,n:0}; map[x.code].h += num(x.hours); map[x.code].n++; }));
-  const rows = Object.entries(map).sort((a,b)=>b[1].h-a[1].h).map(([c,v]) => {
-    const p = S.projects.find(x=>String(x.id)===String(c));
-    return `<tr><td class="mono">${esc(c)}</td><td class="strong">${esc(p?p.name:'')}</td><td class="num">${v.n}</td><td class="num">${fmt(v.h)}</td></tr>`;
-  });
-  $('dash-tbl').innerHTML = rows.join('') || '<tr><td colspan="4" class="empty">No attendance logged today yet</td></tr>';
-}
+// The dashboard is React since 31 Oct 2026 (react/src/dashboard). Kept here: the menu badges, which follow every change; parts 22 / 24 /
+// 26 / 33 extend this with their badges and the loading of voice, HR alerts and the board member's requests.
+function renderDashboard(){ updateBadges(); if (typeof PKR !== 'undefined') PKR.render(); }
 
 // ═════════════════════════════════════════════════════════
 //  RENDER — EMPLOYEES
@@ -1821,14 +1797,8 @@ function managerAssigned(ids, mid){
 // ═════════════════════════════════════════════════════════
 //  WARN WHEN TODAY IS OUTSIDE THE PERIOD ON SCREEN
 // ═════════════════════════════════════════════════════════
-function renderPeriodHint(){
-  const today = todayStr(), p = settings.period, cur = cycleOf(today);
-  const outside = today < periodStart(p) || today > periodEnd(p);
-  const html = outside ? `<div class="alert a-warn">📅 Today (${today}) belongs to the <b>${esc(periodLabel(cur))}</b> payroll period, but the app is showing <b>${esc(periodLabel(p))}</b> — today's attendance and phone check-ins are not included on this screen.
-      <button class="btn btn-primary btn-sm" data-act="goto-current" style="margin-inline-start:10px">Switch to ${cur}</button>
-      <span class="ro-set-inline"> Ask Finance or the administrator to move the period in Settings.</span></div>` : '';
-  document.querySelectorAll('.period-note').forEach(el => el.innerHTML = html);
-}
+// the notice is drawn by the React dashboard (react/src/dashboard) and the Attendance page
+function renderPeriodHint(){ if (typeof PKR !== 'undefined') PKR.render(); }
 async function gotoCurrentPeriod(){
   const cur = cycleOf(todayStr()), old = settings.period;
   settings.period = cur;
@@ -2299,20 +2269,10 @@ function calcRatesSaved(stored){ settings.calcRates = stored; renderCalc(); DIRT
 //  ANNOUNCEMENTS · EMPLOYEE VOICE · BIRTHDAYS (desktop)
 // ═════════════════════════════════════════════════════════
 const V = { loaded: false };   // the dashboard loads the Employee voice badge once
-const vDate = ts => ts ? new Date(ts).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '';
-const vChip = s => `<span class="chip ${({'Waiting for board':'c-orange','Waiting for HR':'c-blue',Approved:'c-green',Cancelled:'c-grey',New:'c-orange','In review':'c-blue','In progress':'c-blue',Closed:'c-green',Done:'c-green',Rejected:'c-red'})[s]||'c-grey'}">${esc(s)}</span>`;
-const vName = id => { const e = empById(id); return e ? `${empName(e)} (${id})` : id; };
-// ── birthdays ──
-const isBirthdayToday = d => { if (!d) return false; const t = new Date(), b = String(d).slice(5,10), m = String(t.getMonth()+1).padStart(2,'0'), day = String(t.getDate()).padStart(2,'0');
-  return b === `${m}-${day}` || (b === '02-29' && `${m}-${day}` === '02-28' && new Date(t.getFullYear(), 1, 29).getMonth() !== 1); };
-function renderBirthdays(){
-  const box = $('dash-bday'); if (!box) return;
-  const L = (S.employees || []).filter(e => e.status !== 'Inactive' && isBirthdayToday(e.birth_date));
-  box.innerHTML = L.length ? `<div class="alert a-info" style="margin-bottom:14px">🎂 <b>Birthdays today:</b> ${L.map(e => esc(`${empName(e)} (${e.id})${e.department ? ' — ' + e.department : ''}`)).join(' · ')}. Their phone app shows “Petrokima family wishes you a happy birthday”.</div>` : '';
-}
+// (the dashboard's 🎂 birthdays line is React now — react/src/dashboard)
 const _renderDashboardB = renderDashboard;
 // @ts-expect-error — renderDashboard is deliberately extended here (the new version wraps the earlier one)
-renderDashboard = function(){ const r = _renderDashboardB.apply(this, arguments); renderBirthdays(); if (ME && ['admin','hr'].includes(ME.role) && !V.loaded){ V.loaded = true; loadVoice().catch(() => {}); } return r; };
+renderDashboard = function(){ const r = _renderDashboardB.apply(this, arguments); if (ME && ['admin','hr'].includes(ME.role) && !V.loaded){ V.loaded = true; loadVoice().catch(() => {}); } return r; };
 async function renderSelfBirthday(){
   const box = $('self-bday'); if (!box) return;
   const r = await sb.rpc('my_birthday_today').then(x => x, () => (/** @type {{ data?: boolean }} */ ({})));
@@ -2339,7 +2299,7 @@ async function loadVoice(){
 /** after an answer in the React window: the badge, and the board member's dashboard card when it is shown */
 async function voiceChanged(){
   await loadVoice().catch(() => {});
-  if (typeof isBoardViewer === 'function' && isBoardViewer() && await loadBoardRequests(true)) renderBoardRequests();
+  if (typeof isBoardViewer === 'function' && isBoardViewer() && await loadBoardRequests(true) && typeof PKR !== 'undefined') PKR.render();
 }
 
 // ── Basic salary changes (only after the board member approves), resignation ↔ Inactive, re-employment, employment history
@@ -2508,16 +2468,13 @@ function projectsPatched(rows){
   if (typeof PKR !== 'undefined') PKR.render();
 }
 
-// ── dashboard alert + menu badge ──
+// ── menu badge (the dashboard banner is React now — react/src/dashboard) ──
 const _renderDashboardBase = renderDashboard;
 // @ts-expect-error — renderDashboard is deliberately extended here (the new version wraps the earlier one)
 renderDashboard = function(){
   _renderDashboardBase();
-  const flagged = locFlagged(), n = flagged.length, held = flagged.filter(c => c.applied === false).length;
-  const el = $('loc-badge'); if (el) { el.style.display = n ? '' : 'none'; el.textContent = n; }
-  if (n) $('dash-alert').insertAdjacentHTML('beforeend', `<div class="alert ${flagged.some(c => (c.location_flags||[]).includes('fake_gps') || (c.location_flags||[]).includes('impossible_travel')) ? 'a-alarm' : 'a-warn'}" style="margin-bottom:10px;cursor:pointer" data-nav="locations">📍 <b>${n}</b> check-in${n>1?'s':''} with location warnings this period${held ? ` (${held} kept for review, not counted)` : ''} — click to review</div>`);
+  const n = locFlagged().length, el = $('loc-badge'); if (el) { el.style.display = n ? '' : 'none'; el.textContent = String(n); }
 };
-
 
 // ═════════════════════════════════════════════════════════
 //  ATTENDANCE CALENDAR — monthly / weekly view of one employee
@@ -2684,18 +2641,13 @@ function employeePatched(id, patch){
   const i = S.employees.findIndex(x => String(x.id) === String(id));
   if (i >= 0) S.employees[i] = { ...S.employees[i], ...patch };
 }
-// dashboard alert + menu badge (loads once after sign-in, again when the page is opened)
+// menu badge, and the alerts loaded once after sign-in (the dashboard banner is React now — react/src/dashboard)
 const _renderDashboard26 = renderDashboard;
 // @ts-expect-error — renderDashboard is deliberately extended here (the new version wraps the earlier one)
 renderDashboard = function(){
   const r = _renderDashboard26.apply(this, arguments);
   if (canHRA() && !HRA.loaded && !HRA.loading) loadHRAlerts().then(() => renderDashboard(), () => {});
-  const open = hraOpen(), n = open.length, late = open.filter(a => Number(a.days_left) < 0).length;
   hraBadge();
-  if (n && $('dash-alert')){
-    const by = Object.entries(open.reduce((m, a) => (m[a.kind] = (m[a.kind] || 0) + 1, m), {})).map(([k, c]) => `${c} ${(HRA_KIND[k] || [k])[0].replace(/^\S+\s/, '').toLowerCase()}`).join(' · ');
-    $('dash-alert').insertAdjacentHTML('beforeend', `<div class="alert ${late ? 'a-alarm' : 'a-warn'}" style="margin-bottom:10px;cursor:pointer" data-nav="hralerts">🔔 <b>${n} HR alert${n === 1 ? '' : 's'}</b> need${n === 1 ? 's' : ''} attention${late ? ` — ${late} already past the date` : ''}: ${esc(by)}. <u>Open HR alerts</u></div>`);
-  }
   return r;
 };
 
@@ -2952,7 +2904,6 @@ $('idle-stay').addEventListener('click', () => idleTouch());
 //   2. Other requests from the DIRECTORS            — penalties / incentives / variable elements (waiting for the
 //   3. Other requests from the other managers          board member or HR) and training requests (New / In progress)
 // ═════════════════════════════════════════════════════════
-const DIRECTORS = ['189', '212', '333', '748'];   // Hamdy Ragab · Ghadeer Nassar · Khaled Aman · Tamer Nour (employee codes)
 let BRD = { at: 0, busy: false };
 const isBoardViewer = () => !!(ME && (ME.super_admin || ME.board_approver));
 
@@ -2968,57 +2919,15 @@ async function loadBoardRequests(force){
     return true;
   } finally { BRD.busy = false; }
 }
-function boardRow(kind, x){
-  const who = kind === 'act' ? (x.manager_name ? `${x.manager_name} (${x.manager_emp})` : vName(x.manager_emp)) : vName(x.manager_emp);
-  const what = kind === 'hire' ? `👥 <b>${esc(x.headcount)} × ${esc(x.job_name)}</b>${x.needed_by ? ` <span style="color:var(--muted)">· needed by ${esc(x.needed_by)}</span>` : ''}`
-    : kind === 'train' ? `🎓 Training: <b>${esc(x.topic)}</b> <span style="color:var(--muted)">· ${(x.emp_ids || []).length} employee${(x.emp_ids || []).length === 1 ? '' : 's'}</span>`
-    : `${x.kind === 'penalty' ? '⚖️ Penalty' : '💰 ' + esc(x.element_name || 'Incentive')} for <b>${esc(x.emp_name || vName(x.emp_id))}</b>
-       <span style="color:var(--muted)">· ${fmt(x.quantity)} ${x.action_type === 'Amount' ? 'EGP' : x.action_type === 'Days' ? 'day(s)' : 'hour(s)'} · ${esc(x.apply_period || '')}</span>`;
-  const mine = kind === 'act' && x.status === 'Waiting for board';
-  return `<tr data-vo="${kind}:${esc(x.id)}" style="cursor:pointer${mine ? ';background:rgba(224,123,57,.08)' : ''}">
-    <td class="mono" style="white-space:nowrap">${esc(vDate(x.created_at))}</td><td>${esc(who)}</td><td style="white-space:normal">${what}</td>
-    <td>${mine ? '<span class="chip c-orange">Waiting for your approval</span>' : vChip(x.status)}</td></tr>`;
-}
-function boardGroup(icon, title, rows, empty){
-  return `<div class="sec" style="margin:14px 0 6px">${icon} ${title} <span class="chip ${rows.length ? 'c-orange' : 'c-grey'}" style="margin-left:6px">${rows.length}</span></div>
-    ${rows.length ? `<div class="tbl-wrap"><table><thead><tr><th style="width:110px">Sent</th><th style="width:240px">From</th><th>Request</th><th style="width:190px">Status</th></tr></thead>
-      <tbody>${rows.join('')}</tbody></table></div>` : `<div style="font-size:12px;color:var(--muted);padding:4px 0 6px">${empty}</div>`}`;
-}
-function renderBoardRequests(){
-  const box = $('dash-board'); if (!box) return;
-  if (!isBoardViewer()) { box.innerHTML = ''; return; }
-  if (!BRD.at) { box.innerHTML = ''; return; }
-  const isDir = id => DIRECTORS.includes(String(id));
-  const byDate = (a, b) => String(b.x.created_at).localeCompare(String(a.x.created_at));
-  const other = [...BRD.train.map(x => ({ k: 'train', x })), ...BRD.act.map(x => ({ k: 'act', x }))].sort(byDate);
-  const hire = BRD.hire.map(x => boardRow('hire', x));
-  const dir = other.filter(o => isDir(o.x.manager_emp)).map(o => boardRow(o.k, o.x));
-  const mgr = other.filter(o => !isDir(o.x.manager_emp)).map(o => boardRow(o.k, o.x));
-  const waiting = BRD.act.filter(x => x.status === 'Waiting for board').length;
-  box.innerHTML = `<div class="card" style="padding:16px 18px;margin-bottom:16px">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-      <div class="toolbar-title">📋 Pending requests from managers</div>
-      <div style="font-size:12px;color:var(--muted)">${waiting ? `<b style="color:var(--warn)">${waiting} waiting for your approval</b> (approve on the phone app → Approvals) · ` : ''}click a row for details</div></div>
-    ${boardGroup('👥', 'Hiring requests from managers', hire, 'No open hiring requests.')}
-    ${boardGroup('⭐', 'Other requests from directors', dir, 'Nothing pending from the directors.')}
-    ${boardGroup('🧑‍💼', 'Other requests from other managers', mgr, 'Nothing pending from other managers.')}
-  </div>`;
-}
+// The card itself is React since 31 Oct 2026 (react/src/dashboard — the three groups, DIRECTORS, rows that open the Employee voice
+// window). Kept here: loading its lists (bridge boardRequests), at most once a minute when the dashboard is drawn.
 const _renderDashboardBoard = renderDashboard;
 // @ts-expect-error — renderDashboard is deliberately extended here (the new version wraps the earlier one)
 renderDashboard = function(){
   const r = _renderDashboardBoard.apply(this, arguments);
-  if (isBoardViewer()) { renderBoardRequests(); loadBoardRequests(false).then(ch => { if (ch) renderBoardRequests(); }).catch(() => {}); }
-  else { const b = $('dash-board'); if (b) b.innerHTML = ''; }
+  if (isBoardViewer()) loadBoardRequests(false).then(ch => { if (ch && typeof PKR !== 'undefined') PKR.render(); }).catch(() => {});
   return r;
 };
-// a row opens the Employee voice window (React since 30 Oct 2026 — react/src/voice) for that case
-document.addEventListener('click', e => {
-  const r = /** @type {PageEl} */ (e.target).closest('#dash-board [data-vo]'); if (!r) return;
-  const [kind, id] = /** @type {string} */ (r.dataset.vo).split(':');
-  const row = (kind === 'hire' ? BRD.hire : kind === 'act' ? BRD.act : BRD.train).find(x => String(x.id) === id);
-  if (row && typeof PKR !== 'undefined') PKR.openVoice(kind, row);
-});
 
 // ═════════════════════════════════════════════════════════
 //  OUTSIDE MISSIONS — HR final approval page (66, 22 Oct 2026)

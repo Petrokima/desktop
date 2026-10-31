@@ -403,22 +403,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <main class="main">
 
 <!-- DASHBOARD -->
-<div class="page active" id="page-dashboard">
-  <div class="page-header"><div><div class="page-title">Dashboard</div><div class="page-sub" id="dash-date"></div></div>
-    <div class="btn-group"><button class="btn btn-ghost btn-sm" data-act="new-att">+ Log Attendance</button><button class="btn btn-primary btn-sm no-officer" data-nav="payroll">Payroll Run</button></div></div>
-  <div class="period-note"></div>
-  <div id="dash-alert"></div>
-  <div id="dash-bday"></div>
-  <div id="dash-board"></div>
-  <div class="stats">
-    <div class="stat"><div class="stat-label">Active Employees</div><div class="stat-value" id="st-emp">—</div><div class="stat-sub" id="st-emp-sub"></div></div>
-    <div class="stat"><div class="stat-label">Logged Today</div><div class="stat-value" id="st-today">—</div><div class="stat-sub" id="st-today-sub"></div></div>
-    <div class="stat"><div class="stat-label">Projects / Cost Centres</div><div class="stat-value" id="st-proj">—</div></div>
-    <div class="stat no-officer"><div class="stat-label">Net Payroll (period)</div><div class="stat-value" id="st-net" style="font-size:20px">—</div><div class="stat-sub">EGP · computed live</div></div>
-  </div>
-  <div class="card"><div class="toolbar"><span class="toolbar-title">Today's hours by project</span></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Name</th><th class="num">Headcount</th><th class="num">Hours</th></tr></thead><tbody id="dash-tbl"></tbody></table></div></div>
-</div>
+<div class="page active" id="page-dashboard"><div id="react-dashboard"></div></div>   <!-- drawn by React: react/src/dashboard -->
 
 <!-- EMPLOYEES -->
 <div class="page" id="page-employees"><div id="react-employees"></div></div>   <!-- drawn by React: react/src/employees -->
@@ -741,6 +726,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=070d44315558"></script>
-<script src="react.js?v=890b271d2470"></script>
+<script src="app.js?v=60d398e755f5"></script>
+<script src="react.js?v=8fa0b2a16fc9"></script>
 </body></html>

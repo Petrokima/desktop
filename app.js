@@ -3084,23 +3084,8 @@ function makeAttCalendar(p, opts){
   return { load, st };
 }
 
-// ── HR: Attendance page → Calendar tab ──
-const HR_CAL = makeAttCalendar('hc', {
-  getEmp: () => { const v = $('hc-emp').value.trim(); return v ? empById(v.split(' — ')[0].trim()) || null : null; },
-  emptyText: 'Type an employee code or name in the box above to see their attendance calendar',
-  title: e => e ? `${e.id} — ${empName(e)}` : 'Employee calendar', who: true });
-$('hc-emp').addEventListener('change', () => HR_CAL.load());
-/** the Calendar tab of the React Attendance page: show / hide this card; start with the employee typed in the records search
- *  @param {boolean} cal @param {string} typed */
-function showHrCalendar(cal, typed){
-  $('att-cal-wrap').style.display = cal ? '' : 'none';
-  if (cal) {
-    if (!$('hc-emp').value.trim()) { const q = String(typed || '').trim(), e = q && (empById(q) || S.employees.find(x => empName(x).toLowerCase() === q.toLowerCase()));
-      if (e) $('hc-emp').value = `${e.id} — ${empName(e)}`; }
-    HR_CAL.load();
-  }
-}
-
+// (HR's Calendar tab on the Attendance page is React since 31 Oct 2026 — react/src/attendance/AttCalendar.tsx, proven equal by
+//  calendar.golden.json. This factory still draws the employees' own "My attendance" calendar below.)
 // ── Employee: self-service → My attendance ──
 const SELF_CAL = makeAttCalendar('sc', {
   getEmp: () => (typeof SD !== 'undefined' && SD && SD.emp) || null,

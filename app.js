@@ -71,10 +71,6 @@ const DEFAULTS = {
 };
 /** @type {typeof DEFAULTS & { calcRates?: any }} — company settings; calcRates = the payroll calculator's own rates (part21) */
 let settings = { ...DEFAULTS };
-let attDayFilter = null;   // null = whole range
-let ATT_RANGE = null;      // null = the current payroll cycle; otherwise { from, to, rows, clocks } loaded for viewing past attendance
-const attRows   = () => ATT_RANGE ? ATT_RANGE.rows   : S.attendance;
-const attClocks = () => ATT_RANGE ? ATT_RANGE.clocks : S.clocks;
 // manager step on vacation / permission requests
 const waitingManager = r => r.status==='Pending' && r.manager_status==='Pending';
 const readyForHR     = r => r.status==='Pending' && r.manager_status!=='Pending';
@@ -459,7 +455,7 @@ function buildLists(){
 }
 
 // Pages are prepared when they are opened (the payroll calculation, reports and labour cost are the heavy ones)
-const PAGE_RENDER = { dashboard:()=>renderDashboard(), employees:()=>renderEmployees(), attendance:()=>renderAttendance(), projects:()=>renderProjects(),
+const PAGE_RENDER = { dashboard:()=>renderDashboard(), employees:()=>renderEmployees(), projects:()=>renderProjects(),
   loans:()=>renderLoans(), reports:()=>renderReports(), permissions:()=>renderPermissions(),
   leaves:()=>renderLeaves(), exempt:()=>renderExempt(), penalties:()=>renderPenalties(), holidays:()=>renderHolidays(), hrreq:()=>renderHrRequests(),
   reporting:()=>renderReporting(), history:()=>renderHistory(), parrules:()=>renderParRules(), approvals:()=>renderApprovals(), assign:()=>renderAssign(), calc:()=>renderCalc(), news:()=>renderNewsPage() };
@@ -984,155 +980,23 @@ async function saveEmp(){
 // ═════════════════════════════════════════════════════════
 //  ATTENDANCE
 // ═════════════════════════════════════════════════════════
-// 92: when did the offline tap(s) of this line really reach the server (shown to HR before confirming the time)
-function offlineSentNote(a, x){
-  const hm = v => new Date(v).toLocaleTimeString('en-GB', { timeZone:'Africa/Cairo', hour:'2-digit', minute:'2-digit' });
-  const hits = (S.clocks || []).filter(c => String(c.emp_id) === String(a.emp_id) && c.offline && c.local_date === a.date && (c.local_time === x.in || c.local_time === x.out) && c.received_at);
-  return hits.map(c => ` ${c.event_type === 'out' ? 'Check-out' : 'Check-in'} ${c.local_time} reached the server at ${hm(c.received_at)}.`).join('');
+// The records list, the past date range and the entry window moved to React 31 Oct 2026 (react/src/attendance). The Calendar tab
+// (part25) and the fingerprint-machine import (part16) are still here. The old code keeps the cycle's records (S.attendance).
+function renderAttendance(){ if (typeof PKR !== 'undefined') PKR.render(); }
+/** a record saved in the React window: kept when it is in the loaded payroll cycle; payroll, dashboard and reports follow @param {AttendanceRow} saved */
+function attendanceSaved(saved){
+  const inPeriod = saved.date >= periodStart(settings.period) && saved.date <= periodEnd(settings.period);
+  S.attendance = S.attendance.filter(a => a.id !== saved.id); if (inPeriod) S.attendance.push(saved);
+  renderAttendance(); renderDashboard(); renderPayroll(); renderReports();
 }
-function renderAttendance(){
-  const q = $('att-q').value.trim().toLowerCase();
-  const base = attRows().filter(a => (!attDayFilter || a.date===attDayFilter) && orgMatch(empById(a.emp_id),'att') &&
-      (!q || [a.emp_id,a.emp_name].some(v=>String(v||'').toLowerCase().includes(q))));
-  const st = stFill('att-status', base.map(a => a.status));
-  const list = base.filter(a => !st || a.status===st)
-    .sort((a,b)=> (b.date||'').localeCompare(a.date||''));
-  const shown = list.slice(0,500);
-  $('att-tbl').innerHTML = shown.map(a => `<tr class="click" data-att-edit="${a.id}">
-    <td class="strong">${esc(a.emp_name||a.emp_id)} <span class="mono" style="color:var(--muted)">${esc(a.emp_id)}</span></td>
-    <td class="mono">${esc(a.date)}${a.source==='Mobile'?' <span title="Recorded from the mobile app">📱</span>':a.source==='Machine'?' <span title="Imported from the HQ fingerprint machine">🖐</span>':a.source==='Combined'?' <span title="Phone and fingerprint machine combined: first punch to last punch">📱🖐</span>':''}${isHoliday(a.date)?' <span class="chip c-blue" title="Public holiday">Holiday</span>':''}</td><td class="mono">${esc(a.check_in||'—')}</td><td class="mono">${attNoOut(a) ? '<span class="neg" title="No check-out recorded — open the record and enter the time the employee left">⚠ missing</span>' : esc(a.check_out||'—')}</td>
-    <td class="num">${attNoOut(a) ? '<span style="color:var(--muted)" title="Not calculated until the check-out is recorded or settled by HR">—</span>' : fmt(a.total_hours)}</td>
-    <td style="white-space:normal">${(a.projects||[]).map(x=>x.missing ? `<span class="tag" style="border-color:rgba(217,79,79,.5);color:var(--danger)" title="Only one punch on the machine — add the missing time">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)} · missing punch</span>`
-      : x.review && x.why === 'offline' ? `<span class="tag" style="border-color:rgba(224,123,57,.5);color:var(--warn)" title="Tapped with no internet and sent late — the time comes from the phone.${offlineSentNote(a, x)} Check it, correct if needed, and save: until then this day has no deductions and no overtime">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)}–${esc(x.out || '?')} · offline time to confirm</span>`
-      : x.review ? `<span class="tag" style="border-color:rgba(224,123,57,.5);color:var(--warn)" title="More than 16 hours between first and last punch — check and correct">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)}–${esc(x.out)} · ${fmt(x.hours)}h to check</span>`
-      : x.forgotten ? `<span class="tag" style="border-color:rgba(217,79,79,.5);color:var(--danger)" title="Checked in from the phone but never checked out — open the record and enter the check-out time">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)}–? missing check-out</span>`
-      : !x.out && x.in && a.date < todayStr() ? `<span class="tag" style="border-color:rgba(217,79,79,.5);color:var(--danger)" title="No check-out recorded — open the record and enter the check-out time">⚠ ${esc(x.code || 'No project')} · ${esc(x.in)}–? missing check-out</span>`
-      : !x.out && x.in ? `<span class="tag" style="border-color:rgba(34,197,160,.5);color:var(--accent2)">${esc(x.code || 'No project')} · ${esc(x.in)}–on site</span>`
-      : `<span class="tag"${x.src==='Machine'?' title="Time recorded only by the fingerprint machine"':''}>${x.src==='Machine'?'🖐 ':''}${esc(x.code || 'No project')}${x.in?` · ${esc(x.in)}–${esc(x.out)}`:''} · ${fmt(x.hours)}h</span>`).join('')||'—'}</td>
-    <td style="white-space:normal;min-width:120px">${mapLinks(a.emp_id, a.date)}</td>
-    ${(()=>{ const r=dayRules(a, empById(a.emp_id)); if (r.exempt) return `<td class="num">—</td><td class="num" colspan="2" style="text-align:center"><span class="chip c-blue">Exception</span></td>`;
-      const cellD=(net,raw)=> net ? `<span class="neg">${fmt(net)}</span>` : (raw ? `<span class="chip c-green" title="${fmt(raw)} h waived by approved permission">waived</span>` : '—');
-      return `<td class="num">${r.ot?`<span style="color:var(--warn)">+${fmt(r.ot)}</span>`:'—'}</td><td class="num">${cellD(r.late,r.lateRaw)}</td><td class="num">${cellD(r.early,r.earlyRaw)}</td>`; })()}
-    <td>${chip(a.status)}</td><td><button class="icon-btn" data-del-att="${a.id}" title="Close (a reason is required)">⊘</button></td></tr>`).join('')
-    || '<tr><td colspan="12" class="empty">No attendance records for this selection</td></tr>';
-  const rangeTxt = ATT_RANGE ? `${ATT_RANGE.from} → ${ATT_RANGE.to}` : 'Payroll cycle ' + periodLabel(settings.period);
-  $('att-foot').textContent = `${attDayFilter ? 'Day '+attDayFilter : rangeTxt}: ${list.length.toLocaleString()} records${list.length>500?' (showing latest 500 — pick a day or search to narrow)':''}.`;
-  $('att-range-note').textContent = ATT_RANGE ? '📅 Viewing past attendance — the payroll cycle is not changed' : '';
-  if (!ATT_RANGE && !$('att-from').value){ $('att-from').value = periodStart(settings.period); $('att-to').value = periodEnd(settings.period); }
-}
+/** a day closed (with a reason) on the React page @param {string} id */
+function attendanceClosed(id){ S.attendance = S.attendance.filter(r => r.id !== id); renderAttendance(); renderDashboard(); renderPayroll(); renderReports(); }
 
 // Time 'HH:MM' → minutes after midnight; a missing time → null.
 /** @overload @param {string} t  a filled-in time @returns {number} */
 /** @overload @param {string | null | undefined} t  a time that may be missing @returns {number | null} */
 /** @param {string | null | undefined} t */
 function toMin(t){ if(!t) return null; const [h,m]=String(t).split(':').map(Number); return h*60+m; }
-function segHours(tin, tout){
-  const a=toMin(tin), b=toMin(tout); if(a===null||b===null) return 0;
-  let d=b-a; if(d<0) d+=1440; return Math.round(d/60*100)/100;
-}
-function addSplit(code='', tin='', tout=''){
-  const rows=[...document.querySelectorAll('#a-splits .split')];
-  const st = settings.shiftStart || '08:00';
-  if (!tin) tin = rows.length ? (/** @type {HTMLInputElement} */ (rows[rows.length-1].querySelector('[data-s="out"]')).value || '') : st;
-  if (!tout && !rows.length){ const m=(toMin(st)+Math.round(num(settings.hoursPerDay)*60))%1440; tout=`${pad(Math.floor(m/60))}:${pad(m%60)}`; }
-  const d=document.createElement('div');
-  d.className='split'; d.style='display:grid;grid-template-columns:1fr 104px 104px 58px 32px;gap:8px;margin-bottom:8px;align-items:center';
-  d.innerHTML = `<input class="inp" style="width:100%" list="dl-proj" data-s="proj" placeholder="Type project code or name…" value="${esc(code)}">
-    <input class="inp" style="width:100%" type="time" data-s="in" value="${esc(tin)}">
-    <input class="inp" style="width:100%" type="time" data-s="out" value="${esc(tout)}">
-    <span class="mono" data-s="hrs" style="text-align:right;color:var(--text)">—</span>
-    <button class="icon-btn" data-rm-split title="Remove line">🗑</button>`;
-  $('a-splits').appendChild(d); checkSplits();
-}
-function readSplits(){
-  return [...document.querySelectorAll('#a-splits .split')].map(r => ({
-    row:r, proj:/** @type {HTMLInputElement} */ (r.querySelector('[data-s="proj"]')).value.trim(),
-    tin:/** @type {HTMLInputElement} */ (r.querySelector('[data-s="in"]')).value, tout:/** @type {HTMLInputElement} */ (r.querySelector('[data-s="out"]')).value }));
-}
-function checkSplits(){
-  const L=readSplits(), msgs=[]; let total=0;
-  L.forEach(l => { const h=segHours(l.tin,l.tout); /** @type {PageEl} */ (l.row.querySelector('[data-s="hrs"]')).textContent = h ? fmt(h) : '—'; total+=h; });
-  const timed = L.filter(l=>l.tin&&l.tout).map(l=>({...l,a:toMin(l.tin),b:toMin(l.tout)})).filter(l=>l.b>l.a).sort((x,y)=>x.a-y.a);
-  L.filter(l => l.tin && !l.tout).forEach(l => msgs.push(`<span class="neg">⚠ ${esc(l.proj || 'No project')} from ${esc(l.tin)} has no check-out — enter the time the employee left, then Save. The day's hours are not counted until then.</span>`));
-  for (let i=1;i<timed.length;i++) if (timed[i].a < timed[i-1].b) msgs.push(`<span class="neg">⚠ ${timed[i-1].tin}–${timed[i-1].tout} overlaps ${timed[i].tin}–${timed[i].tout}</span>`);
-  const first = timed.length ? timed[0].tin : '', last = timed.length ? timed.reduce((m,l)=>l.b>toMin(m)?l.tout:m, timed[0].tout) : '';
-  const emp = empById(parseEmpInput($('a-emp').value));
-  const R = dayRules({ status:$('a-status').value, total_hours:total, check_in:first, date:$('a-date').value, emp_id: emp?emp.id:null }, emp);
-  const extra = Math.max(0, total - num(settings.hoursPerDay));
-  const lv = emp ? leaveOn(emp.id, $('a-date').value) : null, hol = holidayOn($('a-date').value);
-  $('a-check').innerHTML = (hol ? `<div class="alert a-info" style="margin:0 0 8px">📅 <b>${esc(hol.name)}</b> is a public holiday. Working today earns ${num(settings.holidayExtraDays)||1} extra day's pay; no late/early deduction applies.</div>` : '') + (lv ? `<div class="alert a-warn" style="margin:0 0 8px">🌴 ${esc(empName(emp))} is on <b>${esc(lv.leave_type)}</b> leave ${esc(lv.date_from)} → ${esc(lv.date_to)}. No late/early deduction applies on this day.</div>` : '') + (L.length ? `<b style="color:var(--text)">${fmt(total)} h</b> across ${L.length} line${L.length>1?'s':''}` +
-      (first ? ` · day check-in <b>${first}</b>, check-out <b>${last}</b>` : '') +
-      (R.exempt ? ` · <span class="chip c-blue">Exception rule — no overtime or delay</span>`
-        : (R.ot ? ` · <span style="color:var(--warn)">overtime ${fmt(R.ot)} h</span>` : (extra>0 ? ` · ${fmt(extra)} h extra (below the ${fmt(settings.otThreshold)} h overtime minimum)` : '')) +
-          (R.late ? ` · <span class="neg">late ${fmt(R.late)} h</span>` : '') +
-          (R.early ? ` · <span class="neg">early/short ${fmt(R.early)} h</span>` : '') +
-          (R.waived ? ` · <span class="pos">${fmt(R.waived)} h waived by approved permission</span>` : '')) : '') + (msgs.length ? '<br>'+msgs.join('<br>') : '');
-}
-function toggleWork(){ const s=$('a-status').value; $('a-work').style.display = (s==='Present'||s==='Half Day') ? 'block' : 'none'; }
-let editingAtt = null;
-function openAtt(rec){
-  editingAtt = rec ? rec.id : null;
-  $('a-title').textContent = rec ? 'Edit attendance' : 'Log attendance';
-  const e = rec ? empById(rec.emp_id) : null;
-  $('a-emp').value = rec ? `${rec.emp_id} — ${empName(e) || rec.emp_name || ''}` : '';
-  $('a-date').value = rec ? rec.date : todayStr();
-  $('a-status').value = rec ? (rec.status||'Present') : 'Present';
-  $('a-notes').value = rec ? (rec.notes||'') : '';
-  $('a-splits').innerHTML='';
-  if (rec && (rec.projects||[]).length){
-    rec.projects.forEach(x => addSplit(projLabel(x.code), x.in || '', x.out || ''));
-    // legacy records stored hours only: keep the day's times on a single line
-    if (rec.projects.length===1 && !rec.projects[0].in){ const r=$('a-splits').querySelector('.split');
-      r.querySelector('[data-s="in"]').value = rec.check_in||''; r.querySelector('[data-s="out"]').value = rec.check_out||''; }
-  } else addSplit();
-  toggleWork(); checkSplits(); openM('m-att'); if(!rec) setTimeout(()=>$('a-emp').focus(),50);
-}
-async function saveAtt(){
-  const empId = parseEmpInput($('a-emp').value);
-  if (!empId) return toast('Pick an employee from the list','warn');
-  const date = $('a-date').value; if(!date) return toast('Date is required','warn');
-  const status=$('a-status').value, working = status==='Present'||status==='Half Day';
-  let segs=[]; const empRec = empById(empId);
-  if (working){
-    for (const l of readSplits()){
-      if (!l.proj && !l.tin && !l.tout) continue;
-      const code = (!l.proj && empRec && !empRec.project_staff) ? '' : parseProjInput(l.proj);
-      if (code === null) return toast(l.proj ? `"${l.proj}" is not a valid project — pick it from the suggestions` : 'Every line needs a project (site staff must always work at a project)','warn');
-      if (!l.tin || !l.tout) return toast(`Enter both check-in and check-out for ${code || 'the no-project line'}`,'warn');
-      const h=segHours(l.tin,l.tout); if (!h) return toast(`Check-out must be after check-in for ${code || 'the no-project line'}`,'warn');
-      segs.push({ code, in:l.tin, out:l.tout, hours:h });
-    }
-    if (!segs.length) return toast('Add at least one project line with times','warn');
-    const s=[...segs].sort((x,y)=>toMin(x.in)-toMin(y.in));
-    for (let i=1;i<s.length;i++) if (toMin(s[i].in) < toMin(s[i-1].out) && toMin(s[i-1].out) > toMin(s[i-1].in))
-      return toast(`${s[i-1].code} ${s[i-1].in}–${s[i-1].out} overlaps ${s[i].code} ${s[i].in}–${s[i].out}`,'warn');
-  }
-  if (!editingAtt){
-    const dup = S.attendance.find(a => String(a.emp_id)===empId && a.date===date);
-    if (dup && !confirm(`${empId} already has a record on ${date}. Save a second one anyway?`)) return;
-  }
-  const total = segs.reduce((t,x)=>t+x.hours,0);
-  const sorted=[...segs].sort((x,y)=>toMin(x.in)-toMin(y.in));
-  const e = empById(empId);
-  const rec = { emp_id:empId, emp_name:empName(e), date, status, projects:segs, notes:$('a-notes').value.trim(),
-    check_in: sorted.length ? sorted[0].in : null,
-    check_out: sorted.length ? sorted.reduce((m,x)=>toMin(x.out)>toMin(m)?x.out:m, sorted[0].out) : null,
-    total_hours: Math.round(total*100)/100, ot_hours: 0 };
-  rec.ot_hours = dayRules(rec, e).ot;
-  const btn=$('a-save'); btn.disabled=true;
-  const res = editingAtt ? await sb.from('attendance').update(rec).eq('id',editingAtt).select()
-                         : await sb.from('attendance').insert(rec).select();
-  btn.disabled=false;
-  if (res.error) return toast(res.error.message,'err');
-  if (!(res.data && res.data.length)) return toast(NOPERM,'err'); 
-  const saved=res.data[0], inPeriod = date>=periodStart(settings.period) && date<=periodEnd(settings.period);
-  S.attendance = S.attendance.filter(a=>a.id!==saved.id); if (inPeriod) S.attendance.push(saved);
-  if (ATT_RANGE){ ATT_RANGE.rows = ATT_RANGE.rows.filter(a=>a.id!==saved.id); if (date>=ATT_RANGE.from && date<=ATT_RANGE.to) ATT_RANGE.rows.push(saved); }
-  closeM('m-att'); renderAttendance(); renderDashboard(); renderPayroll(); renderReports();
-  toast(editingAtt ? 'Attendance updated' : 'Attendance saved');
-}
-
-$('a-date').addEventListener('change', checkSplits);
 
 // ═════════════════════════════════════════════════════════
 //  PROJECTS
@@ -1281,7 +1145,6 @@ document.addEventListener('click', async ev => {
   const act = t.closest('[data-act]');
   if (act){ const a = act.dataset.act;
     if (a==='new-emp') return openEmp(null);
-    if (a==='new-att') return openAtt(null);
     if (a==='myprofile') return showSelf(ME, { email: ME.email });
     if (a==='goto-current') return gotoCurrentPeriod();
     if (a==='theme') return openTheme();
@@ -1294,24 +1157,12 @@ document.addEventListener('click', async ev => {
     if (a==='disconnect'){ ev.preventDefault(); return disconnect(); }
   }
   const er = t.closest('[data-emp]'); if (er) return openEmp(er.dataset.emp);
-  if (t.closest('[data-rm-split]')){ t.closest('.split')?.remove(); return checkSplits(); }
   const df = t.closest('[data-del-fixed]');
   if (df){ const id=/** @type {string} */ (df.dataset.delFixed); return askReason('Close salary element', 'Close this salary element for the employee? It is kept in the register of closed records with your reason.', 'Close element', async reason=>{ await closeRecords('employee_salary_elements', [{ id }], reason); S.fixed=S.fixed.filter(r=>r.id!==id); renderPackage(); renderPayroll(); renderDashboard(); toast('Element closed'); }); }
-  const da = t.closest('[data-del-att]');
-  if (da){ const id=/** @type {string} */ (da.dataset.delAtt); return askReason('Close attendance day', 'Close this attendance day? It leaves the list and is kept in the register of closed records with your reason.', 'Close day', async reason=>{ await closeRecords('attendance', [{ id }], reason); S.attendance=S.attendance.filter(r=>r.id!==id); if (ATT_RANGE) ATT_RANGE.rows=ATT_RANGE.rows.filter(r=>r.id!==id); renderAttendance(); renderDashboard(); renderPayroll(); renderReports(); toast('Attendance day closed'); }); }
-  const ae = t.closest('[data-att-edit]'); if (ae && !t.closest('[data-del-att]')) { const r=attRows().find(x=>String(x.id)===ae.dataset.attEdit); if(r) return openAtt(r); }
 });
 
 // inputs
 ['emp-q','emp-dept','emp-unit','emp-status'].forEach(id => $(id).addEventListener('input', renderEmployees));
-$('att-q').addEventListener('input', renderAttendance);
-$('att-day').addEventListener('change', e => { attDayFilter = /** @type {PageEl} */ (e.target).value || null; renderAttendance(); });
-$('att-all').addEventListener('click', () => { attDayFilter = null; $('att-day').value=''; renderAttendance(); });
-$('a-status').addEventListener('change', () => { toggleWork(); checkSplits(); });
-$('a-emp').addEventListener('input', checkSplits);
-$('a-splits').addEventListener('input', checkSplits);
-$('a-add-split').addEventListener('click', () => addSplit());
-$('a-save').addEventListener('click', saveAtt);
 $('emp-save').addEventListener('click', saveEmp);
 $('emp-pkg').addEventListener('click', e => { if (/** @type {PageEl} */ (e.target).id==='pk-add') addPackageRow(); });
 $('set-save').addEventListener('click', saveSettings);
@@ -2216,18 +2067,6 @@ async function gotoCurrentPeriod(){
 //  PHONE LOCATIONS & REGISTERED PHONES
 // ═════════════════════════════════════════════════════════
 function mapUrl(c){ return (c && c.lat != null && c.lng != null) ? `https://www.google.com/maps?q=${c.lat},${c.lng}` : null; }
-function mapLinks(empId, date){
-  const ev = attClocks().filter(c => String(c.emp_id)===String(empId) && c.local_date===date).sort((a,b)=>String(a.local_time).localeCompare(String(b.local_time)));
-  if (!ev.length) return '<span style="color:var(--muted)">—</span>';
-  return ev.map(c => { const u = mapUrl(c), off = !!c.offline, corr = /corrected/.test(c.time_method || '');
-    const lbl = `${off ? (corr ? '<span style="color:var(--danger)">📴⚠</span> ' : '📴 ') : ''}${c.event_type==='in'?'In':'Out'} ${esc(c.local_time)}${c.event_type==='in' ? ' · ' + esc(c.project_code || 'no project') : ''}`;
-    const tip = [`Open on Google Maps — accuracy about ${c.accuracy ?? '?'} m`,
-                 off ? `Recorded with no internet; sent ${String(c.received_at||'').slice(0,16).replace('T',' ')} UTC; time from the ${c.time_method || 'phone clock'}` : '',
-                 corr ? 'The phone clock was wrong when it reconnected, and the server corrected this time — review it' : ''].filter(Boolean).join('\n');
-    return u ? `<a class="maplink" href="${u}" target="_blank" rel="noopener" title="${esc(tip)}">📍 ${lbl}</a>`
-             : c.location_exempt ? `<span style="color:var(--warn);white-space:nowrap" title="No location — allowed by an exception the administrator set">⌀ ${lbl} · no location (exception)</span>`
-             : `<span style="color:var(--muted);white-space:nowrap" title="No location recorded">⌀ ${lbl}</span>`; }).join('<br>');
-}
 
 function renderEmpDevice(){
   const box = $('emp-dev'); if (!box) return;
@@ -2456,7 +2295,7 @@ async function miImport(){
     toast(`Import stopped: ${e.message}. Nothing is duplicated — you can import the same file again.`, 'err');
   }
 }
-$('mi-open').addEventListener('click', openMachineImport);
+// (the "🖐 Import fingerprint machine" button is on the React Attendance page since 31 Oct — it calls openMachineImport through the bridge)
 $('mi-file').addEventListener('change', miPreview);
 ['mi-from','mi-to'].forEach(id => $(id).addEventListener('change', () => { if ($('mi-file').files[0]) miPreview(); }));
 $('mi-go').addEventListener('click', miImport);
@@ -2495,28 +2334,7 @@ function miPhoneOnly(ex){
   return { projects: phone, check_in: ins[0] || null, check_out: outs[outs.length-1] || null, total_hours: miSegHours(phone), source: 'Mobile', notes: null };
 }
 
-// ═════════════════════════════════════════════════════════
-//  PAST ATTENDANCE — any date range, without changing the payroll cycle
-// ═════════════════════════════════════════════════════════
-async function loadAttRange(){
-  const from = $('att-from').value, to = $('att-to').value;
-  if (!from || !to) return toast('Choose both dates','warn');
-  if (to < from) return toast('“To” is before “From”','warn');
-  if ((new Date(to).getTime() - new Date(from).getTime()) / 86400000 > 400) return toast('Please choose at most about one year at a time','warn');
-  const b = $('att-load'); b.disabled = true; b.textContent = 'Loading…';
-  try {
-    const [rows, clocks] = await Promise.all([
-      fetchAll('attendance','date', q => q.gte('date', from).lte('date', to)),
-      fetchAll('clock_events','at', q => q.gte('local_date', from).lte('local_date', to)).catch(() => []) ]);
-    ATT_RANGE = { from, to, rows, clocks }; attDayFilter = null; $('att-day').value = '';
-    renderAttendance();
-    toast(`${rows.length.toLocaleString()} attendance records from ${from} to ${to}`);
-  } catch(e){ toast(e.message,'err'); }
-  b.disabled = false; b.textContent = 'Show';
-}
-function backToCycle(){ ATT_RANGE = null; attDayFilter = null; $('att-day').value=''; $('att-from').value = periodStart(settings.period); $('att-to').value = periodEnd(settings.period); renderAttendance(); }
-$('att-load').addEventListener('click', loadAttRange);
-$('att-cur').addEventListener('click', backToCycle);
+// (Past attendance — any date range — moved to the React Attendance page, 31 Oct 2026.)
 
 // ═════════════════════════════════════════════════════════
 //  PROJECT ALLOWANCE RULES
@@ -2569,7 +2387,7 @@ function allowanceApprovalsUpdated(rows){
 // ═════════════════════════════════════════════════════════
 //  DEPARTMENT + UNIT FILTERS — on every page that lists employees
 // ═════════════════════════════════════════════════════════
-const ORG_PAGES = { emp:()=>renderEmployees(), att:()=>renderAttendance(),
+const ORG_PAGES = { emp:()=>renderEmployees(),
   rep:()=>{ if (repCur) runReport(); } };
 // does this employee match the department and unit chosen on page p?
 function orgMatch(e, p){
@@ -3460,17 +3278,16 @@ const HR_CAL = makeAttCalendar('hc', {
   emptyText: 'Type an employee code or name in the box above to see their attendance calendar',
   title: e => e ? `${e.id} — ${empName(e)}` : 'Employee calendar', who: true });
 $('hc-emp').addEventListener('change', () => HR_CAL.load());
-function attTab(cal){
-  $('att-cal-wrap').style.display = cal ? '' : 'none'; $('att-list-card').style.display = cal ? 'none' : '';
-  $('att-tab-cal').classList.toggle('on', cal); $('att-tab-list').classList.toggle('on', !cal);
-  if (cal) {                                           // start with the employee typed in the records search, if it is one
-    if (!$('hc-emp').value.trim()) { const q = $('att-q').value.trim(), e = q && (empById(q) || S.employees.find(x => empName(x).toLowerCase() === q.toLowerCase()));
+/** the Calendar tab of the React Attendance page: show / hide this card; start with the employee typed in the records search
+ *  @param {boolean} cal @param {string} typed */
+function showHrCalendar(cal, typed){
+  $('att-cal-wrap').style.display = cal ? '' : 'none';
+  if (cal) {
+    if (!$('hc-emp').value.trim()) { const q = String(typed || '').trim(), e = q && (empById(q) || S.employees.find(x => empName(x).toLowerCase() === q.toLowerCase()));
       if (e) $('hc-emp').value = `${e.id} — ${empName(e)}`; }
     HR_CAL.load();
   }
 }
-$('att-tab-list').addEventListener('click', () => attTab(false));
-$('att-tab-cal').addEventListener('click', () => attTab(true));
 
 // ── Employee: self-service → My attendance ──
 const SELF_CAL = makeAttCalendar('sc', {
@@ -4554,8 +4371,6 @@ function stFill(id, vals){
   sel.classList.toggle('st-on', !!keep);
   return keep;
 }
-/** @type {[string, () => void][]} */ ([['att-status', () => renderAttendance()]])   // loans: React page since 30 Oct
-  .forEach(([id, fn]) => { const el = $(id); if (el) el.addEventListener('change', fn); });
 
 // on-screen filter for a table body: adds the box to the card's toolbar and re-applies whenever the rows are redrawn
 function stCellText(td){

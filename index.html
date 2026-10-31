@@ -437,12 +437,8 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </div>
 
 <!-- ATTENDANCE -->
-<div class="page" id="page-attendance">
-  <div class="page-header"><div><div class="page-title">Attendance</div><div class="page-sub">Each line records a project with its own check-in and check-out · click a record to edit it</div></div>
-    <div class="btn-group"><button class="btn btn-ghost" id="mi-open">🖐 Import fingerprint machine</button><button class="btn btn-primary" data-act="new-att">+ Add Entry</button></div></div>
-  <div class="period-note"></div>
-  <div class="lock-note"></div>
-  <div class="calv-seg" style="margin-bottom:14px"><button class="btn btn-sm on" id="att-tab-list">📋 Records</button><button class="btn btn-sm" id="att-tab-cal">📅 Calendar</button></div>
+<div class="page" id="page-attendance"><div id="react-attendance"></div>   <!-- drawn by React: react/src/attendance -->
+  <!-- the Calendar tab (still the old part25 calendar) — shown by the React page's tab -->
   <div id="att-cal-wrap" style="display:none">
   <div class="card" id="hc-card">
     <div class="toolbar" style="flex-wrap:wrap;gap:8px"><span class="toolbar-title" id="hc-title">Employee calendar</span>
@@ -456,16 +452,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
     <div id="hc-grid" class="calv"></div>
     <div class="foot" id="hc-sum"></div>
   </div>
-  </div>
-  <div class="card" id="att-list-card">
-    <div class="toolbar"><span class="toolbar-title">Records</span>
-      <div class="toolbar-right"><select class="sel" id="att-status" title="Filter by status"><option value="">All statuses</option></select><input type="date" class="sel" id="att-day" title="Show one day"><button class="btn btn-ghost btn-sm" id="att-all">Whole range</button><input class="inp" id="att-q" placeholder="Search employee…"></div></div>
-    <div class="toolbar" style="border-top:1px solid var(--border);padding-top:10px;gap:8px;flex-wrap:wrap">
-      <span style="font-size:13px;color:var(--label)">Show attendance from</span><input type="date" class="sel" id="att-from"><span style="font-size:13px;color:var(--label)">to</span><input type="date" class="sel" id="att-to">
-      <button class="btn btn-primary btn-sm" id="att-load">Show</button><button class="btn btn-ghost btn-sm" id="att-cur">Current payroll cycle</button>
-      <span id="att-range-note" style="font-size:12px;color:var(--muted)"></span></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Date</th><th>In</th><th>Out</th><th class="num">Hours</th><th>Project split</th><th>Phone locations</th><th class="num">OT</th><th class="num">Late</th><th class="num">Early</th><th>Status</th><th></th></tr></thead><tbody id="att-tbl"></tbody></table></div>
-    <div class="foot" id="att-foot"></div>
   </div>
 </div>
 
@@ -708,25 +694,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </div></div>
 
 
-<!-- MODAL: ATTENDANCE -->
-<div class="overlay" id="m-att"><div class="modal" style="max-width:680px">
-  <div class="modal-head"><div class="modal-title" id="a-title">Log attendance</div><button class="x" data-close="m-att">×</button></div>
-  <div class="grid2">
-    <div class="field full"><label>Employee (type code or name)</label><input id="a-emp" list="dl-emp" placeholder="Start typing…"></div>
-    <div class="field"><label>Date</label><input type="date" id="a-date"></div>
-    <div class="field"><label>Status</label><select id="a-status"><option>Present</option><option>Half Day</option><option>Annual Leave</option><option>Sick Leave</option><option>Absent</option></select></div>
-  </div>
-  <div id="a-work">
-    <div class="sec">Project time — one line per site, each with its own check-in and check-out</div>
-    <div style="display:grid;grid-template-columns:1fr 104px 104px 58px 32px;gap:8px;font-size:11px;color:var(--muted);margin-bottom:6px">
-      <span>Project</span><span>Check-in</span><span>Check-out</span><span style="text-align:right">Hours</span><span></span></div>
-    <div id="a-splits"></div>
-    <button class="btn btn-ghost btn-sm" id="a-add-split">+ Add project</button>
-    <div id="a-check" style="font-size:12px;margin-top:10px;color:var(--muted);line-height:1.6"></div>
-  </div>
-  <div class="field" style="margin-top:14px"><label>Notes</label><textarea id="a-notes"></textarea></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-att">Cancel</button><button class="btn btn-primary" id="a-save">Save entry</button></div>
-</div></div>
 
 <!-- MODAL: PROJECT -->
 <!-- MODAL: LOAN -->
@@ -911,6 +878,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=5358307f7ec2"></script>
-<script src="react.js?v=aae2e62ba8ad"></script>
+<script src="app.js?v=6e81462c6c9b"></script>
+<script src="react.js?v=fdc335330d64"></script>
 </body></html>

@@ -266,20 +266,8 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
     <div class="nav-item" data-spage="prof">👤 My profile</div>
   </nav>
   <main class="main" style="max-width:1100px">
-    <div class="page-header"><div><div class="page-title" id="self-title"></div><div class="page-sub" id="self-sub"></div></div></div>
-    <div id="self-bday"></div>
-    <div id="self-req">
-      <div class="stats" id="self-stats"></div>
-      <div class="btn-group" style="margin-bottom:18px">
-        <button class="btn btn-primary" data-act="self-leave">🌴 Request vacation</button>
-        <button class="btn btn-primary" data-act="self-perm">✋ Request late arrival / early leave</button>
-        <button class="btn btn-ghost" data-act="self-hr">📨 Other HR request</button>
-        <button class="btn btn-ghost" id="smis-new">🚗 Outside mission</button>
-      </div>
-      <div id="smis-ack"></div>
-      <div class="card"><div class="toolbar"><span class="toolbar-title">My requests</span><span style="margin-left:auto;font-size:12px;color:var(--muted)">Pending requests can be cancelled</span></div>
-        <div class="tbl-wrap"><table><thead><tr><th>Submitted</th><th>Request</th><th>Details</th><th>Status</th><th>HR reply</th><th></th></tr></thead><tbody id="self-list"></tbody></table></div></div>
-    </div>
+    <div id="react-self-head"></div>
+    <div id="self-req"><div id="react-self-req"></div></div>
     <div id="self-team" style="display:none">
       <div class="card" id="smis-card" style="display:none"><div class="toolbar"><span class="toolbar-title">🚗 Outside missions — your team</span>
         <div class="toolbar-right"><button class="btn btn-primary btn-sm" id="smis-assign">🚗 Assign a mission</button></div></div>
@@ -335,10 +323,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
       <div class="card" id="self-pay-card" style="display:none"><div class="toolbar"><span class="toolbar-title">My approved payslips</span><div class="toolbar-right"><button class="btn btn-ghost btn-sm" id="self-pay-relock">🔒 Lock</button></div></div>
         <div class="tbl-wrap"><table><thead><tr><th>Payroll</th><th class="num">Gross</th><th class="num">Deductions</th><th class="num">Net pay</th><th></th></tr></thead><tbody id="self-slips"></tbody></table></div></div>
     </div>
-    <div id="self-prof" style="display:none">
-      <div class="card" style="padding:22px" id="self-body"></div>
-      <div class="alert a-info">If any of your details are wrong, send an “Update my personal data” request from My requests.</div>
-    </div>
+    <div id="self-prof" style="display:none"><div id="react-self-prof"></div></div>
   </main>
   </div>
 </div>
@@ -534,41 +519,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <!-- MODAL: HOLIDAY -->
 
 
-<!-- MODAL: SELF VACATION -->
-<div class="overlay" id="m-sl"><div class="modal">
-  <div class="modal-head"><div class="modal-title">Request vacation</div><button class="x" data-close="m-sl">×</button></div>
-  <div class="grid2">
-    <div class="field"><label>Type</label><select id="sl-type"><option>Annual</option><option>Casual</option><option>Sick</option><option>Unpaid</option><option>Other paid</option></select></div>
-    <div class="field"><label>Working days (calculated)</label><input type="number" step="0.5" min="0.5" id="sl-days"></div>
-    <div class="field"><label>From</label><input type="date" id="sl-from"></div>
-    <div class="field"><label>To</label><input type="date" id="sl-to"></div>
-    <div class="field full"><label>Reason / notes</label><input id="sl-reason" placeholder="e.g. family travel · for sick leave, mention the medical report"></div>
-  </div>
-  <div id="sl-hint" style="font-size:12px;margin-top:10px;line-height:1.7"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-sl">Cancel</button><button class="btn btn-primary" id="sl-send">Send request</button></div>
-</div></div>
-
-<!-- MODAL: SELF PERMISSION -->
-<div class="overlay" id="m-sp"><div class="modal" style="max-width:480px">
-  <div class="modal-head"><div class="modal-title">Request late arrival / early leave</div><button class="x" data-close="m-sp">×</button></div>
-  <div class="grid2">
-    <div class="field"><label>Date</label><input type="date" id="sp-date"></div>
-    <div class="field"><label>Type</label><select id="sp-type"><option>Late arrival</option><option>Early leave</option></select></div>
-    <div class="field"><label>Hours (maximum <span id="sp-max"></span>)</label><input type="number" step="0.25" min="0.25" id="sp-hours"></div>
-    <div class="field full"><label>Reason</label><input id="sp-reason"></div>
-  </div>
-  <div id="sp-hint" style="font-size:12px;margin-top:10px;line-height:1.7"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-sp">Cancel</button><button class="btn btn-primary" id="sp-send">Send request</button></div>
-</div></div>
-
-<!-- MODAL: SELF HR REQUEST -->
-<div class="overlay" id="m-sh"><div class="modal" style="max-width:480px">
-  <div class="modal-head"><div class="modal-title">HR request</div><button class="x" data-close="m-sh">×</button></div>
-  <div class="field" style="margin-bottom:12px"><label>What do you need?</label><select id="sh-type"><option>HR letter</option><option>Salary certificate</option><option>Experience certificate</option><option>Update my personal data</option><option>Payslip copy</option><option>Loan request</option><option>Other</option></select></div>
-  <div class="field"><label>Details</label><textarea id="sh-details" placeholder="e.g. addressed to the bank / new mobile number / loan amount and months"></textarea></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-sh">Cancel</button><button class="btn btn-primary" id="sh-send">Send request</button></div>
-</div></div>
-
+<!-- (the self-service request windows — vacation, permission, HR request — are React: react/src/self/SelfDialogs) -->
 <!-- MODAL: HANDLE HR REQUEST -->
 
 <!-- MODAL: PROJECT ALLOWANCE RULE -->
@@ -663,6 +614,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=b48fc7e3a5ee"></script>
-<script src="react.js?v=17b1c9b7a260"></script>
+<script src="app.js?v=28c4fae1db9f"></script>
+<script src="react.js?v=e5ef20c189d2"></script>
 </body></html>

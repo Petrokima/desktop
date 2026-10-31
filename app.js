@@ -979,9 +979,6 @@ document.addEventListener('click', async ev => {
     if (a==='myprofile') return showSelf(ME, { email: ME.email });
     if (a==='goto-current') return gotoCurrentPeriod();
     if (a==='theme') return openTheme();
-    if (a==='self-leave') return openSelfLeave();
-    if (a==='self-perm') return openSelfPerm();
-    if (a==='self-hr') return openSelfHr();
     if (a==='reload') return loadAll();
     if (a==='signout') return signOut();
     if (a==='chpass') return openM('m-pass');
@@ -1455,37 +1452,10 @@ async function loadSelf(){
   } catch(e){ toast(e.message,'err'); }
   renderSelf();
 }
-function selfYearDays(types, status){
-  const y = todayStr().slice(0,4);
-  return SD.leaves.filter(l => types.includes(l.leave_type) && l.status===status).reduce((s,l)=>s+leaveDaysIn(l, `${y}-01-01`, `${y}-12-31`),0);
-}
-function selfAnnualTypes(){ return settings.casualCountsAnnual==='no' ? ['Annual'] : ['Annual','Casual']; }
 function renderSelf(){
-  const e = SD.emp;
-  if (!e){ $('self-title').textContent='My profile'; $('self-sub').textContent=''; $('self-body').innerHTML='<div class="empty">Your employee record could not be found. Please contact HR.</div>'; $('self-list').innerHTML=''; $('self-stats').innerHTML=''; return; }
-  $('self-title').textContent = e.name_en || e.name_ar || e.id;
-  $('self-sub').textContent = `${e.id} · ${e.job_name||''} · ${e.department||''}${e.unit?' · '+e.unit:''}`;
-  // balances
-  const ent = annualEntitlement(e), taken = selfYearDays(selfAnnualTypes(),'Approved'), pend = selfYearDays(selfAnnualTypes(),'Pending');
-  const cyc = cycleOf(todayStr()), lim = num(settings.permissionsPerMonth)||2;
-  const used = SD.perms.filter(p=>p.status==='Approved' && cycleOf(p.date)===cyc).length, pPend = SD.perms.filter(p=>p.status==='Pending').length;
-  const open = SD.leaves.filter(l=>l.status==='Pending').length + pPend + SD.reqs.filter(r=>r.status==='Pending'||r.status==='In progress').length;
-  const card = (label, value, sub) => `<div class="stat"><div class="stat-label">${label}</div><div class="stat-value">${value}</div><div class="stat-sub">${sub}</div></div>`;
-  $('self-stats').innerHTML =
-    card(`Annual leave ${todayStr().slice(0,4)}`, fmt(ent - taken), `remaining of ${fmt(ent)}${pend?` · ${fmt(pend)} pending`:''}`) +
-    card('Permissions this cycle', `${used} / ${lim}`, `${periodLabel(cyc)}${pPend?` · ${pPend} pending`:''}`) +
-    card('Sick leave this year', fmt(selfYearDays(['Sick'],'Approved')), 'days approved') +
-    card('Open requests', open, open ? 'waiting for HR' : 'nothing pending');
-  // one list of everything
-  const items = [
-    ...SD.leaves.map(l => ({ kind:'leave', id:l.id, at:l.created_at, what:`🌴 ${l.leave_type} leave`, detail:`${l.date_from} → ${l.date_to} · ${fmt(l.days)} day${num(l.days)===1?'':'s'}${l.reason?' · '+l.reason:''}`, status: waitingManager(l) ? 'Waiting for manager' : l.status==='Pending' && l.manager_status==='Approved' ? 'Waiting for HR' : l.status, reply:[l.decided_by?`by ${l.decided_by}`:'', l.decision_note||''].filter(Boolean).join(' — ') })),
-    ...SD.perms.map(p => ({ kind:'perm', id:p.id, at:p.requested_at, what:`✋ ${p.type}`, detail:`${p.date} · ${fmtHM(p.hours)}${p.reason?' · '+p.reason:''}`, status: waitingManager(p) ? 'Waiting for manager' : p.status==='Pending' && p.manager_status==='Approved' ? 'Waiting for HR' : p.status, reply:[p.decided_by?`by ${p.decided_by}`:'', p.decision_note||''].filter(Boolean).join(' — ') })),
-    ...SD.reqs.map(r => ({ kind:'req', id:r.id, at:r.created_at, what:`📨 ${r.request_type}`, detail:r.details||'', status:r.status, reply:[r.hr_response||'', r.handled_by?`(${r.handled_by})`:''].filter(Boolean).join(' ') })),
-  ].sort((a,b)=>String(b.at||'').localeCompare(String(a.at||'')));
-  $('self-list').innerHTML = items.map(x => `<tr><td class="mono" style="white-space:nowrap">${esc(fmtSent(x.at))}</td><td class="strong">${esc(x.what)}</td>
-    <td style="white-space:normal;min-width:200px">${esc(x.detail)}</td><td>${chip(x.status)}</td><td style="white-space:normal;min-width:160px">${esc(x.reply)}</td>
-    <td>${['Pending','Waiting for manager','Waiting for HR'].includes(x.status)?`<button class="btn btn-ghost btn-sm" data-self-cancel="${x.kind}:${x.id}">Cancel</button>`:''}</td></tr>`).join('')
-    || '<tr><td colspan="6" class="empty">You have not made any requests yet</td></tr>';
+  // the name line, "My requests" and "My profile" are React since 31 Oct 2026 (react/src/self): they draw from SD
+  if (typeof PKR !== 'undefined') PKR.render();
+  if (!SD.emp) return;
   // team approvals (managers only)
   const team = (SD.team||[]).slice().sort((a,b) => (a.status==='Pending manager' ? 0 : 1) - (b.status==='Pending manager' ? 0 : 1) || String(b.period).localeCompare(String(a.period)));
   /** @type {{ kind: string, r: any, when: string }[]} — r is a leave or a permission (see kind) */
@@ -1516,92 +1486,8 @@ function renderSelf(){
   $('self-slips').innerHTML = slips.map(l => `<tr><td class="strong">${esc(periodLabel(l.period))}</td><td class="num">${fmt(l.gross)}</td><td class="num neg">${fmt(l.deductions)}</td>
     <td class="num pos strong">${fmt(l.net)}</td><td><button class="btn btn-ghost btn-sm" data-self-slip="${esc(l.period)}">View payslip</button></td></tr>`).join('')
     || '<tr><td colspan="5" class="empty">No approved payslips yet — they appear here once HR and Finance approve a payroll month</td></tr>';
-  // profile tab
-  const skip = new Set(['attendance_exempt','annual_leave_days','daily_pay','hour_pay','delay_hour_pay']);
-  $('self-body').innerHTML = EMP_FIELDS.filter(([sec])=>sec!=='Attendance rules').map(([sec, fields]) => {
-    const rows = fields.filter(([k])=>!skip.has(k)).map(([k,label]) => `<div class="field"><label>${esc(label)}</label>
-      <div style="padding:8px 0;color:var(--text);${k==='name_ar'?'direction:rtl;text-align:right':''}">${k==='manager_id' ? (SD.manager ? esc(`${SD.manager.name_en||SD.manager.name_ar} — ${SD.manager.job_name||''}`) : '<span style="color:var(--muted)">—</span>') : (esc(e[k] ?? '') || '<span style="color:var(--muted)">—</span>')}</div></div>`).join('');
-    return rows ? `<div class="sec">${esc(sec)}</div><div class="grid3">${rows}</div>` : '';
-  }).join('');
 }
-// ── vacation request ──
-function slHint(){
-  const f=$('sl-from').value, t=$('sl-to').value, type=$('sl-type').value, days=num($('sl-days').value), out=[];
-  if (f && t && t < f) out.push('<span class="neg">“To” is before “From”.</span>');
-  if (f && t && t >= f){ const cal=Math.round((dObj(t).getTime()-dObj(f).getTime())/86400000)+1, wd=workdays(f,t);
-    out.push(`${cal} calendar day${cal>1?'s':''} · <b>${wd} working day${wd===1?'':'s'}</b> (weekends and public holidays are not counted)`); }
-  if (f && f < todayStr()) out.push('<span style="color:var(--warn)">These dates are in the past — HR will review them.</span>');
-  if (selfAnnualTypes().includes(type) && SD.emp){
-    const ent=annualEntitlement(SD.emp), taken=selfYearDays(selfAnnualTypes(),'Approved'), pend=selfYearDays(selfAnnualTypes(),'Pending'), left=ent-taken-pend-days;
-    out.push(`Annual balance: ${fmt(ent)} − ${fmt(taken)} taken${pend?` − ${fmt(pend)} pending`:''} − ${fmt(days)} this request = <b class="${left<0?'neg':'pos'}">${fmt(left)} left</b>${left<0?' — more than your balance; HR may reject it':''}`); }
-  if (type==='Unpaid') out.push('Unpaid leave is deducted from your salary at your daily rate.');
-  if (type==='Sick') out.push('Please keep your medical report — HR may ask for it.');
-  if (f && t){ const c = SD.leaves.find(l => (l.status==='Approved'||l.status==='Pending') && l.date_from<=t && l.date_to>=f);
-    if (c) out.push(`<span class="neg">Overlaps your ${c.status.toLowerCase()} ${c.leave_type} leave ${c.date_from} → ${c.date_to}.</span>`); }
-  $('sl-hint').innerHTML = out.join('<br>');
-}
-function slRecalc(){ const f=$('sl-from').value, t=$('sl-to').value; if (f && t && t>=f) $('sl-days').value = workdays(f,t) || ''; slHint(); }
-function openSelfLeave(){
-  $('sl-type').value='Annual'; $('sl-from').value=todayStr(); $('sl-to').value=todayStr(); $('sl-reason').value='';
-  slRecalc(); openM('m-sl');
-}
-async function sendSelfLeave(){
-  const f=$('sl-from').value, t=$('sl-to').value, days=num($('sl-days').value);
-  if (!f || !t) return toast('Choose the From and To dates','warn');
-  if (t < f) return toast('“To” cannot be before “From”','warn');
-  if (days <= 0) return toast('The request has no working days — check the dates','warn');
-  if (SD.leaves.some(l => (l.status==='Approved'||l.status==='Pending') && l.date_from<=t && l.date_to>=f)) return toast('These dates overlap another vacation of yours','warn');
-  const rec = { emp_id:SELF.me.emp_id, leave_type:$('sl-type').value, date_from:f, date_to:t, days, status:'Pending', source:'Self-service',
-                reason:$('sl-reason').value.trim()||null, entered_by: SELF.me.full_name || SELF.me.emp_id };
-  await selfSend('employee_leaves', rec, 'm-sl', 'sl-send', SD.emp && SD.emp.manager_id ? 'Vacation request sent to your direct manager' : 'Vacation request sent to HR');
-}
-// ── permission request ──
-function spHint(){
-  const d=$('sp-date').value, lim=num(settings.permissionsPerMonth)||2; if (!d){ $('sp-hint').innerHTML=''; return; }
-  const cyc=cycleOf(d), used=SD.perms.filter(p=>p.status==='Approved' && cycleOf(p.date)===cyc).length, pend=SD.perms.filter(p=>p.status==='Pending' && cycleOf(p.date)===cyc).length;
-  $('sp-hint').innerHTML = `This date is in the <b>${periodLabel(cyc)}</b> payroll cycle: ${used} of ${lim} permissions approved${pend?`, ${pend} pending`:''}.` +
-    (used>=lim ? `<br><span class="neg">You have used all ${lim} permissions for this cycle — this request would have to be rejected.</span>` : '') +
-    (isHoliday(d) ? '<br>This date is a public holiday.' : !isWorkday(d) ? '<br><span style="color:var(--warn)">This date is a weekend day.</span>' : '');
-}
-function openSelfPerm(){
-  $('sp-date').value=todayStr(); $('sp-type').value='Late arrival'; $('sp-hours').value=settings.permissionMaxHours||2; $('sp-max').textContent=`${settings.permissionMaxHours||2} h`; $('sp-reason').value='';
-  spHint(); openM('m-sp');
-}
-async function sendSelfPerm(){
-  const d=$('sp-date').value, h=num($('sp-hours').value), max=num(settings.permissionMaxHours)||2;
-  if (!d) return toast('Choose the date','warn');
-  if (h<=0 || h>max) return toast(`Hours must be between 0.25 and ${max}`,'warn');
-  if (SD.perms.some(p=>p.date===d && p.type===$('sp-type').value && (p.status==='Pending'||p.status==='Approved'))) return toast('You already have this request for that date','warn');
-  await selfSend('attendance_permissions', { emp_id:SELF.me.emp_id, date:d, type:$('sp-type').value, hours:h, reason:$('sp-reason').value.trim()||null, status:'Pending', source:'Self-service' },
-                 'm-sp', 'sp-send', SD.emp && SD.emp.manager_id ? 'Permission request sent to your direct manager' : 'Permission request sent to HR');
-}
-// ── other HR request ──
-function openSelfHr(){ $('sh-type').value='HR letter'; $('sh-details').value=''; openM('m-sh'); }
-async function sendSelfHr(){
-  const det=$('sh-details').value.trim();
-  if (!det && ['Update my personal data','Loan request','Other','HR letter'].includes($('sh-type').value)) return toast('Please add the details HR will need','warn');
-  await selfSend('hr_requests', { emp_id:SELF.me.emp_id, request_type:$('sh-type').value, details:det||null, status:'Pending' }, 'm-sh', 'sh-send', 'Request sent to HR');
-}
-/** @param {'attendance_permissions' | 'employee_leaves' | 'hr_requests'} table — where the request is saved */
-async function selfSend(table, rec, modal, btnId, okMsg){
-  const b=$(btnId); b.disabled=true;
-  const { data, error } = await /** @type {any} — table chosen by the caller (checked above) */ (sb).from(table).insert(rec).select();
-  b.disabled=false;
-  if (error) return toast(/duplicate/i.test(error.message) ? 'You already have an open request of this kind for that date' : deadlineMsg(error.message), 'err');
-  if (!(data && data.length)) return toast(NOPERM,'err');
-  closeM(modal); toast(okMsg); await loadSelf();
-}
-async function selfCancel(key){
-  const [kind, id] = key.split(':'), table = /** @type {Record<string, 'attendance_permissions' | 'employee_leaves' | 'hr_requests'>} */ ({ leave:'employee_leaves', perm:'attendance_permissions', req:'hr_requests' })[kind];
-  confirmDel('Cancel this request?', async () => {
-    const { data, error } = await sb.from(table).update({ status:'Cancelled' }).eq('id', id).select();
-    if (error) throw error;
-    if (!(data && data.length)) throw new Error('This request can no longer be cancelled — HR has already decided it.');
-    toast('Request cancelled'); await loadSelf();
-  });
-  $('del-title').textContent='Please confirm'; $('del-ok').textContent='Cancel request';
-}
-$('self-list').addEventListener('click', e => { const b=/** @type {PageEl} */ (e.target).closest('[data-self-cancel]'); if(b) selfCancel(b.dataset.selfCancel); });
+// The request windows (vacation, permission, HR request) and Cancel are React since 31 Oct 2026 (react/src/self/SelfDialogs).
 document.querySelectorAll('[data-spage]').forEach(t => t.addEventListener('click', () => {
   document.querySelectorAll('[data-spage]').forEach(x=>x.classList.toggle('active', x===t));
   ['req','team','tatt','pcost','att','pay','prof'].forEach(k => $('self-'+k).style.display = t.dataset.spage===k ? '' : 'none');
@@ -1610,12 +1496,6 @@ document.querySelectorAll('[data-spage]').forEach(t => t.addEventListener('click
   if (t.dataset.spage === 'tatt') { if (!$('ta-from').value) { $('ta-from').value = periodStart(cycleOf(todayStr())); $('ta-to').value = todayStr(); } loadTeamAtt(); }   // part42
 }));
 $('self-back').addEventListener('click', () => { $('self').style.display='none'; $('app').style.display='block'; });
-['sl-from','sl-to'].forEach(id=>$(id).addEventListener('change', slRecalc));
-['sl-type','sl-days'].forEach(id=>$(id).addEventListener('input', slHint));
-$('sl-send').addEventListener('click', sendSelfLeave);
-['sp-date','sp-type'].forEach(id=>$(id).addEventListener('input', spHint));
-$('sp-send').addEventListener('click', sendSelfPerm);
-$('sh-send').addEventListener('click', sendSelfHr);
 
 // ═════════════════════════════════════════════════════════
 //  HR SIDE: vacation decisions, HR requests page, badges
@@ -2250,16 +2130,7 @@ const V = { loaded: false };   // the dashboard loads the Employee voice badge o
 const _renderDashboardB = renderDashboard;
 // @ts-expect-error — renderDashboard is deliberately extended here (the new version wraps the earlier one)
 renderDashboard = function(){ const r = _renderDashboardB.apply(this, arguments); if (ME && ['admin','hr'].includes(ME.role) && !V.loaded){ V.loaded = true; loadVoice().catch(() => {}); } return r; };
-async function renderSelfBirthday(){
-  const box = $('self-bday'); if (!box) return;
-  const r = await sb.rpc('my_birthday_today').then(x => x, () => (/** @type {{ data?: boolean }} */ ({})));
-  box.innerHTML = r && r.data ? `<div class="card" style="background:linear-gradient(135deg,#ee2624,#b4151a);color:#fff;text-align:center;padding:22px;margin-bottom:16px">
-      <div style="font-size:42px">🎂</div><div style="font-size:20px;font-weight:800;margin-top:6px">Petrokima family wishes you a happy birthday 🎉</div>
-      <div style="opacity:.9;margin-top:4px">عائلة بتروكيما تتمنى لك عيد ميلاد سعيد</div></div>` : '';
-}
-const _showSelfB = showSelf;
-// @ts-expect-error — showSelf is deliberately extended here (the new version wraps the earlier one)
-showSelf = async function(){ const r = await _showSelfB.apply(this, arguments); renderSelfBirthday(); return r; };
+// (self-service's 🎂 birthday card is React now — react/src/self SelfHead)
 
 // ── announcements — the page is React now (react/src/news, 30 Oct 2026); it loads when opened ──
 function renderNewsPage(){ if (typeof PKR !== 'undefined') PKR.render(); }
@@ -2651,48 +2522,8 @@ function lbText(b, reqDays, type, alreadyIn){
     out.push(`Emergency leave ${y}: ${fmt(b.emergency_cap)} days allowed · <b class="${el < 0 ? 'neg' : 'pos'}">${fmt(el)} left</b> after this request${el < 0 ? ' — over the emergency limit' : ''}`); }
   return out;
 }
-// (the vacation window's balance hint is React now — react/src/vacations/LeaveDialog; lbText above stays for self-service)
-
-// employee self-service: own balance
-// @ts-expect-error — slHint is deliberately extended here (the new version wraps the earlier one)
-slHint = function(){
-  const f = $('sl-from').value, t = $('sl-to').value, type = $('sl-type').value, days = num($('sl-days').value), out = [];
-  if (f && t && t < f) out.push('<span class="neg">“To” is before “From”.</span>');
-  if (f && t && t >= f){ const cal = Math.round((dObj(t).getTime() - dObj(f).getTime()) / 86400000) + 1, wd = workdays(f, t);
-    out.push(`${cal} calendar day${cal > 1 ? 's' : ''} · <b>${wd} working day${wd === 1 ? '' : 's'}</b> (weekends and public holidays are not counted)`); }
-  if (f && f < todayStr()) out.push('<span style="color:var(--warn)">These dates are in the past — HR will review them.</span>');
-  if (SD.emp && (type === 'Annual' || type === 'Casual')){
-    const y = (f || todayStr()).slice(0, 4), b = LB.get(`${SD.emp.id}|${y}`);
-    if (b === undefined){ out.push('<span style="color:var(--muted)">Annual balance: loading…</span>'); getLB(SD.emp.id, y).then(() => slHint()); }
-    else if (b){
-      const lines = lbText(b, days, type, 0);
-      if (type === 'Annual' || lbTypes().includes('Casual')) out.push(lines[0].replace(' — exceeds the balance', ' — more than your balance; HR may reject it'));
-      if (type === 'Casual') out.push(lines[1].replace(' — over the emergency limit', ' — over your emergency limit; it will not be accepted'));
-      if (f && b.eligible_from && f < b.eligible_from && !b.early_ok)
-        out.push(`<span class="neg">You can request annual or emergency leave from <b>${esc(b.eligible_from)}</b> (after ${num(HR_RULES.leave_rules.wait_months) || 6} months of service). Ask HR if you need an exception.</span>`);
-    }
-  }
-  if (type === 'Unpaid') out.push('Unpaid leave is deducted from your salary at your daily rate.');
-  if (type === 'Sick') out.push('Please keep your medical report — HR may ask for it.');
-  if (f && t){ const c = SD.leaves.find(l => (l.status === 'Approved' || l.status === 'Pending') && l.date_from <= t && l.date_to >= f);
-    if (c) out.push(`<span class="neg">Overlaps your ${c.status.toLowerCase()} ${c.leave_type} leave ${c.date_from} → ${c.date_to}.</span>`); }
-  $('sl-hint').innerHTML = out.join('<br>');
-};
-const _openSelfLeave26 = openSelfLeave;
-// @ts-expect-error — openSelfLeave is deliberately extended here (the new version wraps the earlier one)
-openSelfLeave = function(){ LB.clear(); return _openSelfLeave26.apply(this, arguments); };
-const _renderSelf26 = renderSelf;
-// @ts-expect-error — renderSelf is deliberately extended here (the new version wraps the earlier one)
-renderSelf = function(){
-  const r = _renderSelf26.apply(this, arguments);
-  if (SD && SD.emp){ const y = todayStr().slice(0, 4), id = SD.emp.id;
-    const paint = b => { const c = document.querySelector('#self-stats .stat'); if (!c || !b) return;
-      c.innerHTML = `<div class="stat-label">Annual leave ${y}</div><div class="stat-value">${fmt(num(b.remaining) - num(b.pending))}</div>
-        <div class="stat-sub">left of ${fmt(num(b.entitlement) + num(b.carry_in))}${num(b.pending) ? ` · ${fmt(b.pending)} pending` : ''} · emergency ${fmt(Math.max(0, num(b.emergency_cap) - num(b.emergency_taken) - num(b.emergency_pending)))} left${b.eligible_from > todayStr() && !b.early_ok ? `<br>leave can be requested from ${esc(b.eligible_from)}` : ''}</div>`; };
-    const b = LB.get(`${id}|${y}`); if (b !== undefined) paint(b); else getLB(id, y).then(paint);
-  }
-  return r;
-};
+// (the vacation windows' balance hints are React now — react/src/vacations/LeaveDialog and react/src/self/SelfDialogs; so is
+//  self-service's annual balance card — react/src/self)
 
 // report: Annual leave balance
 const repLB = REPORTS.find(r => r.id === 'lv-balance');
@@ -2720,7 +2551,6 @@ async function loadLeaveBalances(y){
 // (the employee window's leave balance and certificates are React now — react/src/employee; after a save there the bridge
 //  employeeSaved clears LB and reloads the HR alerts)
 // the original hint functions were attached directly — attach the new ones too (they run last and replace the text)
-['sl-type','sl-days'].forEach(id => $(id).addEventListener('input', () => slHint()));
 
 // ═════════════════════════════════════════════════════════
 //  HR OFFICERS SAVE EMPLOYEE MASTER DATA (database: 49-officer-edit-master-data.sql)
@@ -2952,19 +2782,7 @@ async function loadSelfMissions(){
   SMIS.mine = a.data || []; SMIS.team = b.data || [];
 }
 function renderSelfMissions(){
-  $('smis-new').style.display = SMIS.missing ? 'none' : '';
-  // assigned to me, waiting for my acknowledgement
-  const ack = SMIS.mine.filter(m => m.status === 'Waiting for employee');
-  $('smis-ack').innerHTML = ack.map(m => `<div class="alert a-warn" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-      <div style="flex:1;min-width:240px">🚗 <b>Your manager assigned you a mission:</b> ${esc(m.place)} · ${esc(smisWhen(m))}${m.project_code ? ' · ' + esc(m.project_code) : ''}${m.purpose ? `<div style="font-size:12px">💬 ${esc(m.purpose)}</div>` : ''}</div>
-      <button class="btn btn-success btn-sm" data-smis-ack="${esc(m.id)}">✋ I undertake this mission</button></div>`).join('');
-  // my missions inside "My requests"
-  const rows = SMIS.mine.map(m => `<tr><td class="mono" style="white-space:nowrap">${esc(fmtSent(m.created_at))}</td><td class="strong">🚗 Outside mission${m.origin === 'manager' ? '<div style="font-size:11px;color:var(--muted)">assigned by your manager</div>' : ''}</td>
-      <td style="white-space:normal;min-width:200px">${esc(m.place)} · ${esc(smisWhen(m))}${m.project_code ? ' · ' + esc(m.project_code) : ''}${m.purpose ? ' · ' + esc(m.purpose) : ''}</td>
-      <td>${smisStatus(m, false)}</td><td style="white-space:normal;min-width:160px">${esc([m.manager_note, m.hr_note].filter(Boolean).join(' · '))}</td>
-      <td>${m.origin === 'employee' && ['Waiting for manager', 'Waiting for HR'].includes(m.status) ? `<button class="btn btn-ghost btn-sm" data-smis-cancel="${esc(m.id)}">Cancel</button>` : ''}</td></tr>`).join('');
-  const tb = $('self-list');
-  if (rows) { if (/class="empty"/.test(tb.innerHTML)) tb.innerHTML = ''; tb.insertAdjacentHTML('afterbegin', rows); }
+  // "🚗 Outside mission", the missions assigned to me and my missions in "My requests" are React since 31 Oct 2026 (react/src/self)
   // the manager's team
   const myTeam = SD.myTeam || [];
   $('smis-card').style.display = (myTeam.length || SMIS.team.length) && !SMIS.missing ? '' : 'none';
@@ -3023,7 +2841,6 @@ async function smisRpc(name, args, msg){
   if (error) return toast(error.message.replace(/^[A-Z_]+:\s*/, ''), 'err');
   toast(msg); await loadSelf();
 }
-$('smis-new').addEventListener('click', () => openSelfMission(false));
 $('smis-assign').addEventListener('click', () => openSelfMission(true));
 $('smis-k-full').addEventListener('click', () => smisKind(false));
 $('smis-k-part').addEventListener('click', () => smisKind(true));
@@ -3397,7 +3214,7 @@ function domStatusFilter(tbodyId){
   obs.observe(tb, { childList: true });
   apply();
 }
-['self-list', 'smis-tbl', 'self-treq-tbl', 'self-team-tbl'].forEach(domStatusFilter);   // Employee voice: React (own status boxes)
+['smis-tbl', 'self-treq-tbl', 'self-team-tbl'].forEach(domStatusFilter);   // Employee voice and My requests: React (own status boxes)
 
 // ═════════════════════════════════════════════════════════
 //  DATES TYPED AS DAY-MONTH-YEAR (26 Oct 2026) — Mohammed: "type dates like 26102026, 01012026"

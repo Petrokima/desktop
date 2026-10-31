@@ -447,14 +447,11 @@ function buildLists(){
   $('dl-emp-mgr').innerHTML = S.employees.filter(e=>e.status!=='Inactive').map(e=>`<option value="${esc(e.id)} — ${esc(empName(e))}" label="${esc(e.id)} — ${esc(empName(e))}${e.job_name ? ' · ' + esc(e.job_name) : ''}"></option>`).join('');
   $('dl-proj').innerHTML = S.projects.filter(p => p.status !== 'Inactive' && p.status !== 'Completed')
                             .map(p => `<option value="${esc(p.id)} — ${esc(p.name||'')}"></option>`).join('');
-  const depts = [...new Set(S.employees.map(e=>e.department).filter(Boolean))].sort();
-  const dOpts = '<option value="">All departments</option>' + depts.map(d=>`<option>${esc(d)}</option>`).join('');
-  ['rep-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
 }
 
 // Pages are prepared when they are opened (the payroll calculation, reports and labour cost are the heavy ones)
 const PAGE_RENDER = { dashboard:()=>renderDashboard(), projects:()=>renderProjects(),
-  loans:()=>renderLoans(), reports:()=>renderReports(), permissions:()=>renderPermissions(),
+  loans:()=>renderLoans(), permissions:()=>renderPermissions(),
   leaves:()=>renderLeaves(), exempt:()=>renderExempt(), penalties:()=>renderPenalties(), holidays:()=>renderHolidays(), hrreq:()=>renderHrRequests(),
   reporting:()=>renderReporting(), history:()=>renderHistory(), parrules:()=>renderParRules(), approvals:()=>renderApprovals(), assign:()=>renderAssign(), calc:()=>renderCalc(), news:()=>renderNewsPage() };
 let DIRTY = new Set(), LOAD_MS = 0;
@@ -1012,7 +1009,7 @@ document.addEventListener('click', async ev => {
   const t = /** @type {PageEl} */ (ev.target);
   const nav = t.closest('[data-page]'); if (nav && nav.classList.contains('nav-item')) return showPage(nav.dataset.page);
   const nv = t.closest('[data-nav]'); if (nv) return showPage(nv.dataset.nav);
-  const orp = t.closest('[data-open-report]'); if (orp) { showPage('reports'); return openReport(orp.dataset.openReport); }
+  const orp = t.closest('[data-open-report]'); if (orp) { showPage('reports'); return openReport(orp.dataset.openReport || ''); }
   const cl = t.closest('[data-close]'); if (cl) return closeM(cl.dataset.close);
   if (t.classList && t.classList.contains('overlay')) return t.classList.remove('open');
   const act = t.closest('[data-act]');
@@ -1329,113 +1326,23 @@ const REPORTS = [
         note:Object.entries(groupBy(R,r=>r.issue)).map(([k,L])=>`${k}: ${L.length}`).join(' · ') }; } },
 ];
 
-let repCur = null, repData = null;
+// The Reports PAGE is React since 31 Oct 2026 (react/src/reports — list, dates, filters, columns, table, exports). Kept here: the
+// report definitions above (+ those added by parts 26, 37, 38, 39) and their calculations, which use the payroll / attendance engine.
 const MONEY_REPORT = r => r.g==='Payroll' || r.id==='prj-cost' || r.id==='prj-cost-detail';
-const MONEY_COLS = ['rate','value','ded','mult'];
-function reportAllowed(r){
-  const role = ME && ME.role;
-  if (role==='admin' || role==='finance') return true;
-  if (role==='hr_officer' && MONEY_REPORT(r)) return false;
-  const a = ME && ME.allowed_reports;
-  return Array.isArray(a) ? a.includes(r.id) : true;          // no list saved yet = all (for HR); HR Officers start with an empty list
+/** one report's columns and rows. For dates outside the loaded payroll cycle the page passes that range's data (attendance, phone
+ *  taps, permissions, vacations, missions, penalties, undone check-outs): it is swapped into S only while the report is built.
+ * @param {string} id @param {{ from: string, to: string, group: string, view: string }} p @param {any} D */
+function reportBuild(id, p, D){
+  const r = REPORTS.find(x => x.id === id); if (!r) throw new Error('This report no longer exists');
+  if (!D) return r.build(p);
+  /** @type {(keyof typeof S)[]} */ const keys = ['attendance','clocks','permissions','leaves','missions','penalties','undos'];
+  const old = {};
+  keys.forEach(k => { old[k] = S[k]; S[k] = D[k]; });
+  try { return r.build(p); } finally { keys.forEach(k => { S[k] = old[k]; }); }
 }
-function renderReportList(){
-  const mine = REPORTS.filter(reportAllowed), G=groupBy(mine, r=>r.g);
-  if (repCur && !mine.some(r=>r.id===repCur)) { repCur=null; $('rep-view').style.display='none'; $('rep-empty').style.display='block'; }
-  $('rep-list').innerHTML = Object.entries(G).map(([g,L]) => `<div class="nav-label">${esc(g)}</div>` +
-    L.map(r=>`<div class="nav-item ${r.id===repCur?'active':''}" data-rep="${r.id}" style="font-size:12.5px">${esc(r.t)}</div>`).join('')).join('');
-  if (!mine.length) $('rep-list').innerHTML = '<div style="padding:14px;font-size:13px;color:var(--muted)">No reports have been assigned to you yet. Ask the administrator.</div>';
-  $('rep-sub').textContent = `${mine.length} report${mine.length===1?'':'s'} · period ${periodLabel(settings.period)} (change it in Settings) · all figures calculated live from the database`;
-}
-function openReport(id){
-  const r0 = REPORTS.find(x=>x.id===id);
-  if (!r0 || !reportAllowed(r0)) return toast('This report has not been assigned to you','warn');
-  repCur=id; const r=r0;
-  $('rep-empty').style.display='none'; $('rep-view').style.display='block';
-  $('rep-title').textContent=r.t; $('rep-desc').textContent=r.d;
-  $('rep-mode').style.display = r.param==='view' ? '' : 'none';
-  $('rep-group').style.display = r.param==='group' ? '' : 'none';
-  $('rep-q').value=''; renderReportList(); runReport();
-}
-function runReport(){
-  if (!repCur) return;
-  const r=REPORTS.find(x=>x.id===repCur); if (!r) return;   // the remembered report no longer exists
-  const mode=repDatesMode(r);
-  repDateBar(mode);
-  const msg = t => { $('rep-head').innerHTML=''; $('rep-foot').innerHTML=''; $('rep-body').innerHTML=`<tr><td class="empty">${t}</td></tr>`; $('rep-note').textContent=''; repData=null; };
-  const rg = mode==='range' ? repRange() : null;
-  if (rg && rg.error) return msg(esc(rg.error));
-  const D = mode==='range' ? repRangeData(rg) : null;
-  if (D && D.wait) return msg(esc(D.wait));
-  let data; try{ data=repWithData(D, () => r.build({ from:rg?rg.from:periodStart(settings.period), to:rg?rg.to:periodEnd(settings.period), group:$('rep-group').value||'department', view:$('rep-mode').value||'emp' })); }
-  catch(e){ console.error(e); $('rep-body').innerHTML=`<tr><td class="empty">Could not build this report: ${esc(e.message)}</td></tr>`; return; }
-  if (rg) data.rows = data.rows.filter(x => { const d = x._date || x.date; return !(typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d)) || (d.slice(0,10) >= rg.from && d.slice(0,10) <= rg.to); });
-  const d=$('rep-dept').value, q=$('rep-q').value.trim().toLowerCase();
-  data.rows = data.rows.filter(x => repOrgMatch(x) &&
-                                    (!q || Object.values(x).some(v => typeof v!=='object' && String(v??'').toLowerCase().includes(q))));
-  if (isOfficer()) data.cols = data.cols.filter(c => !MONEY_COLS.includes(c.k) && !PAY_FIELDS.includes(c.k));
-  data.allCols = data.cols;                                        // ☰ Columns: the user's choice for this report
-  const hide = repHiddenCols(r.id), kept = data.cols.filter(c => !hide.includes(c.k));
-  data.cols = kept.length ? kept : data.cols.slice(0, 1);
-  repData=data; renderRepColsBtn();
-  const cell=(c,v)=>{ if(c.t==='link') return /^https?:/.test(String(v||'')) ? `<td><a class="maplink" href="${esc(v)}" target="_blank" rel="noopener">📍 Open map</a></td>` : `<td style="color:var(--muted)">no location</td>`;
-    if(v===null||v===undefined||v==='') return `<td${c.t==='num'||c.t==='int'||c.t==='pct'?' class="num"':''}></td>`;
-    if(c.t==='num') return `<td class="num">${fmt(v)}</td>`; if(c.t==='int') return `<td class="num">${Math.round(num(v))}</td>`;
-    if(c.t==='pct') return `<td class="num">${(num(v)*100).toFixed(1)}%</td>`; if(c.t==='ar') return `<td class="ar">${esc(v)}</td>`;
-    if(c.t==='link') return /^https?:/.test(String(v)) ? `<td><a class="maplink" href="${esc(v)}" target="_blank" rel="noopener">📍 Open map</a></td>` : `<td style="color:var(--muted)">no location</td>`;
-    if(['id','mono','date'].includes(c.t)) return `<td class="mono">${esc(v)}</td>`; if(c.t==='strong') return `<td class="strong">${esc(v)}</td>`;
-    return `<td style="white-space:normal;min-width:120px">${esc(v)}</td>`; };
-  const numCls=c=>['num','int','pct'].includes(c.t)?' class="num"':'';
-  $('rep-head').innerHTML = '<tr>'+data.cols.map(c=>`<th${numCls(c)}>${esc(c.l)}</th>`).join('')+'</tr>';
-  const shown=data.rows.slice(0,1000);
-  $('rep-body').innerHTML = shown.map(x=>'<tr>'+data.cols.map(c=>cell(c,x[c.k])).join('')+'</tr>').join('') || `<tr><td colspan="${data.cols.length}" class="empty">Nothing to report for this selection</td></tr>`;
-  const hasSum=data.cols.some(c=>c.s);
-  $('rep-foot').innerHTML = hasSum && data.rows.length ? '<tr>'+data.cols.map((c,i)=>{ if(c.s){ const t=data.rows.reduce((s,x)=>s+num(x[c.k]),0); return `<td class="num strong" style="border-top:1px solid var(--accent)">${c.t==='int'?Math.round(t):fmt(t)}</td>`; }
-      return `<td class="strong" style="border-top:1px solid var(--accent)">${i===0?'Total':''}</td>`; }).join('')+'</tr>' : '';
-  $('rep-note').textContent = `${data.rows.length} row${data.rows.length===1?'':'s'}${data.rows.length>1000?' (showing first 1,000 — the export contains all)':''}` + (data.note?' · '+data.note:'');
-}
-function exportReport(){
-  if (!repData || !repData.rows.length) return toast('Nothing to export','warn');
-  const r=REPORTS.find(x=>x.id===repCur); if (!r) return;
-  const q=v=>{ let s=String(v??''); if (/^[=+@\t\r]/.test(s) || /^-[^\d.]/.test(s)) s="'"+s;   // review fix: never let a cell run as an Excel formula
-    return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
-  const val=(c,v)=>{ if(v===null||v===undefined) return '';
-    if(c.t==='num') return (Math.round(num(v)*100)/100).toFixed(2); if(c.t==='int') return Math.round(num(v)); if(c.t==='pct') return (num(v)*100).toFixed(2);
-    if((c.t==='id' && String(v).length>0) || /^\d{10,}$/.test(String(v).trim())) return `="${String(v).trim().replace(/"/g,'')}"`;   // keeps codes and long numbers (national ID, mobile…) as text in Excel
-    return v; };
-  const lines=[repData.cols.map(c=>q(c.l)).join(','), ...repData.rows.map(x=>repData.cols.map(c=>{ const v=val(c,x[c.k]); return String(v).startsWith('="')?v:q(v); }).join(','))];
-  const extra = (repDatesMode(r)==='range' && !repRange().error ? `-${repRange().from}-to-${repRange().to}` : '-'+settings.period) + (r.param==='group' ? '-'+$('rep-group').value : r.param==='view' ? '-'+$('rep-mode').value : '');
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob(['\uFEFF'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
-  a.download=`petrokima-${r.id}${extra}.csv`; a.click(); toast('Report exported');
-}
-function renderReports(){ renderReportList(); if (repCur) runReport(); }
-
-$('rep-list').addEventListener('click', e => { const i=/** @type {PageEl} */ (e.target).closest('[data-rep]'); if(i) openReport(i.dataset.rep); });
-['rep-mode','rep-group','rep-dept'].forEach(id => $(id).addEventListener('change', runReport));
-$('rep-q').addEventListener('input', runReport);
-$('rep-export').addEventListener('click', exportReport);
-
-// ── ☰ Columns: choose which columns a report shows and exports (remembered per report on this computer) ──
-function repHiddenCols(id){ try { return JSON.parse(localStorage.getItem('pk_repcols_' + id) || '[]'); } catch(e) { return []; } }
-function renderRepColsBtn(){
-  if (!repData || !repData.allCols) return;
-  const hide = repHiddenCols(repCur), n = repData.allCols.filter(c => !hide.includes(c.k)).length;
-  $('rep-cols-btn').textContent = n < repData.allCols.length ? `☰ Columns (${n} of ${repData.allCols.length})` : '☰ Columns';
-  $('rep-cols-list').innerHTML = repData.allCols.map(c => `<label style="display:flex;gap:8px;align-items:center;padding:4px 2px;font-size:13px;cursor:pointer">
-      <input type="checkbox" data-repcol="${esc(c.k)}" ${hide.includes(c.k) ? '' : 'checked'}> ${esc(c.l)}</label>`).join('');
-}
-function setRepHidden(list){ localStorage.setItem('pk_repcols_' + repCur, JSON.stringify(list)); runReport(); }
-$('rep-cols-btn').addEventListener('click', e => { e.stopPropagation(); const p = $('rep-cols-pop'); p.style.display = p.style.display === 'none' ? 'block' : 'none'; });
-$('rep-cols-pop').addEventListener('click', e => e.stopPropagation());
-document.addEventListener('click', () => { const p = $('rep-cols-pop'); if (p) p.style.display = 'none'; });
-$('rep-cols-list').addEventListener('change', () => {
-  const hide = [.../** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll('#rep-cols-list [data-repcol]'))].filter(x => !x.checked).map(x => x.dataset.repcol);
-  if (hide.length === repData.allCols.length) { toast('Keep at least one column','warn'); return renderRepColsBtn(); }
-  setRepHidden(hide);
-});
-$('rep-cols-all').addEventListener('click', e => { e.preventDefault(); setRepHidden([]); });
-$('rep-cols-none').addEventListener('click', e => { e.preventDefault(); setRepHidden(repData.allCols.slice(1).map(c => c.k)); });
+function renderReports(){ if (typeof PKR !== 'undefined') PKR.render(); }
+/** opens a report on the Reports page (dashboard banners) @param {string} id */
+function openReport(id){ if (typeof PKR !== 'undefined') PKR.openReport(id); }
 
 // ═════════════════════════════════════════════════════════
 //  PERMISSIONS (late arrival / early leave)
@@ -2047,55 +1954,7 @@ function allowanceApprovalsUpdated(rows){
   renderApprovals(); renderDashboard(); DIRTY.add('payroll'); DIRTY.add('reports');
 }
 
-// ═════════════════════════════════════════════════════════
-//  DEPARTMENT + UNIT FILTERS — on every page that lists employees
-// ═════════════════════════════════════════════════════════
-const ORG_PAGES = {
-  rep:()=>{ if (repCur) runReport(); } };
-// does this employee match the department and unit chosen on page p?
-function orgMatch(e, p){
-  const d = ($(p+'-dept') || {}).value || '', u = ($(p+'-unit') || {}).value || '';
-  if (!d && !u) return true; e = e || {};
-  return (!d || e.department === d) && (!u || e.unit === u);
-}
-// reports: use the row's own department/unit, or look the employee up by code
-function repOrgMatch(x){
-  const d = $('rep-dept').value, u = $('rep-unit') ? $('rep-unit').value : '';
-  if (!d && !u) return true;
-  let dep = 'department' in x ? x.department : undefined, un = 'unit' in x ? x.unit : undefined;
-  if ((d && dep === undefined) || (u && un === undefined)){
-    const e = empById(x.code ?? x.emp_id ?? x.id);
-    if (e){ if (dep === undefined) dep = e.department; if (un === undefined) un = e.unit; }
-  }
-  return (!d || dep === undefined || dep === d) && (!u || un === undefined || un === u);   // rows not about one employee (e.g. project totals) stay
-}
-function orgDeptOptions(){ return '<option value="">All departments</option>' + [...new Set(S.employees.map(e=>e.department).filter(Boolean))].sort().map(d=>`<option>${esc(d)}</option>`).join(''); }
-function orgFillUnits(p){
-  const sel = $(p+'-unit'); if (!sel) return;
-  const d = $(p+'-dept') ? $(p+'-dept').value : '', keep = sel.value;
-  const units = [...new Set(S.employees.filter(e => !d || e.department === d).map(e => e.unit).filter(Boolean))].sort();
-  sel.innerHTML = `<option value="">${d ? 'All units in this department' : 'All units'}</option>` + units.map(u => `<option>${esc(u)}</option>`).join('');
-  sel.value = units.includes(keep) ? keep : '';
-}
-// add the boxes where they are missing, once
-(function orgInject(){
-  Object.keys(ORG_PAGES).forEach(p => {
-    if (!$(p+'-dept')){ const q = $(p+'-q'); if (!q) return; q.insertAdjacentHTML('beforebegin', `<select class="sel" id="${p}-dept"><option value="">All departments</option></select>`); }
-    if (!$(p+'-unit')) $(p+'-dept').insertAdjacentHTML('afterend', `<select class="sel" id="${p}-unit"><option value="">All units</option></select>`);
-    $(p+'-dept').addEventListener('change', () => { orgFillUnits(p); ORG_PAGES[p](); });
-    $(p+'-unit').addEventListener('change', () => ORG_PAGES[p]());
-  });
-})();
-// keep the lists filled whenever employee data is (re)loaded
-const _orgBuildLists = buildLists;
-// @ts-expect-error — buildLists is deliberately extended here (the new version wraps the earlier one)
-buildLists = function(){
-  _orgBuildLists.apply(this, arguments);
-  const opts = orgDeptOptions();
-  Object.keys(ORG_PAGES).forEach(p => { const ds = $(p+'-dept'); if (!ds) return;
-    if (ds.options.length <= 1){ const v = ds.value; ds.innerHTML = opts; ds.value = v; }
-    orgFillUnits(p); });
-};
+// (the department + unit filters of every page are React now — react/src/shared/OrgFilter; the Reports page was the last old one)
 
 // ═════════════════════════════════════════════════════════
 //  PHONE SIGN-IN ATTEMPTS — review window
@@ -2199,16 +2058,6 @@ async function exportPageExcel(pageEl){
   XL.writeFile(wb, `petrokima-${name.trim().toLowerCase().replace(/[^a-z0-9]+/g,'-')}-${todayISO()}.xlsx`);
   toast('Excel file downloaded');
 }
-async function exportReportExcel(){
-  const rep = repCur && REPORTS.find(x => x.id === repCur);
-  if (!rep || !repData) return toast('Open a report first','warn');
-  const XL = await loadSheetJs();
-  const aoa = [repData.cols.map(c => c.l)].concat(repData.rows.map(r => repData.cols.map(c => { const v = r[c.k];
-    if (v == null) return ''; if (typeof v === 'number') return Number.isInteger(v) && isLongCode(v) ? String(v) : v;
-    return xlNum(String(v).replace(/<[^>]*>/g,'')); })));
-  const wb = XL.utils.book_new(); XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(aoa), rep.t.replace(/[\\/?*\[\]:]/g,' ').slice(0,31));
-  XL.writeFile(wb, `petrokima-${rep.id}-${todayISO()}.xlsx`); toast('Report downloaded as Excel');
-}
 const todayISO = () => new Date().toISOString().slice(0,10);
 (function addExcelButtons(){
   document.querySelectorAll('.page').forEach(pg => {
@@ -2220,7 +2069,6 @@ const todayISO = () => new Date().toISOString().slice(0,10);
   });
 })();
 document.addEventListener('click', e => { const b = /** @type {PageEl} */ (e.target).closest('[data-xl]'); if (b) exportPageExcel(b.closest('.page')); });
-$('rep-xlsx').addEventListener('click', exportReportExcel);
 
 // ═════════════════════════════════════════════════════════
 //  PROJECT COSTS FOR ACCOUNTING — totals per project only (no names), published for approved months
@@ -2933,15 +2781,12 @@ if (repLB){
       note: LB_ALL.year === y ? '' : 'Loading the balances…' };
   };
 }
-const _openReport26 = openReport;
-// @ts-expect-error — openReport is deliberately extended here (the new version wraps the earlier one)
-openReport = function(id){
-  const r = _openReport26.apply(this, arguments);
-  const y = Number(settings.period.slice(0, 4));
-  if (id === 'lv-balance' && LB_ALL.year !== y)
-    sb.rpc('leave_balances', { p_year:y }).then(({ data, error }) => { if (error) return toast(error.message, 'err'); LB_ALL = { year:y, rows:data || [] }; if (repCur === 'lv-balance') runReport(); });
-  return r;
-};
+/** the leave balances of all staff for the report "Annual leave balance" (the React Reports page asks when it opens it) @param {number} y */
+async function loadLeaveBalances(y){
+  const { data, error } = await sb.rpc('leave_balances', { p_year:y });
+  if (error) return toast(error.message, 'err');
+  LB_ALL = { year:y, rows:data || [] }; renderReports();
+}
 
 // (the employee window's leave balance and certificates are React now — react/src/employee; after a save there the bridge
 //  employeeSaved clears LB and reloads the HR alerts)
@@ -3791,102 +3636,6 @@ document.addEventListener('click', e => {
   bad.classList.add('dmy-bad'); bad.focus();
   toast(`“${DMY_NATIVE.get.call(bad)}” is not a real date — type day month year, e.g. 26102026`, 'warn');
 }, true);
-
-// ═════════════════════════════════════════════════════════
-//  REPORTS: FROM / TO DATES (26 Oct 2026) — Mohammed: "all reports must have a filter by date from date to date"
-//  · 'range' reports (attendance, vacations, permissions, phone taps, projects, penalties, joiners…) use the two dates.
-//    Inside the current payroll cycle they use the data already loaded; any other dates (up to 400 days) are loaded
-//    from the database for the report only — the payroll cycle is not changed. Rows with a date are kept only when
-//    the date is inside the range; summaries are calculated from the days inside the range only.
-//  · 'cycle' reports (pay, labour cost, absence deductions, loans) always cover one whole payroll cycle.
-//  · 'none' reports are lists of today's situation (master list, headcount, balances, data checks…).
-// ═════════════════════════════════════════════════════════
-const REP_DATES = {
-  'att-absence':'cycle', 'prj-cost':'cycle', 'prj-cost-detail':'cycle', 'pay-register':'cycle', 'pay-summary':'cycle',
-  'pay-elements':'cycle', 'pay-si':'cycle', 'pay-bank':'cycle', 'pay-loans':'cycle',
-  'att-exempt':'none', 'lv-balance':'none', 'hr-assignments':'none', 'att-phones':'none', 'hr-headcount':'none',
-  'hr-master':'none', 'hr-alerts':'none', 'hr-quality':'none', 'emp-birth-id':'none', 'emp-missing':'none' };
-function repDatesMode(r){ return (r && (r.dates || REP_DATES[r.id])) || 'range'; }
-
-let REP_RANGE = null;                       // the dates the user chose (kept while cycle / today-only reports are open)
-function repCycleRange(p){ p = p || settings.period; return { from: periodStart(p), to: periodEnd(p) }; }
-function repRange(){
-  const f = $('rep-from'), t = $('rep-to');
-  if (!REP_RANGE) REP_RANGE = repCycleRange();
-  const from = f.value, to = t.value;
-  const raw = el => el.dataset.dmy ? DMY_NATIVE.get.call(el) : '';
-  if (!from && /\S/.test(raw(f))) return { error:'The “From” date is not a real date — type it as day month year, e.g. 21102026.' };
-  if (!to && /\S/.test(raw(t))) return { error:'The “To” date is not a real date — type it as day month year, e.g. 20112026.' };
-  const r = { from: from || REP_RANGE.from, to: to || REP_RANGE.to };
-  if (r.to < r.from) return { error:'“To” is before “From”.' };
-  if ((dObj(r.to).getTime() - dObj(r.from).getTime()) / 86400000 > 400) return { error:'Please choose at most about one year (400 days) at a time.' };
-  return r;
-}
-function repDateBar(mode){
-  const f = $('rep-from'), t = $('rep-to'), btns = ['rep-today','rep-cyc','rep-prev'];
-  if (!REP_RANGE) REP_RANGE = repCycleRange();
-  const on = mode === 'range';
-  [f, t, ...btns.map(id => $(id))].forEach(el => el.disabled = !on);
-  if (on){
-    if (f.dataset.shown !== 'range'){ f.value = REP_RANGE.from; t.value = REP_RANGE.to; }
-    const c = repCycleRange(), r = repRange();
-    $('rep-dnote').textContent = r.error ? '' : (r.from >= c.from && r.to <= c.to ? '' : '📅 Dates outside the current payroll cycle — loaded for this report only; the payroll cycle is not changed.');
-  } else if (mode === 'cycle'){
-    const c = repCycleRange(); f.value = c.from; t.value = c.to;
-    $('rep-dnote').textContent = `Pay figures always cover one whole payroll cycle (${periodLabel(settings.period)}). To see another cycle, change it in Settings.`;
-  } else {
-    $('rep-dnote').textContent = 'This list shows today\'s situation — dates do not apply.';
-  }
-  f.dataset.shown = on ? 'range' : mode;
-}
-function repSetRange(from, to){ REP_RANGE = { from, to }; $('rep-from').value = from; $('rep-to').value = to; runReport(); }
-['from','to'].forEach(k => $('rep-' + k).addEventListener('change', () => {
-  const el = $('rep-' + k), v = el.value; REP_RANGE = REP_RANGE || repCycleRange();
-  if (v) REP_RANGE = { ...REP_RANGE, [k]: v };
-  else if (!/\S/.test(el.dataset.dmy ? DMY_NATIVE.get.call(el) : '')) el.value = REP_RANGE[k];   // emptied → back to the last date
-  runReport(); }));
-$('rep-today').addEventListener('click', () => repSetRange(todayStr(), todayStr()));
-$('rep-cyc').addEventListener('click', () => { const c = repCycleRange(); repSetRange(c.from, c.to); });
-$('rep-prev').addEventListener('click', () => { const i = periodIdx(settings.period) - 1, c = repCycleRange(`${Math.floor(i/12)}-${pad(i%12+1)}`); repSetRange(c.from, c.to); });
-
-// data for the range: the loaded cycle when the range is inside it, otherwise loaded once (kept 5 minutes)
-let REPR = null, REPR_BUSY = null;
-function repRangeData(rg){
-  const c = repCycleRange(), inR = d => !!d && String(d).slice(0,10) >= rg.from && String(d).slice(0,10) <= rg.to;
-  let src;
-  if (rg.from >= c.from && rg.to <= c.to)
-    src = { attendance:S.attendance, clocks:S.clocks, permissions:S.permissions, leaves:S.leaves, missions:S.missions, penalties:S.penalties, undos:S.undos || [] };
-  else if (REPR && REPR.period === settings.period && REPR.from <= rg.from && REPR.to >= rg.to && Date.now() - REPR.at < 5*60*1000) src = REPR;
-  else { repLoadRange(rg); return { wait:`Loading attendance from ${dmyShow(rg.from)} to ${dmyShow(rg.to)}…` }; }
-  return { attendance: src.attendance.filter(a => inR(a.date)), clocks: src.clocks.filter(x => inR(x.local_date)),
-           permissions: src.permissions.filter(x => inR(x.date)), leaves: src.leaves, missions: src.missions,
-           penalties: src.penalties, undos: src.undos.filter(u => inR(u.date)) };
-}
-async function repLoadRange(rg){
-  const key = rg.from + '|' + rg.to; if (REPR_BUSY === key) return; REPR_BUSY = key;
-  const soft = pr => pr.catch(e => { console.warn(e.message); return []; });
-  try {
-    const [attendance, clocks, permissions, leaves, missions, penalties, undos] = await Promise.all([
-      fetchAll('attendance','date', q => q.gte('date', rg.from).lte('date', rg.to)),
-      soft(fetchAll('clock_events','at', q => q.gte('local_date', rg.from).lte('local_date', rg.to))),
-      soft(fetchAll('attendance_permissions','date', q => q.gte('date', rg.from).lte('date', rg.to))),
-      soft(fetchAll('employee_leaves','date_from', q => q.lte('date_from', rg.to).gte('date_to', rg.from))),
-      soft(fetchAll('employee_missions','date_from', q => q.gte('date_to', rg.from).lte('date_from', rg.to))),
-      soft(fetchAll('employee_penalties','incident_date', q => q.gte('incident_date', rg.from).lte('incident_date', rg.to))),
-      soft(fetchAll('checkout_undos','date', q => q.gte('date', rg.from).lte('date', rg.to))) ]);
-    REPR = { from:rg.from, to:rg.to, at:Date.now(), period:settings.period, attendance, clocks, permissions, leaves, missions, penalties, undos };
-  } catch(e){ toast('Could not load these dates — ' + e.message, 'err'); REPR_BUSY = null; return; }
-  REPR_BUSY = null;
-  if (repCur) runReport();
-}
-// the report is built with the range's data in place of the cycle's, then everything is put back
-function repWithData(D, fn){
-  if (!D) return fn();
-  /** @type {(keyof typeof S)[]} */ const keys = ['attendance','clocks','permissions','leaves','missions','penalties','undos'];
-  const old = {};
-  keys.forEach(k => { old[k] = S[k]; S[k] = D[k]; });
-  try { return fn(); } finally { keys.forEach(k => { S[k] = old[k]; }); }
-}
 
 // ═════════════════════════════════════════════════════════
 //  BOOT

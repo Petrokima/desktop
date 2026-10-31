@@ -184,7 +184,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 #toast{position:fixed;bottom:24px;right:24px;padding:12px 18px;border-radius:var(--rs);font-size:13px;font-weight:600;transform:translateY(90px);opacity:0;transition:all .3s;z-index:999;max-width:360px}
 #loader{position:fixed;inset:0;background:var(--overlay);z-index:300;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;color:var(--label)}
 @media(max-width:900px){#self .layout{flex-direction:column}#self .sidebar{display:flex;position:static;width:100%;height:auto;padding:8px;gap:6px;border-right:none;border-bottom:1px solid var(--border)}#self .sidebar .nav-label{display:none}#self .sidebar .nav-item{margin:0}
-#page-reports>div:last-child{grid-template-columns:1fr!important}.sidebar{display:none}.main{padding:16px}.grid2,.grid3{grid-template-columns:1fr}}
+#page-reports .rep-grid{grid-template-columns:1fr!important}.sidebar{display:none}.main{padding:16px}.grid2,.grid3{grid-template-columns:1fr}}
 
 /* phones and small tablets: ☰ opens the menu over the page */
 .menu-btn{display:none;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:20px;cursor:pointer;flex-shrink:0}
@@ -489,38 +489,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div class="page" id="page-payroll"><div id="react-payroll"></div></div>
 
 <!-- REPORTS -->
-<div class="page" id="page-reports">
-  <div class="page-header"><div><div class="page-title">Reports</div><div class="page-sub" id="rep-sub"></div></div></div>
-  <div style="display:grid;grid-template-columns:260px 1fr;gap:20px;align-items:start">
-    <div class="card" style="padding:10px 0;position:sticky;top:76px;max-height:calc(100vh - 100px);overflow-y:auto" id="rep-list"></div>
-    <div>
-      <div class="card" id="rep-empty"><div class="empty">Choose a report from the list on the left.</div></div>
-      <div class="card" id="rep-view" style="display:none">
-        <div class="toolbar" style="align-items:flex-start">
-          <div><div class="toolbar-title" id="rep-title"></div><div style="font-size:12px;color:var(--muted);margin-top:3px;max-width:560px" id="rep-desc"></div></div>
-          <div class="toolbar-right">
-            <select class="sel" id="rep-mode" style="display:none"><option value="emp">One line per employee</option><option value="day">One line per day</option></select>
-            <select class="sel" id="rep-group" style="display:none"><option value="department">By department</option><option value="unit">By unit</option><option value="entity">By entity</option><option value="contract_type">By contract type</option></select>
-            <select class="sel" id="rep-dept"><option value="">All departments</option></select>
-            <input class="inp" id="rep-q" placeholder="Search…" style="width:160px">
-            <span style="position:relative;display:inline-block"><button class="btn btn-ghost btn-sm" id="rep-cols-btn">☰ Columns</button>
-              <div id="rep-cols-pop" style="display:none;position:absolute;right:0;top:110%;z-index:60;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.3);padding:12px;width:290px;max-height:420px;overflow:auto">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b style="font-size:13px">Columns to show &amp; export</b>
-                  <span style="font-size:12px"><a href="#" id="rep-cols-all" style="color:var(--link)">All</a> · <a href="#" id="rep-cols-none" style="color:var(--link)">None</a></span></div>
-                <div id="rep-cols-list"></div></div></span>
-            <button class="btn btn-primary btn-sm" id="rep-xlsx">⬇ Excel</button><button class="btn btn-ghost btn-sm" id="rep-export">⬇ CSV</button>
-          </div></div>
-        <div class="toolbar" id="rep-dbar" style="border-top:1px solid var(--border);padding-top:10px;gap:8px;flex-wrap:wrap;justify-content:flex-start">
-          <span style="font-size:13px;color:var(--label)">From</span><input type="date" class="sel" id="rep-from">
-          <span style="font-size:13px;color:var(--label)">to</span><input type="date" class="sel" id="rep-to">
-          <button class="btn btn-ghost btn-sm" id="rep-today">Today</button><button class="btn btn-ghost btn-sm" id="rep-cyc">This payroll cycle</button><button class="btn btn-ghost btn-sm" id="rep-prev">Previous cycle</button>
-          <span id="rep-dnote" style="font-size:12px;color:var(--muted)"></span></div>
-        <div class="tbl-wrap"><table><thead id="rep-head"></thead><tbody id="rep-body"></tbody><tfoot id="rep-foot"></tfoot></table></div>
-        <div class="foot" id="rep-note"></div>
-      </div>
-    </div>
-  </div>
-</div>
+<div class="page" id="page-reports"><div id="react-reports"></div></div>   <!-- drawn by React: react/src/reports -->
 
 <!-- PUBLIC HOLIDAYS -->
 <div class="page" id="page-holidays"><div id="react-holidays"></div></div>   <!-- drawn by React: react/src/holidays -->
@@ -772,6 +741,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=707c9a1b36f0"></script>
-<script src="react.js?v=0ec688759dc2"></script>
+<script src="app.js?v=070d44315558"></script>
+<script src="react.js?v=890b271d2470"></script>
 </body></html>

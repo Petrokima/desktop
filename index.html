@@ -764,28 +764,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 
 <!-- MODAL: HANDLE HR REQUEST -->
 
-<!-- MODAL: FINGERPRINT MACHINE IMPORT -->
-<div class="overlay" id="m-mi"><div class="modal wide">
-  <div class="modal-head"><div class="modal-title">Import from the HQ fingerprint machine</div><button class="x" data-close="m-mi">×</button></div>
-  <div class="alert a-info" style="line-height:1.7">Use the <b>attendance log</b> file from the ZKTeco machine (USB download, e.g. <b>attend.txt</b> or <b>1_attlog.dat</b>) or a CSV export from its software.
-    The original punches are stored permanently. Each day becomes one attendance record: <b>first punch = check-in, last punch = check-out</b>; repeat taps within a minute count once;
-    a night shift (evening <b>In</b> as the only punch of the day, then <b>Out</b> next morning) stays together. Days with <b>one punch</b> or <b>more than 16 hours</b> are marked ⚠ for HR and carry no deductions or overtime until corrected.
-    Records typed in by hand or from phones are never replaced; re-importing replaces only earlier machine records. Approved months are skipped.</div>
-  <div class="grid3" style="margin-bottom:12px">
-    <div class="field"><label>From</label><input type="date" id="mi-from"></div>
-    <div class="field"><label>To</label><input type="date" id="mi-to"></div>
-    <div class="field"><label>Project for these punches (optional)</label><input id="mi-proj" list="dl-proj" placeholder="No project (HQ)"></div>
-  </div>
-  <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
-    <label class="btn btn-primary btn-sm" style="cursor:pointer">📂 Choose file…<input type="file" id="mi-file" accept=".txt,.dat,.csv,.log" style="display:none"></label>
-    <span id="mi-fname" style="font-size:13px;color:var(--muted)"></span>
-  </div>
-  <div id="mi-summary"></div>
-  <div class="tbl-wrap" style="max-height:340px;overflow-y:auto"><table><thead><tr><th>Date</th><th>Code</th><th>Employee</th><th>In</th><th>Out</th><th class="num">Hours</th><th>Result</th></tr></thead><tbody id="mi-rows"></tbody></table></div>
-  <div class="foot" id="mi-foot"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-mi">Cancel</button><button class="btn btn-success" id="mi-go" disabled>Import</button></div>
-</div></div>
-
 <!-- MODAL: PROJECT ALLOWANCE RULE -->
 <!-- MODAL: PHONE SIGN-IN ATTEMPTS -->
 <div class="overlay" id="m-phal"><div class="modal" style="max-width:860px">
@@ -878,6 +856,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=6e81462c6c9b"></script>
-<script src="react.js?v=fdc335330d64"></script>
+<script src="app.js?v=2b7163d3de81"></script>
+<script src="react.js?v=a14c0c621a5c"></script>
 </body></html>

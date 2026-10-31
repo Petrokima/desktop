@@ -148,6 +148,7 @@ td.num,th.num{text-align:right;font-family:'Inter',system-ui,'Segoe UI',Arial,sa
 @keyframes sp{to{transform:rotate(360deg)}}
 #setup{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
 .setup-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:32px;width:100%;max-width:480px}
+#react-setup,#react-login{width:100%;max-width:480px}   /* the React sign-in cards sit inside these (react/src/signin) */
 /* role-based controls */
 body:not(.can-hr) :is([data-act="new-proj"],[data-act="new-hol"],
   #p-save,#hd-save,
@@ -207,43 +208,10 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </style>
 </head>
 <body>
-<div id="setup">
-  <div class="setup-card">
-    <div class="logo" style="margin-bottom:20px"><div class="logo-mark big">PETROKIMA</div>
-      <div><div class="logo-name">HR</div><div class="logo-sub">Connect to the HR database</div></div></div>
-    <div class="field" style="margin-bottom:14px"><label>Server address</label><input id="cfg-url" placeholder="https://xxxxxxxx.supabase.co  or  http://SERVER-IP:8000"></div>
-    <div class="field" style="margin-bottom:18px"><label>Access key</label><input id="cfg-key" placeholder="eyJ... or sb_publishable_..."></div>
-    <button class="btn btn-primary" id="btn-connect" style="width:100%;justify-content:center">Connect &amp; Launch</button>
-    <div id="setup-err" class="alert a-warn" style="display:none;margin-top:14px;margin-bottom:0"></div>
-    <div style="margin-top:14px;font-size:11px;color:var(--muted)">Credentials are stored only in this browser.</div>
-  </div>
-</div>
+<div id="setup"><div id="react-setup"></div></div>
 
-<div id="login" style="display:none;align-items:center;justify-content:center;min-height:100vh;padding:24px">
-  <div class="setup-card">
-    <div class="logo" style="margin-bottom:22px"><div class="logo-mark big">PETROKIMA</div>
-      <div><div class="logo-name">HR</div><div class="logo-sub">Sign in to continue</div></div></div>
-    <div id="login-form">
-      <div class="field" style="margin-bottom:14px"><label>Employee code (or email)</label><input id="li-email" autocomplete="username" placeholder="e.g. 615"></div>
-      <div class="field" style="margin-bottom:8px"><label>Password</label><input id="li-pass" type="password" autocomplete="current-password"></div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.5">First time? Use the temporary password HR gave you. If your account is locked, contact HR.</div>
-      <div id="li-cap" style="display:none;margin-bottom:10px"></div>
-      <button class="btn btn-primary" id="btn-login" style="width:100%;justify-content:center">Sign in</button>
-    </div>
-    <div id="login-first" style="display:none">
-      <div class="alert a-info" style="margin:0 0 14px;line-height:1.6">Welcome <b id="fl-name"></b>. This is your first sign-in — confirm your year of birth and choose your own password (at least 8 characters, different from your first password).</div>
-      <div class="field" style="margin-bottom:12px"><label>Your year of birth</label><input id="fl-year" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="e.g. 1988"></div>
-      <div class="field" style="margin-bottom:12px"><label>New password (at least 8 characters)</label><input id="fl-p1" type="password" autocomplete="new-password"></div>
-      <div class="field" style="margin-bottom:16px"><label>Repeat new password</label><input id="fl-p2" type="password" autocomplete="new-password"></div>
-      <button class="btn btn-primary" id="btn-first" style="width:100%;justify-content:center">Set my password</button>
-      <button class="btn btn-ghost" data-act="signout" style="width:100%;justify-content:center;margin-top:8px">Cancel and sign out</button>
-    </div>
-    <div id="login-noaccess" style="display:none"></div>
-    <div id="login-err" class="alert a-warn" style="display:none;margin-top:14px;margin-bottom:0"></div>
-    <div style="margin-top:16px;font-size:11px;color:var(--muted);display:flex;justify-content:space-between">
-      <span>Forgot your password? Ask the administrator to reset it.</span><a href="#" data-act="disconnect" style="color:var(--muted)">Change database</a></div>
-  </div>
-</div>
+<div id="login" style="display:none;align-items:center;justify-content:center;min-height:100vh;padding:24px"><div id="react-login"></div></div>
+
 
 <div id="self" style="display:none">
   <div class="topbar">
@@ -478,29 +446,8 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="modal-foot"><button class="btn btn-ghost" data-close="m-pass">Cancel</button><button class="btn btn-primary" id="pw-save">Change password</button></div>
 </div></div>
 
-<!-- MODAL: TWO-STEP SET-UP -->
-<div class="overlay" id="m-2fa"><div class="modal" style="max-width:460px">
-  <div class="modal-head"><div class="modal-title">Set up two-step sign-in</div><button class="x" id="tfa-x">×</button></div>
-  <ol style="font-size:13px;line-height:1.7;color:var(--label);padding-left:18px;margin:0 0 12px">
-    <li>On your phone, install <b>Google Authenticator</b> or <b>Microsoft Authenticator</b> (free, App Store / Play Store).</li>
-    <li>In the app tap <b>+</b> → <b>Scan a QR code</b> and scan the square below.</li>
-    <li>Type the <b>6-digit code</b> the app shows, then click <b>Confirm</b>.</li></ol>
-  <div style="text-align:center;margin:6px 0 10px"><img id="tfa-qr" alt="QR code" style="width:200px;height:200px;background:#fff;padding:8px;border-radius:8px"></div>
-  <div style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:12px">Can't scan? Choose <b>Enter a setup key</b> in the app and type:<br><span class="mono" id="tfa-secret" style="font-size:13px;color:var(--text);word-break:break-all"></span></div>
-  <div class="field"><label>6-digit code from the app</label><input id="tfa-code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="123456" style="font-size:20px;letter-spacing:6px;text-align:center"></div>
-  <div id="tfa-err" class="alert a-warn" style="display:none;margin:12px 0 0"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" id="tfa-cancel">Cancel</button><button class="btn btn-primary" id="tfa-confirm">Confirm</button></div>
-</div></div>
-
-<!-- MODAL: TWO-STEP CODE -->
-<div class="overlay" id="m-code"><div class="modal" style="max-width:380px">
-  <div class="modal-head"><div class="modal-title" id="code-title">Enter your 6-digit code</div></div>
-  <p style="font-size:13px;color:var(--label);line-height:1.6;margin:0 0 12px" id="code-msg">Open your authenticator app on your phone and type the 6-digit code shown for <b>Petrokima HR</b>.</p>
-  <div class="field"><input id="code-in" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="123456" style="font-size:22px;letter-spacing:8px;text-align:center"></div>
-  <div id="code-err" class="alert a-warn" style="display:none;margin:12px 0 0"></div>
-  <div style="font-size:11px;color:var(--muted);margin-top:10px">Lost your phone? Ask the administrator to reset your two-step sign-in.</div>
-  <div class="modal-foot"><button class="btn btn-ghost" id="code-cancel">Sign out</button><button class="btn btn-primary" id="code-ok">Continue</button></div>
-</div></div>
+<!-- the two-step windows (6-digit code, set-up) are React: react/src/signin -->
+<div id="react-twostep"></div>
 
 <!-- MODAL: IDLE WARNING (part29.js) -->
 <div class="overlay" id="m-idle"><div class="modal" style="max-width:400px">
@@ -529,6 +476,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=86646daee679"></script>
-<script src="react.js?v=8f67afb6bc01"></script>
+<script src="app.js?v=1fe99adaf5c5"></script>
+<script src="react.js?v=82c99e38eb36"></script>
 </body></html>

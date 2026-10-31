@@ -216,25 +216,12 @@ async function chunked(rows, fn, size=500){ for(let i=0;i<rows.length;i+=size){ 
 // ═════════════════════════════════════════════════════════
 //  CONNECTION
 // ═════════════════════════════════════════════════════════
-async function connectFromForm(){
-  const err=$('setup-err'), show=m=>{ err.innerHTML=m; err.style.display='block'; };
-  err.style.display='none';
-  const url=$('cfg-url').value.trim().replace(/\/+$/,''), key=$('cfg-key').value.trim();
-  if(!lib()) return show('The app could not load. Check your internet connection and reload.');
-  if(!url||!key) return show('Both fields are required.');
-  // cloud (https://xxxx.supabase.co) or our own server in an emergency (http://192.168.1.20:8000)
-  if(!/^https?:\/\/[a-z0-9.-]+(:\d{2,5})?$/i.test(url)) return show('URL should look like <b>https://xxxxxxxx.supabase.co</b> or, for our own server, <b>http://192.168.1.20:8000</b>');
-  const btn=$('btn-connect'); btn.disabled=true; btn.textContent='Connecting…';
-  try{
-    const c = lib().createClient(url,key);
-    const { error } = await c.from('employees').select('id').limit(1);
-    if(error) throw error;
-    localStorage.setItem('sb_url',url); localStorage.setItem('sb_key',key);
-    await startApp(url,key);
-  }catch(e){ show('Connection failed: '+esc(e.message||e)); }
-  btn.disabled=false; btn.textContent='Connect & Launch';
-}
-
+// The connection card, the sign-in card and the first sign-in are React since 31 Oct 2026 (react/src/signin). The old code only
+// says which card to show (SIGNIN) and why the saved connection could not start (SETUP_ERR); what happens after signing in stays here.
+/** @type {{ mode: 'login', msg?: string } | { mode: 'noaccess', kind: 'norole' | 'locked' | 'manager', email: string } | { mode: 'first', name: string, user: any }} */
+let SIGNIN = { mode: 'login' };
+let SETUP_ERR = '';
+function signInCard(state){ SIGNIN = state; if (typeof PKR !== 'undefined') PKR.render(); }
 let ME = null;
 const ROLE_LABEL = { admin:'Admin', hr:'HR', hr_officer:'HR Officer', employee:'Employee' };
 const PAY_FIELDS = ['salary','housing','transport','daily_pay','hour_pay','delay_hour_pay','insurance_amount'];
@@ -248,9 +235,7 @@ async function startApp(url,key){
 }
 function showLogin(msg){
   $('app').style.display='none'; $('login').style.display='flex';
-  $('login-form').style.display='block'; $('login-noaccess').style.display='none';
-  const e=$('login-err'); if(msg){ e.innerHTML=msg; e.style.display='block'; } else e.style.display='none';
-  setTimeout(()=>$('li-email').focus(),50);
+  signInCard({ mode: 'login', msg: msg || undefined });
 }
 // ── CAPTCHA on every password sign-in (Cloudflare Turnstile, 25 Oct 2026) ──
 //  TURNSTILE_SITE_KEY = the PUBLIC site key of the widget "Petrokima HR sign-in". Empty = no CAPTCHA (nothing is shown, nothing sent).
@@ -287,32 +272,18 @@ async function captchaToken(boxId, lang){
       'timeout-callback': () => finish(reject, new Error('captcha-timeout')) });
   });
 }
-const LOGIN_DOMAIN = 'petrokima.local';
-function loginName(v){ v=String(v||'').trim(); return v.includes('@') ? v.toLowerCase() : v.toLowerCase().replace(/[^a-z0-9._-]/g,'') + '@' + LOGIN_DOMAIN; }
-let lastTempPass = '';
-async function doLogin(){
-  const email=loginName($('li-email').value), pass=$('li-pass').value;
-  if(!email||!pass) return showLogin('Enter your email and password.');
-  const b=$('btn-login'); b.disabled=true; b.textContent='Signing in…';
-  let cap; try { cap = await captchaToken('li-cap', 'en'); } catch(e){ cap = undefined; }   // check unavailable: Supabase decides
-  const { data, error } = await sb.auth.signInWithPassword({ email, password:pass, options: cap ? { captchaToken: cap } : undefined });
-  b.disabled=false; b.textContent='Sign in';
-  if (error) return showLogin(/invalid/i.test(error.message) ? 'Wrong employee code / email or password.' : /captcha/i.test(error.message) ? 'The security check did not complete. Check the internet connection and try again.' : esc(error.message));
-  lastTempPass = pass; $('li-pass').value=''; await afterLogin(data.user);
-}
 async function afterLogin(user){
   const { data } = await sb.from('app_users').select('*').eq('id', user.id);
   const me = data && data[0];
-  const stop = html => { $('app').style.display='none'; $('login').style.display='flex'; $('login-form').style.display='none';
-    $('login-err').style.display='none'; $('login-noaccess').style.display='block';
-    $('login-noaccess').innerHTML = `<div class="alert a-warn" style="margin:0 0 14px">${html}</div><button class="btn btn-ghost" data-act="signout" style="width:100%;justify-content:center">Sign out</button>`; };
-  if (!me || !me.role) return stop(`Signed in as <b>${esc(user.email)}</b>, but this account has not been given access yet. Ask the administrator to assign you a role.`);
-  if (!me.active) return stop(`The account <b>${esc(user.email)}</b> is locked or deactivated. Contact the administrator.`);
+  /** @param {'norole' | 'locked' | 'manager'} kind */
+  const stop = kind => { $('app').style.display='none'; $('login').style.display='flex'; signInCard({ mode: 'noaccess', kind, email: user.email }); };
+  if (!me || !me.role) return stop('norole');
+  if (!me.active) return stop('locked');
   if (me.must_change_password) return showFirstLogin(me, user);
   // Admin / HR / HR Officer: the 6-digit code (two-step sign-in) before staff powers
   if (STAFF_ROLES.includes(me.role) && !(await mfaGate(me, user))) return;
   if (me.role==='employee') return showSelf(me, user);
-  if (me.role==='manager') return stop(`Manager access to the desktop app arrives in Phase 2 with reporting lines. Your account is ready.`);
+  if (me.role==='manager') return stop('manager');
   ME = { ...me, email:user.email };
   PK_ERR.user(ME);                                    // error reports carry only the login's number and role
   const r = me.role;
@@ -330,25 +301,7 @@ async function afterLogin(user){
 }
 function showFirstLogin(me, user){
   $('app').style.display='none'; $('self').style.display='none'; $('login').style.display='flex';
-  ['login-form','login-noaccess'].forEach(id=>$(id).style.display='none'); $('login-first').style.display='block';
-  $('login-err').style.display='none'; $('fl-name').textContent = me.full_name || user.email;
-  ['fl-year','fl-p1','fl-p2'].forEach(id=>$(id).value=''); setTimeout(()=>$('fl-year').focus(),50);
-  $('btn-first').onclick = async () => {
-    const yr=$('fl-year').value.trim(), a=$('fl-p1').value, b=$('fl-p2').value, err=$('login-err');
-    const show = m => { err.innerHTML=m; err.style.display='block'; };
-    err.style.display='none';
-    if (a.length < 8) return show('The new password must be at least 8 characters.');
-    if (a !== b) return show('The two passwords do not match.');
-    if (a === lastTempPass) return show('Choose a password different from the temporary one.');
-    const btn=$('btn-first'); btn.disabled=true; btn.textContent='Saving…';
-    if (!/^\d{4}$/.test(yr)) return show('Enter the year you were born (4 digits, e.g. 1988).');
-    const { data, error } = await sb.rpc('complete_first_login', { p_nid_last4:null, p_new_password:a, p_birth_year:yr });
-    btn.disabled=false; btn.textContent='Set my password';
-    if (error) return show(esc(error.message));
-    if (data !== 'ok') return show(esc(data));
-    lastTempPass=''; err.style.display='none'; $('login-first').style.display='none'; toast('Password set — welcome!');
-    await afterLogin(user);
-  };
+  signInCard({ mode: 'first', name: me.full_name || user.email, user });
 }
 let SELF = null;
 async function showSelf(me, user){
@@ -988,7 +941,6 @@ document.addEventListener('click', async ev => {
 });
 
 // inputs
-$('btn-connect').addEventListener('click', connectFromForm);
 document.addEventListener('keydown', e => { if (e.key==='Escape') document.querySelectorAll('.overlay.open').forEach(o=>o.classList.remove('open')); });
 
 setInterval(()=>{ $('clock').textContent = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); }, 1000);
@@ -1416,10 +1368,8 @@ function afterHolChange(){ renderHolidays(); renderLeaves(); renderAttendance();
 
 // ═════════════════════════════════════════════════════════
 //  USERS & ROLES (admin only) — the page is React now (react/src/users, 30 Oct 2026); it loads when opened.
-//  Kept here: the sign-in and change-password buttons.
+//  Kept here: the change-password button (the sign-in card is React — react/src/signin).
 // ═════════════════════════════════════════════════════════
-$('btn-login').addEventListener('click', doLogin);
-['li-email','li-pass'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); }));
 $('pw-save').addEventListener('click', changePassword);
 
 // employee screens: hours as hours and minutes (1.5 → "1 h 30 m"); payroll and reports keep decimal hours
@@ -1979,9 +1929,10 @@ async function voiceChanged(){
 const STAFF_ROLES = ['admin','hr','hr_officer'];
 let SEC = { require_staff_mfa:false, enrolled:false, aal:'aal1', ready:false };
 
-// the two two-step windows must not close by clicking beside them or pressing Esc
+// the two two-step windows (React since 31 Oct 2026 — react/src/signin) must not close by clicking beside them or pressing Esc
+const twoStepOpen = () => !!document.querySelector('#m-code.open, #m-2fa.open');
 document.addEventListener('click', e => { if (e.target && (/** @type {PageEl} */ (e.target).id === 'm-code' || /** @type {PageEl} */ (e.target).id === 'm-2fa')) e.stopImmediatePropagation(); }, true);
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && ($('m-code').classList.contains('open') || $('m-2fa').classList.contains('open'))) e.stopImmediatePropagation(); }, true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && twoStepOpen()) e.stopImmediatePropagation(); }, true);
 
 async function loadSecurity(){
   try {
@@ -2001,77 +1952,11 @@ async function currentAal(){
   return data || { currentLevel:'aal1', nextLevel:'aal1' };
 }
 
-// ── ask for the 6-digit code (resolves true when the session is upgraded) ──
-function askCode(opts = {}){
-  return new Promise(resolve => {
-    $('code-title').textContent = opts.title || 'Enter your 6-digit code';
-    $('code-cancel').textContent = opts.cancelText || 'Sign out';
-    $('code-in').value = ''; $('code-err').style.display = 'none';
-    openM('m-code'); setTimeout(() => $('code-in').focus(), 50);
-    const done = ok => { closeM('m-code'); $('code-ok').onclick = $('code-cancel').onclick = $('code-in').onkeydown = null; resolve(ok); };
-    const go = async () => {
-      const code = $('code-in').value.replace(/\D/g, '');
-      if (code.length !== 6){ $('code-err').textContent = 'Type the 6 digits shown in your authenticator app.'; $('code-err').style.display = 'block'; return; }
-      $('code-ok').disabled = true; $('code-ok').textContent = 'Checking…';
-      try {
-        const f = await verifiedFactor(); if (!f) throw new Error('No authenticator is set up for this account.');
-        const { error } = await sb.auth.mfa.challengeAndVerify({ factorId: f.id, code });
-        if (error) throw error;
-        done(true);
-      } catch (e) {
-        $('code-err').textContent = /invalid|expired|code/i.test(e.message || '') ? 'Wrong or expired code — wait for the next code in the app and try again.' : (e.message || String(e));
-        $('code-err').style.display = 'block'; $('code-in').value = ''; $('code-in').focus();
-      } finally { $('code-ok').disabled = false; $('code-ok').textContent = 'Continue'; }
-    };
-    $('code-ok').onclick = go;
-    $('code-in').onkeydown = e => { if (e.key === 'Enter') go(); };
-    $('code-cancel').onclick = () => done(false);
-  });
-}
-
-// ── set up an authenticator (resolves true when verified) ──
-let tfaPending = null;
-function setupTwoStep(opts = {}){
-  return new Promise(async resolve => {
-    $('tfa-err').style.display = 'none'; $('tfa-code').value = ''; $('tfa-qr').removeAttribute('src'); $('tfa-secret').textContent = '…';
-    $('tfa-cancel').textContent = opts.forced ? 'Sign out' : 'Cancel';
-    $('tfa-x').style.display = opts.forced ? 'none' : '';
-    openM('m-2fa');
-    const fail = m => { $('tfa-err').innerHTML = m; $('tfa-err').style.display = 'block'; };
-    const finish = ok => { closeM('m-2fa'); $('tfa-confirm').onclick = $('tfa-cancel').onclick = $('tfa-x').onclick = $('tfa-code').onkeydown = null; resolve(ok); };
-    const cancel = async () => {
-      if (tfaPending) { try { await sb.auth.mfa.unenroll({ factorId: tfaPending }); } catch (e) {} tfaPending = null; }
-      finish(false);
-    };
-    $('tfa-cancel').onclick = cancel; $('tfa-x').onclick = cancel;
-    try {
-      // remove half-finished set-ups from earlier attempts
-      const { data: fl } = await sb.auth.mfa.listFactors();
-      for (const f of ((fl && fl.all) || []).filter(f => f.status !== 'verified')) { try { await sb.auth.mfa.unenroll({ factorId: f.id }); } catch (e) {} }
-      const { data, error } = await sb.auth.mfa.enroll({ factorType:'totp', issuer:'Petrokima HR', friendlyName:'Petrokima HR ' + new Date().toISOString().slice(0,16) });
-      if (error) throw error;
-      tfaPending = data.id;
-      $('tfa-qr').src = data.totp.qr_code;
-      $('tfa-secret').textContent = (data.totp.secret || '').replace(/(.{4})/g, '$1 ').trim();
-      setTimeout(() => $('tfa-code').focus(), 50);
-    } catch (e) {
-      return fail(/disabled|not enabled/i.test(e.message || '')
-        ? 'Two-step sign-in is switched off in the database settings. Please ask the administrator to turn it on.'
-        : esc(e.message || String(e)));
-    }
-    const go = async () => {
-      const code = $('tfa-code').value.replace(/\D/g, '');
-      if (code.length !== 6) return fail('Type the 6 digits shown in the app.');
-      $('tfa-confirm').disabled = true; $('tfa-confirm').textContent = 'Checking…';
-      const { error } = await sb.auth.mfa.challengeAndVerify({ factorId: tfaPending, code });
-      $('tfa-confirm').disabled = false; $('tfa-confirm').textContent = 'Confirm';
-      if (error) { $('tfa-code').value = ''; return fail('That code did not match — wait for the next code in the app and try again.'); }
-      tfaPending = null; toast('Two-step sign-in is set up ✔'); finish(true);
-    };
-    $('tfa-confirm').onclick = go;
-    $('tfa-code').onkeydown = e => { if (e.key === 'Enter') go(); };
-  });
-}
+// ── the 6-digit code window and the authenticator set-up window are React since 31 Oct 2026 (react/src/signin) ──
+/** @param {{ title?: string, cancelText?: string }} [opts] @returns {Promise<boolean>} true when the code was right */
+function askCode(opts = {}){ return /** @type {NonNullable<typeof PKR>} */ (PKR).askCode(opts); }
+/** @param {{ forced?: boolean }} [opts] @returns {Promise<boolean>} true when an authenticator was set up */
+function setupTwoStep(opts = {}){ return /** @type {NonNullable<typeof PKR>} */ (PKR).setupTwoStep(opts); }
 
 // ── called by afterLogin for Admin / HR / HR Officer. true = carry on, false = stop (a window took over) ──
 async function mfaGate(me, user){
@@ -2763,8 +2648,8 @@ const EMBED_KEY = 'sb_publishable_yyfkPLo6M7XDe3lwurctmw_6wsmB-2M';
   const embedded = EMBED_KEY && !EMBED_KEY.startsWith('PASTE-');
   if (embedded){ localStorage.setItem('sb_url', EMBED_URL); localStorage.setItem('sb_key', EMBED_KEY); $('setup').style.display = 'none'; }
   const url = embedded ? EMBED_URL : localStorage.getItem('sb_url'), key = embedded ? EMBED_KEY : localStorage.getItem('sb_key');
-  if (url) $('cfg-url').value = url; if (key) $('cfg-key').value = key;
-  if (!lib()){ const e=$('setup-err'); e.textContent='The app could not load. Check your internet connection and reload.'; e.style.display='block'; return; }
-  if (url && key) startApp(url, key).catch(e => { const x=$('setup-err'); x.textContent='Auto-connect failed: '+e.message; x.style.display='block'; $('setup').style.display='flex'; $('app').style.display='none'; });
+  // (the connection card is React — react/src/signin: it starts with the saved address and key, and shows SETUP_ERR)
+  if (!lib()){ SETUP_ERR = 'The app could not load. Check your internet connection and reload.'; $('setup').style.display='flex'; return; }
+  if (url && key) startApp(url, key).catch(e => { SETUP_ERR = 'Auto-connect failed: '+e.message; if (typeof PKR !== 'undefined') PKR.render(); $('setup').style.display='flex'; $('app').style.display='none'; });
 })();
 

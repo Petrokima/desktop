@@ -493,70 +493,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div class="page" id="page-hralerts"><div id="react-hralerts"></div></div>   <!-- drawn by React: react/src/hralerts -->
 
 <!-- SETTINGS -->
-<div class="page" id="page-settings">
-  <div class="page-header"><div><div class="page-title">Settings</div><div class="page-sub">Payroll rules — saved to the database and shared by all users</div><div class="ro-note ro-set">View only — Finance and Admin can change settings</div></div>
-    <button class="btn btn-primary" id="set-save">Save settings</button></div>
-  <div class="grid2" style="max-width:900px">
-    <div class="card" style="padding:20px">
-      <div class="sec">Company &amp; period</div>
-      <div class="field" style="margin-bottom:12px"><label>Company name</label><input id="s-company"></div>
-      <div class="field" style="margin-bottom:12px"><label>Current pay period</label><input type="month" id="s-period"></div>
-      <div class="field"><label>Payroll cycle starts on day (21 → 21st of previous month to 20th; 1 → calendar month)</label><input type="number" min="1" max="28" id="s-cycle"></div>
-      <div id="s-cycle-hint" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
-      <div class="sec">Working time</div>
-      <div class="grid2">
-        <div class="field"><label>Standard hours / day</label><input type="number" step="0.5" id="s-hours"></div>
-        <div class="field"><label>Days / month (for hourly rate)</label><input type="number" id="s-days"></div>
-        <div class="field"><label>Overtime multiplier</label><input type="number" step="0.05" id="s-otm"></div>
-        <div class="field"><label>Normal start time</label><input type="time" id="s-shift"></div>
-        <div class="field"><label>Late after (latest allowed arrival)</label><input type="time" id="s-late"></div>
-        <div class="field"><label>Evening / night shift if the day starts after (no lateness)</label><input type="time" id="s-evening"></div>
-        <div class="field"><label>Minimum overtime (hours)</label><input type="number" step="0.25" id="s-ot-thr"></div>
-        <div class="field"><label>Once the minimum is reached, pay…</label><select id="s-ot-mode">
-          <option value="threshold">all extra hours (1.5 h extra → 1.5 h paid)</option>
-          <option value="after">only hours beyond the minimum (1.5 h extra → 0.5 h paid)</option></select></div>
-        <div class="field full"><label>Weekend days (not counted as leave days)</label><div id="s-weekend" style="display:flex;gap:12px;flex-wrap:wrap;font-size:13px;padding-top:4px"></div></div>
-        <div class="field"><label>Default annual leave (days / year)</label><input type="number" id="s-annual"></div>
-        <div class="field"><label>Casual leave counts against annual?</label><select id="s-casual"><option value="yes">Yes</option><option value="no">No</option></select></div>
-        <div class="field full"><label>Working on a public holiday pays, on top of the normal monthly salary…</label><select id="s-hol-x">
-          <option value="1">1 extra day's pay (total for the day = double)</option><option value="2">2 extra days' pay (total for the day = triple)</option></select></div>
-        <div class="field full"><label>Count a working day with NO attendance, leave or mission as an absent day — starting from</label><input type="date" id="s-auto-abs">
-          <div style="font-size:11.5px;color:var(--muted);margin-top:4px">Leave empty to count every day. Until all staff use the app or the fingerprint machine, put your go-live date here so earlier days are not deducted. Attendance-exception staff are never counted absent.</div></div>
-        <div class="field full"><label>Permission requests (late arrival / early leave) from employees — vacations always need HR's final approval after the manager</label><select id="s-reqflow">
-          <option value="hr">Direct manager approves, then HR gives the final approval</option>
-          <option value="manager">Direct manager's approval is final</option></select></div>
-        <div class="field"><label>Free permissions per month</label><input type="number" id="s-perm-n"></div>
-        <div class="field"><label>Late-arrival permission: request no later than (minutes after shift start)</label><input type="number" id="s-perm-deadline" min="0" placeholder="30"></div>
-        <div class="field"><label>Project cost reports for Accounting: combine projects with fewer than … people (1 = show every project)</label><input type="number" id="s-acct-min" min="1" placeholder="3"></div>
-        <div class="field"><label>Annual leave: request at least (days before it starts)</label><input type="number" id="s-annual-notice" min="0" placeholder="1"></div>
-        <div class="field"><label>Max hours per permission</label><input type="number" step="0.25" id="s-perm-h"></div>
-      </div>
-    </div>
-    <div class="card" style="padding:20px">
-      <div class="sec">Deduction rates (%)</div>
-      <div class="grid2">
-        <div class="field"><label>Social insurance — Egypt</label><input type="number" step="0.01" id="s-si-eg"></div>
-        <div class="field"><label>Social insurance — Saudi (GOSI)</label><input type="number" step="0.01" id="s-si-sa"></div>
-      </div>
-      <div class="sec">Engine element codes</div>
-      <div class="grid3">
-        <div class="field"><label>Overtime value</label><input type="number" id="s-c-ot"></div>
-        <div class="field"><label>Social insurance</label><input type="number" id="s-c-si"></div>
-        <div class="field"><label>Loans</label><input type="number" id="s-c-loan"></div>
-        <div class="field"><label>Delay hours</label><input type="number" id="s-c-delay"></div>
-        <div class="field"><label>Penalties</label><input type="number" id="s-c-pen"></div>
-        <div class="field"><label>Unpaid leave</label><input type="number" id="s-c-unpaid"></div>
-        <div class="field"><label>Absence</label><input type="number" id="s-c-absent"></div>
-        <div class="field"><label>Public holiday work</label><input type="number" id="s-c-holiday"></div>
-      </div>
-    </div>
-    <div class="card full" style="padding:20px">
-      <div class="sec">Database connection</div>
-      <div style="font-size:13px;color:var(--label);margin-bottom:12px" id="s-db"></div>
-      <button class="btn btn-danger btn-sm" data-act="disconnect">Disconnect / change database</button>
-    </div>
-  </div>
-</div>
+<div class="page" id="page-settings"><div id="react-settings"></div></div>
 
 </main>
 </div>
@@ -726,6 +663,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=60d398e755f5"></script>
-<script src="react.js?v=8fa0b2a16fc9"></script>
+<script src="app.js?v=b48fc7e3a5ee"></script>
+<script src="react.js?v=17b1c9b7a260"></script>
 </body></html>

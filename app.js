@@ -52,6 +52,7 @@ const PK_ERR = (function(){
 // ═════════════════════════════════════════════════════════
 /** @type {AppDb} — the database connection (typed: every table, column and database function is checked) */
 let sb = /** @type {any} — set at start-up, before anything reads from the database */ (null);
+let DB_HOST = '';                // the database's address, e.g. abc.supabase.co (set by startApp)
 /** The data loaded for the current payroll cycle — rows straight from the database (types: types/globals.d.ts).
  * @type {{ employees: Employee[], projects: Project[], attendance: AttendanceRow[], elements: SalaryElement[], fixed: FixedElement[],
  *          monthly: MonthlyEntry[], loans: Loan[], permissions: Permission[], leaves: Leave[], penalties: Penalty[], holidays: Holiday[],
@@ -241,7 +242,7 @@ const isOfficer = () => !!(ME && ME.role === 'hr_officer');
 async function startApp(url,key){
   sb = lib().createClient(url,key);
   $('setup').style.display='none';
-  $('s-db').textContent = 'Connected to ' + url.replace(/^https?:\/\//,'');
+  DB_HOST = url.replace(/^https?:\/\//,'');          // shown on the Settings page (React: react/src/settings)
   const { data } = await sb.auth.getSession();
   if (data && data.session) await afterLogin(data.session.user); else showLogin();
 }
@@ -915,26 +916,10 @@ function openSlip(r){
 // ═════════════════════════════════════════════════════════
 //  SETTINGS
 // ═════════════════════════════════════════════════════════
-const SET_MAP = [['s-company','companyName','t'],['s-period','period','t'],['s-cycle','cycleStartDay'],['s-hours','hoursPerDay'],['s-shift','shiftStart','t'],['s-late','lateAfter','t'],['s-evening','eveningShiftAfter','t'],['s-ot-thr','otThreshold'],['s-ot-mode','otMode','t'],['s-perm-n','permissionsPerMonth'],['s-reqflow','requestFlow','t'],['s-perm-deadline','permDeadlineMin','n'],['s-acct-min','acctMinEmployees','n'],['s-annual-notice','annualNoticeDays','n'],['s-annual','annualLeaveDefault'],['s-casual','casualCountsAnnual','t'],['s-c-unpaid','codeUnpaid'],['s-c-absent','codeAbsent'],['s-c-holiday','codeHoliday'],['s-hol-x','holidayExtraDays'],['s-perm-h','permissionMaxHours'],['s-days','daysPerMonth'],['s-otm','otMultiplier'],
-  ['s-auto-abs','autoAbsentFrom','t'],['s-si-eg','siRateEG'],['s-si-sa','siRateSA'],['s-c-ot','codeOT'],['s-c-si','codeSI'],['s-c-loan','codeLoan'],['s-c-delay','codeDelay'],['s-c-pen','codePenalty']];
+// The Settings page moved to React 31 Oct 2026 (react/src/settings): it reads and saves the settings itself. The old code
+// still calls applySettingsUI() after it (re)loaded them, so the page shows the saved values again.
 const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-function applySettingsUI(){
-  SET_MAP.forEach(([id,k]) => $(id).value = settings[k] ?? '');
-  const w = settings.weekendDays || [];
-  cycleHint();
-  $('s-weekend').innerHTML = DAYS.map((d,i)=>`<label style="display:flex;gap:5px;align-items:center;cursor:pointer"><input type="checkbox" data-wd="${i}" ${w.includes(i)?'checked':''}>${d}</label>`).join('');
-}
-async function saveSettings(){
-  const oldPeriod = settings.period, oldCycle = settings.cycleStartDay;
-  SET_MAP.forEach(([id,k,t]) => settings[k] = t==='t' ? $(id).value.trim() : num($(id).value));
-  settings.weekendDays = [...document.querySelectorAll('#s-weekend [data-wd]')].filter(c=>c.checked).map(c=>num(c.dataset.wd));
-  if(!settings.period) settings.period = thisMonth();
-  const { data, error } = await sb.from('settings').upsert({ key:'payroll', value:settings }).select();
-  if(error) return toast(error.message,'err');
-  if (!(data && data.length)) return toast(NOPERM,'err');
-  if (settings.period !== oldPeriod || settings.cycleStartDay !== oldCycle){ await loadPeriodData(); loader(false); }
-  renderAll(); toast('Settings saved');
-}
+function applySettingsUI(){ if (typeof PKR !== 'undefined') PKR.settingsLoaded(); }
 
 // ═════════════════════════════════════════════════════════
 //  DELETE
@@ -1006,20 +991,12 @@ document.addEventListener('click', async ev => {
 });
 
 // inputs
-$('set-save').addEventListener('click', saveSettings);
 $('btn-connect').addEventListener('click', connectFromForm);
 document.addEventListener('keydown', e => { if (e.key==='Escape') document.querySelectorAll('.overlay.open').forEach(o=>o.classList.remove('open')); });
 
 setInterval(()=>{ $('clock').textContent = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); }, 1000);
 
 
-function cycleHint(){
-  const keep = settings.cycleStartDay, kp = settings.period;
-  settings.cycleStartDay = num($('s-cycle').value); settings.period = $('s-period').value || kp;
-  $('s-cycle-hint').textContent = settings.period ? `Period ${periodLabel(settings.period)}` : '';
-  settings.cycleStartDay = keep; settings.period = kp;
-}
-['s-cycle','s-period'].forEach(id => $(id).addEventListener('input', cycleHint));
 
 // ═════════════════════════════════════════════════════════
 //  REPORTS

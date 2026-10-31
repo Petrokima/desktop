@@ -314,14 +314,7 @@ async function showSelf(me, user){
   await loadSelf();
 }
 async function signOut(){ try { await sb.auth.signOut(); } catch(e){} location.reload(); }
-async function changePassword(){
-  const a=$('pw1').value, b=$('pw2').value;
-  if (a.length < 8) return toast('Use at least 8 characters','warn');
-  if (a !== b) return toast('The two passwords do not match','warn');
-  const { error } = await sb.auth.updateUser({ password:a });
-  if (error) return toast(error.message,'err');
-  $('pw1').value=''; $('pw2').value=''; closeM('m-pass'); toast('Password changed');
-}
+// (change password is a React window since 31 Oct 2026 — react/src/windows)
 async function disconnect(){ try { if (sb) await sb.auth.signOut(); } catch(e){} localStorage.removeItem('sb_url'); localStorage.removeItem('sb_key'); location.reload(); }
 
 // ═════════════════════════════════════════════════════════
@@ -851,20 +844,7 @@ function afterLoanChange(){ renderLoans(); renderPayroll(); renderDashboard(); }
 // The page and the approval window moved to React 30 Oct 2026 (react/src/payroll). The engine (computeAll, part4) stays here;
 // "redraw the payroll" now means: React draws again (the payroll is recalculated when the page shows).
 function renderPayroll(){ if (typeof PKR !== 'undefined') PKR.render(); }
-/** the payslip window for one row of the Payroll Run page (live or approved snapshot) @param {any} r */
-function openSlip(r){
-  $('slip-title').textContent = `${empName(r.emp)} — ${periodLabel(settings.period)}`;
-  const line = l => `<div class="pay-line"><span>${l.code!==0?`<span class="mono" style="color:var(--muted)">${l.code}</span> `:''}${esc(l.name)}${l.note?`<div style="font-size:11px;color:var(--muted)">${esc(l.note)}</div>`:''}</span><span class="mono ${l.type==='Deduction'?'neg':'pos'}">${l.type==='Deduction'?'−':''}${fmt(l.amount)}</span></div>`;
-  const adds=r.lines.filter(l=>l.type==='Addition'), deds=r.lines.filter(l=>l.type==='Deduction');
-  $('slip-body').innerHTML = `
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${esc(r.emp.name_ar||'')} · ${esc(r.emp.department||'')} · ${esc(r.emp.unit||'')} · ${esc(r.emp.entity||'')}</div>
-    <div class="sec">Additions</div>${adds.map(line).join('')||'<div style="color:var(--muted);font-size:12px">None</div>'}
-    <div class="pay-line total"><span>Gross</span><span class="mono">${fmt(r.gross)}</span></div>
-    <div class="sec">Deductions</div>${deds.map(line).join('')||'<div style="color:var(--muted);font-size:12px">None</div>'}
-    <div class="pay-line total"><span>Total deductions</span><span class="mono neg">${fmt(r.ded)}</span></div>
-    <div class="pay-line total" style="font-size:16px"><span>Net pay</span><span class="mono pos">${fmt(r.net)} EGP</span></div>`;
-  openM('m-slip');
-}
+// (the payslip window is React since 31 Oct 2026 — react/src/windows; the bridge's showPayslip opens it)
 
 // ═════════════════════════════════════════════════════════
 //  SETTINGS
@@ -874,14 +854,7 @@ function openSlip(r){
 const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 function applySettingsUI(){ if (typeof PKR !== 'undefined') PKR.settingsLoaded(); }
 
-// ═════════════════════════════════════════════════════════
-//  DELETE
-// ═════════════════════════════════════════════════════════
-function confirmDel(msg, fn){
-  $('del-msg').textContent = msg; $('del-ok').textContent='Delete'; $('del-ok').className='btn btn-danger'; $('del-title').textContent='Confirm delete';
-  $('del-ok').onclick = async () => { $('del-ok').disabled=true; try{ await fn(); closeM('m-del'); }catch(e){ toast(e.message,'err'); } $('del-ok').disabled=false; };
-  openM('m-del');
-}
+// (the confirm window is React since 31 Oct 2026 — react/src/windows; React pages call it through the bridge, legacy.confirm)
 // ── Records are never deleted (database file 100, Mohammed 30 Oct 2026): they are CANCELLED (vacations, permissions, penalties,
 //    loans, HR requests, allowance approvals — the row stays, marked Cancelled) or CLOSED (everything else — the row is kept in the
 //    register of closed records, then leaves the list). Always with a reason.
@@ -893,20 +866,7 @@ async function closeRecords(table, keys, reason, replacing){
 }
 /** the database's own explanation without its code word, e.g. "NOT_CLOSED: Nothing was…" → "Nothing was…" @param {string} m */
 const closeError = m => String(m).replace(/^.*?\b(NO_DELETE|CLOSE_REASON|NOT_CLOSED|CANCEL_REASON|CANCELLED|CLOSE_KEYS|CLOSE_TABLE): ?/, '');
-/** the "write the reason" window: title, what will happen, button text, then action(reason) — closes itself when the action worked
- * @param {string} title @param {string} msg @param {string} ok @param {(reason: string) => Promise<void>} action */
-function askReason(title, msg, ok, action){
-  $('cls-title').textContent = title; $('cls-msg').textContent = msg; $('cls-ok').textContent = ok;
-  $('cls-reason').value = ''; $('cls-miss').style.display = 'none';
-  $('cls-ok').onclick = async () => {
-    const reason = $('cls-reason').value.trim();
-    if (reason.length < 3) { $('cls-miss').style.display = ''; return; }
-    $('cls-ok').disabled = true;
-    try { await action(reason); closeM('m-close'); } catch (e) { toast(e.message, 'err'); }
-    $('cls-ok').disabled = false;
-  };
-  openM('m-close'); setTimeout(() => $('cls-reason').focus(), 50);
-}
+// (the old "write the reason" window m-close is gone: React pages use react/src/shared/ReasonDialog / CloseDialog)
 
 // ═════════════════════════════════════════════════════════
 //  NAVIGATION & EVENTS
@@ -925,7 +885,8 @@ document.addEventListener('click', async ev => {
   const nv = t.closest('[data-nav]'); if (nv) return showPage(nv.dataset.nav);
   const orp = t.closest('[data-open-report]'); if (orp) { showPage('reports'); return openReport(orp.dataset.openReport || ''); }
   const cl = t.closest('[data-close]'); if (cl) return closeM(cl.dataset.close);
-  if (t.classList && t.classList.contains('overlay')) return t.classList.remove('open');
+  // a click beside an old window closed it; the React windows (role="dialog") close only with their own buttons or Esc
+  if (t.classList && t.classList.contains('overlay') && !t.hasAttribute('role')) return t.classList.remove('open');
   const act = t.closest('[data-act]');
   if (act){ const a = act.dataset.act;
     if (a==='new-emp') return openEmp(null);
@@ -934,14 +895,14 @@ document.addEventListener('click', async ev => {
     if (a==='theme') return openTheme();
     if (a==='reload') return loadAll();
     if (a==='signout') return signOut();
-    if (a==='chpass') return openM('m-pass');
+    if (a==='chpass') return typeof PKR !== 'undefined' && PKR.openPassword();
     if (a==='disconnect'){ ev.preventDefault(); return disconnect(); }
   }
   const er = t.closest('[data-emp]'); if (er) return openEmp(er.dataset.emp || null);
 });
 
 // inputs
-document.addEventListener('keydown', e => { if (e.key==='Escape') document.querySelectorAll('.overlay.open').forEach(o=>o.classList.remove('open')); });
+// (Esc closes the top React window — react/src/main.tsx; every window is React since 31 Oct 2026)
 
 setInterval(()=>{ $('clock').textContent = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); }, 1000);
 
@@ -1366,12 +1327,6 @@ function holidaysAdded(rows){ S.holidays.push(...rows); holidaySet = new Set(S.h
 function holidayDeleted(id){ S.holidays = S.holidays.filter(h=>h.id!==id); holidaySet = new Set(S.holidays.map(h=>h.date)); afterHolChange(); }
 function afterHolChange(){ renderHolidays(); renderLeaves(); renderAttendance(); renderPayroll(); renderDashboard(); renderReports(); }
 
-// ═════════════════════════════════════════════════════════
-//  USERS & ROLES (admin only) — the page is React now (react/src/users, 30 Oct 2026); it loads when opened.
-//  Kept here: the change-password button (the sign-in card is React — react/src/signin).
-// ═════════════════════════════════════════════════════════
-$('pw-save').addEventListener('click', changePassword);
-
 // employee screens: hours as hours and minutes (1.5 → "1 h 30 m"); payroll and reports keep decimal hours
 const fmtHM = v => { const tm = Math.round(num(v) * 60), h = Math.floor(tm / 60), m = tm % 60; return h && m ? `${h} h ${m} m` : h ? `${h} h` : `${m} m`; };
 // ═════════════════════════════════════════════════════════
@@ -1486,22 +1441,10 @@ async function payrollApproved(p, costDetail, moveNext){
 // ═════════════════════════════════════════════════════════
 //  PAYROLL HISTORY
 // ═════════════════════════════════════════════════════════
-// The page itself moved to React 30 Oct 2026 (react/src/history). Kept here: the approved payslip window and the CSV export
-// (both also used by the Payroll Run page; the React page calls them through the bridge).
+// The page itself moved to React 30 Oct 2026 (react/src/history). Kept here: the CSV export (also used by the Payroll Run page;
+// the React page calls it through the bridge).
 function renderHistory(){ if (typeof PKR !== 'undefined') PKR.render(); }
-function showSnapSlip(line, period){
-  const r = snapToResult(line);
-  $('slip-title').textContent = `${line.name_en||line.name_ar||line.emp_id} — ${periodLabel(period)} 🔒`;
-  const row = l => `<div class="pay-line"><span>${l.code!==0&&l.code!=='TAX'?`<span class="mono" style="color:var(--muted)">${esc(l.code)}</span> `:''}${esc(l.name)}${l.note?`<div style="font-size:11px;color:var(--muted)">${esc(l.note)}</div>`:''}</span><span class="mono ${l.type==='Deduction'?'neg':'pos'}">${l.type==='Deduction'?'−':''}${fmt(l.amount)}</span></div>`;
-  const adds=r.lines.filter(l=>l.type==='Addition'), deds=r.lines.filter(l=>l.type==='Deduction');
-  $('slip-body').innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:14px">${esc(line.name_ar||'')} · ${esc(line.department||'')} · ${esc(line.unit||'')} · approved payslip</div>
-    <div class="sec">Additions</div>${adds.map(row).join('')||'<div style="color:var(--muted);font-size:12px">None</div>'}
-    <div class="pay-line total"><span>Gross</span><span class="mono">${fmt(r.gross)}</span></div>
-    <div class="sec">Deductions</div>${deds.map(row).join('')||'<div style="color:var(--muted);font-size:12px">None</div>'}
-    <div class="pay-line total"><span>Total deductions</span><span class="mono neg">${fmt(r.ded)}</span></div>
-    <div class="pay-line total" style="font-size:16px"><span>Net pay</span><span class="mono pos">${fmt(r.net)} EGP</span></div>`;
-  openM('m-slip');
-}
+// (the approved payslip window is React since 31 Oct 2026 — react/src/windows; the bridge's showApprovedPayslip opens it)
 function exportRunCsv(run, period){
   const codes = [...new Set(run.flatMap(r=>r.lines.map(l=>String(l.code))))];
   const pick = c => run.flatMap(r=>r.lines).find(x=>String(x.code)===c) || {};
@@ -1564,24 +1507,8 @@ function deviceReset(empId){ S.devices = S.devices.filter(x => String(x.emp_id) 
 // ═════════════════════════════════════════════════════════
 //  COLOUR THEMES
 // ═════════════════════════════════════════════════════════
-const THEMES = [
-  { id:'dark',     name:'Dark',          note:'The original look',              sw:['#0f1117','#1e2336','#3b6fd4','#22c5a0','#e8ecf4'] },
-  { id:'light',    name:'Light',         note:'Best in bright offices',         sw:['#f2f4f8','#ffffff','#2f5fc4','#0e8a6b','#161a26'] },
-  { id:'navy',     name:'Navy',          note:'Softer dark blue',               sw:['#0a1730','#12284f','#4d8bf5','#2fd3a8','#eaf1ff'] },
-  { id:'contrast', name:'High contrast', note:'Maximum readability',            sw:['#000000','#121212','#3d8bff','#35e0a1','#ffffff'] } ];
-function setTheme(id){
-  document.documentElement.dataset.theme = id;
-  try { localStorage.setItem('pk_theme', id); } catch(e){}
-  renderThemeList();
-}
-function renderThemeList(){
-  const cur = document.documentElement.dataset.theme || 'dark';
-  $('theme-list').innerHTML = THEMES.map(t => `<button class="theme-card ${t.id===cur?'on':''}" data-theme-pick="${t.id}">
-      <b>${esc(t.name)}</b>${t.id===cur?' ✓':''}<div class="theme-sw">${t.sw.map(c=>`<span style="background:${c}"></span>`).join('')}</div>
-      <div style="font-size:12px;color:var(--muted)">${esc(t.note)}</div></button>`).join('');
-}
-function openTheme(){ renderThemeList(); openM('m-theme'); }
-document.addEventListener('click', e => { const b = /** @type {HTMLElement | null} */ (/** @type {HTMLElement} */ (e.target).closest('[data-theme-pick]')); if (b) setTheme(b.dataset.themePick); });
+// the window is React since 31 Oct 2026 (react/src/windows); the theme chosen is applied at start-up by boot.js
+function openTheme(){ if (typeof PKR !== 'undefined') PKR.openTheme(); }
 
 // ═════════════════════════════════════════════════════════
 //  READING AN EXCEL / CSV FILE — shared by Bulk upload, the Monthly entries upload (both React now) and the manager team upload
@@ -1671,33 +1598,7 @@ function allowanceApprovalsUpdated(rows){
 
 // (the department + unit filters of every page are React now — react/src/shared/OrgFilter; the Reports page was the last old one)
 
-// ═════════════════════════════════════════════════════════
-//  PHONE SIGN-IN ATTEMPTS — review window
-// ═════════════════════════════════════════════════════════
-function openPhoneAlerts(){
-  const open = S.phoneAlerts.filter(a => !a.reviewed).sort((a,b) => (a.kind==='other_employee_phone' ? 0 : 1) - (b.kind==='other_employee_phone' ? 0 : 1) || String(b.last_at).localeCompare(String(a.last_at)));
-  const canReview = ME && ['admin','hr'].includes(ME.role);
-  $('phal-tbl').innerHTML = open.map(a => `<tr><td class="mono" style="white-space:nowrap">${esc(fmtSent(a.last_at))}</td>
-      <td class="strong">${a.kind==='other_employee_phone' ? '🚨 Another employee\'s phone' : 'ℹ Unregistered phone'}</td>
-      <td>${esc(a.attempted_emp_id || '')} ${esc(a.attempted_name || empName(empById(a.attempted_emp_id)) || '')}</td>
-      <td>${a.owner_emp_id ? esc(a.owner_emp_id + ' ' + (a.owner_name || empName(empById(a.owner_emp_id)) || '')) : '—'}</td>
-      <td>${esc(a.device_label || '')}</td><td class="num">${a.attempts}</td>
-      <td>${canReview ? `<input class="inp" style="width:170px" placeholder="e.g. spoke to both" data-phal-note="${a.id}">` : ''}</td>
-      <td>${canReview ? `<button class="btn btn-success btn-sm" data-phal-ok="${a.id}">Mark reviewed</button>` : ''}</td></tr>`).join('')
-    || '<tr><td colspan="8" class="empty">Nothing to review</td></tr>';
-  openM('m-phal');
-}
-async function reviewPhoneAlert(id){
-  const note = (document.querySelector(`[data-phal-note="${id}"]`) || {}).value || '';
-  const { data, error } = await sb.from('phone_alerts').update({ reviewed:true, reviewed_by:(ME && (ME.full_name || ME.email)) || 'HR', reviewed_at:new Date().toISOString(), review_note: note.trim() || null }).eq('id', id).select();
-  if (error) return toast(error.message, 'err'); if (!(data && data.length)) return toast(NOPERM, 'err');
-  S.phoneAlerts = S.phoneAlerts.map(a => a.id === id ? data[0] : a);
-  renderDashboard(); openPhoneAlerts(); toast('Marked as reviewed');
-}
-document.addEventListener('click', e => {
-  if (/** @type {PageEl} */ (e.target).closest('[data-open-phal]')) return openPhoneAlerts();
-  const ok = /** @type {PageEl} */ (e.target).closest('[data-phal-ok]'); if (ok) return reviewPhoneAlert(ok.dataset.phalOk);
-});
+// (the phone sign-in attempts window is React since 31 Oct 2026 — react/src/windows; the Dashboard's 🚨 banner opens it)
 
 // ═════════════════════════════════════════════════════════
 //  PROJECT ASSIGNMENTS — moved to React 30 Oct 2026 (react/src/assign). The old code keeps the list (S.empProjects: employee
@@ -2249,7 +2150,7 @@ function idleTouch(){
   const now = Date.now();
   if (now - idleLast > 5000) { idleLast = now; idleStore(now); }     // write at most every 5 s
   else idleLast = now;
-  const w = $('m-idle'); if (w && w.classList.contains('open')) closeM('m-idle');
+  if (typeof PKR !== 'undefined') PKR.idleWarning(null);           // the warning window (React — react/src/windows) closes
 }
 ['mousemove','mousedown','keydown','wheel','scroll','touchstart'].forEach(ev => document.addEventListener(ev, idleTouch, { passive:true, capture:true }));
 async function idleSignOut(){
@@ -2262,11 +2163,8 @@ function idleCheck(){
   if (!idleSignedIn() || idleOut) return;
   const last = Math.max(idleLast, idleRead()), quiet = Date.now() - last;
   if (quiet >= IDLE_LIMIT_MS) return idleSignOut();
-  const w = $('m-idle');
-  if (quiet >= IDLE_WARN_MS && w) {
-    $('idle-sec').textContent = Math.max(1, Math.ceil((IDLE_LIMIT_MS - quiet) / 1000));
-    if (!w.classList.contains('open')) openM('m-idle');
-  } else if (w && w.classList.contains('open')) closeM('m-idle');
+  // the warning window is React (react/src/windows): it shows the seconds left
+  if (typeof PKR !== 'undefined') PKR.idleWarning(quiet >= IDLE_WARN_MS ? Math.max(1, Math.ceil((IDLE_LIMIT_MS - quiet) / 1000)) : null);
 }
 setInterval(idleCheck, 1000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) idleCheck(); });   // a computer waking from sleep
@@ -2277,9 +2175,7 @@ showLogin = function(msg){
   let idle = false; try { idle = sessionStorage.getItem('pk_idle_out') === '1'; sessionStorage.removeItem('pk_idle_out'); } catch(e){}
   showLoginBeforeIdle(msg || (idle ? 'You were signed out automatically after 10 minutes without activity. Please sign in again.' : undefined));
 };
-// buttons of the "still there?" window (no onclick= in the page: the security policy forbids code inside the page)
-$('idle-out').addEventListener('click', () => idleSignOut());
-$('idle-stay').addEventListener('click', () => idleTouch());
+// (the "still there?" window is React — react/src/windows; its buttons call idleSignOut / idleTouch through the bridge)
 
 // ═════════════════════════════════════════════════════════
 //  BOARD MEMBER DASHBOARD — pending requests from managers, in three groups (22 Oct 2026)

@@ -408,11 +408,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <!-- MODAL: PROJECT -->
 <!-- MODAL: LOAN -->
 
-<!-- MODAL: PAYSLIP -->
-<div class="overlay" id="m-slip"><div class="modal">
-  <div class="modal-head"><div class="modal-title" id="slip-title">Payslip</div><button class="x" data-close="m-slip">×</button></div>
-  <div id="slip-body"></div>
-</div></div>
 
 
 <!-- MODAL: PENALTY -->
@@ -423,59 +418,17 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <!-- MODAL: HANDLE HR REQUEST -->
 
 <!-- MODAL: PROJECT ALLOWANCE RULE -->
-<!-- MODAL: PHONE SIGN-IN ATTEMPTS -->
-<div class="overlay" id="m-phal"><div class="modal" style="max-width:860px">
-  <div class="modal-head"><div class="modal-title">🚨 Phone sign-in attempts to review</div><button class="x" data-close="m-phal">×</button></div>
-  <div class="alert a-info">The phone app refused these sign-ins. Talk to the people involved, then mark each one reviewed. The full history is in Reports → <b>Phone sign-in attempts</b>.</div>
-  <div class="tbl-wrap"><table><thead><tr><th>Last attempt</th><th>What happened</th><th>Tried by</th><th>Phone belongs to</th><th>Phone</th><th class="num">Tries</th><th>Note</th><th></th></tr></thead><tbody id="phal-tbl"></tbody></table></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-phal">Close</button></div>
-</div></div>
 
-<!-- MODAL: THEME -->
-<div class="overlay" id="m-theme"><div class="modal" style="max-width:560px">
-  <div class="modal-head"><div class="modal-title">Choose a theme</div><button class="x" data-close="m-theme">×</button></div>
-  <div class="grid2" id="theme-list"></div>
-  <div style="font-size:12px;color:var(--muted);margin-top:12px">Your choice is saved on this computer only — each person can pick their own.</div>
-</div></div>
 
-<!-- MODAL: CHANGE PASSWORD -->
-<div class="overlay" id="m-pass"><div class="modal" style="max-width:400px">
-  <div class="modal-head"><div class="modal-title">Change password</div><button class="x" data-close="m-pass">×</button></div>
-  <div class="field" style="margin-bottom:12px"><label>New password (at least 8 characters)</label><input type="password" id="pw1" autocomplete="new-password"></div>
-  <div class="field"><label>Repeat new password</label><input type="password" id="pw2" autocomplete="new-password"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-pass">Cancel</button><button class="btn btn-primary" id="pw-save">Change password</button></div>
-</div></div>
 
-<!-- the two-step windows (6-digit code, set-up) are React: react/src/signin -->
+<!-- every window is React: the two-step windows (react/src/signin) and the shared ones — payslip, phone sign-in attempts, themes,
+     change password, "still there?", confirm (react/src/windows) -->
 <div id="react-twostep"></div>
-
-<!-- MODAL: IDLE WARNING (part29.js) -->
-<div class="overlay" id="m-idle"><div class="modal" style="max-width:400px">
-  <div class="modal-head"><div class="modal-title">⏱ Are you still there?</div></div>
-  <p style="color:var(--label)">For security you will be signed out in <b id="idle-sec">60</b> seconds because there was no activity for 9 minutes. Anything not saved will be lost.</p>
-  <div class="modal-foot"><button class="btn btn-ghost" id="idle-out">Sign out now</button><button class="btn btn-primary" id="idle-stay">Stay signed in</button></div>
-</div></div>
-
-
-<!-- MODAL: CONFIRM -->
-<!-- MODAL: CANCEL / CLOSE WITH A REASON (records are never deleted — database file 100) -->
-<div class="overlay" id="m-close"><div class="modal" style="max-width:460px">
-  <div class="modal-head"><div class="modal-title" id="cls-title">Close</div><button class="x" data-close="m-close">×</button></div>
-  <p id="cls-msg" style="color:var(--label)"></p>
-  <div class="field"><label for="cls-reason">Reason (required — kept with the record)</label><textarea id="cls-reason" rows="3"></textarea></div>
-  <div class="alert a-warn" id="cls-miss" style="display:none;margin:10px 0 0">Write the reason (at least 3 characters).</div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-close">Back</button><button class="btn btn-danger" id="cls-ok">Close</button></div>
-</div></div>
-
-<div class="overlay" id="m-del"><div class="modal" style="max-width:420px">
-  <div class="modal-head"><div class="modal-title" id="del-title">Confirm delete</div><button class="x" data-close="m-del">×</button></div>
-  <p id="del-msg" style="color:var(--label)"></p>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-del">Cancel</button><button class="btn btn-danger" id="del-ok">Delete</button></div>
-</div></div>
+<div id="react-windows"></div>
 
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=1fe99adaf5c5"></script>
-<script src="react.js?v=82c99e38eb36"></script>
+<script src="app.js?v=4577107e1cb7"></script>
+<script src="react.js?v=2022295cabc3"></script>
 </body></html>

@@ -268,20 +268,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <main class="main" style="max-width:1100px">
     <div id="react-self-head"></div>
     <div id="self-req"><div id="react-self-req"></div></div>
-    <div id="self-team" style="display:none">
-      <div class="card" id="smis-card" style="display:none"><div class="toolbar"><span class="toolbar-title">🚗 Outside missions — your team</span>
-        <div class="toolbar-right"><button class="btn btn-primary btn-sm" id="smis-assign">🚗 Assign a mission</button></div></div>
-        <div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>When</th><th>Place · purpose</th><th>Project</th><th>Status</th><th></th></tr></thead><tbody id="smis-tbl"></tbody></table></div></div>
-      <div class="card"><div class="toolbar"><span class="toolbar-title">Vacation and permission requests from your team</span></div>
-        <div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Request</th><th>When</th><th>Reason</th><th>Status</th><th></th></tr></thead><tbody id="self-treq-tbl"></tbody></table></div></div>
-      <div class="card" id="self-tproj-card" style="display:none"><div class="toolbar"><span class="toolbar-title">Your team's projects</span>
-        <div class="toolbar-right"><button class="btn btn-ghost btn-sm" id="mbu-template">⬇ Template</button><label class="btn btn-primary btn-sm" style="cursor:pointer">⬆ Bulk upload<input type="file" id="mbu-file" accept=".xlsx,.xls,.csv" style="display:none"></label></div></div>
-        <div class="alert a-info" style="margin:0 16px 10px">Team members with projects can check in only at those projects. Your changes apply immediately.</div>
-        <div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Job</th><th class="num">Projects</th><th></th></tr></thead><tbody id="self-tproj-tbl"></tbody></table></div></div>
-      <div class="alert a-info">Project Allowance calculated for your team from their attendance at projects. Nothing is paid until you approve it and HR then approves it.</div>
-      <div class="card"><div class="toolbar"><span class="toolbar-title">Waiting for your approval</span></div>
-        <div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Payroll</th><th>Working</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead><tbody id="self-team-tbl"></tbody></table></div></div>
-    </div>
+    <div id="self-team" style="display:none"><div id="react-self-team"></div></div>
     <div id="self-tatt" style="display:none">
       <div class="card"><div class="toolbar" style="flex-wrap:wrap;gap:8px"><span class="toolbar-title">👥 My team's attendance</span>
         <div class="toolbar-right" style="flex-wrap:wrap;gap:6px">
@@ -490,24 +477,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <!-- MODAL: PROJECT -->
 <!-- MODAL: LOAN -->
 
-<!-- MODAL: OUTSIDE MISSION — self-service (66) -->
-<div class="overlay" id="m-smis"><div class="modal" style="max-width:640px">
-  <div class="modal-head"><div class="modal-title" id="smis-title">🚗 Outside mission</div><button class="x" data-close="m-smis">×</button></div>
-  <div id="smis-who-box" class="field" style="display:none"><label>Employees · <span id="smis-cnt">0 chosen</span></label>
-    <div style="border:1px solid var(--border);border-radius:8px;padding:6px 10px;max-height:300px;overflow:auto">
-      <label style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-weight:600"><input type="checkbox" id="smis-all" style="width:auto"> <span id="smis-all-l">Select all</span></label>
-      <div id="smis-who"></div></div>
-    <div style="font-size:12px;color:var(--muted);margin-top:4px">Employees who use the app must tap “I undertake this mission”; those who do not use the app yet go straight to HR.</div></div>
-  <div class="btn-group" style="margin:6px 0 10px"><button class="btn btn-primary btn-sm" id="smis-k-full">Full day(s)</button><button class="btn btn-ghost btn-sm" id="smis-k-part">Part of a day</button></div>
-  <div class="grid2" id="smis-full"><div class="field"><label>From date</label><input type="date" id="smis-f"></div><div class="field"><label>To date</label><input type="date" id="smis-t"></div></div>
-  <div class="grid3" id="smis-part" style="display:none"><div class="field"><label>Date</label><input type="date" id="smis-d"></div><div class="field"><label>From time</label><input type="time" id="smis-tf" value="10:00"></div><div class="field"><label>To time</label><input type="time" id="smis-tt" value="14:00"></div></div>
-  <div class="field"><label>Place (where) *</label><input id="smis-pl" maxlength="200"></div>
-  <div class="field"><label>Purpose</label><textarea id="smis-pu" rows="2" maxlength="500"></textarea></div>
-  <div class="field"><label>Project code (optional)</label><input id="smis-pr" list="dl-proj" maxlength="40"></div>
-  <div style="font-size:12px;color:var(--muted)">On an approved mission day the employee still checks in and out on the phone; late / early are not deducted and away-from-site is not warned.</div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-smis">Cancel</button><button class="btn btn-primary" id="smis-go">Send</button></div>
-</div></div>
-
 <!-- MODAL: PAYSLIP -->
 <div class="overlay" id="m-slip"><div class="modal">
   <div class="modal-head"><div class="modal-title" id="slip-title">Payslip</div><button class="x" data-close="m-slip">×</button></div>
@@ -529,23 +498,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   <div class="alert a-info">The phone app refused these sign-ins. Talk to the people involved, then mark each one reviewed. The full history is in Reports → <b>Phone sign-in attempts</b>.</div>
   <div class="tbl-wrap"><table><thead><tr><th>Last attempt</th><th>What happened</th><th>Tried by</th><th>Phone belongs to</th><th>Phone</th><th class="num">Tries</th><th>Note</th><th></th></tr></thead><tbody id="phal-tbl"></tbody></table></div>
   <div class="modal-foot"><button class="btn btn-ghost" data-close="m-phal">Close</button></div>
-</div></div>
-
-<!-- MODAL: A TEAM MEMBER'S PROJECTS (manager, desktop) -->
-<div class="overlay" id="m-tproj"><div class="modal" style="max-width:640px">
-  <div class="modal-head"><div class="modal-title" id="tproj-title">Projects</div><button class="x" data-close="m-tproj">×</button></div>
-  <div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Name</th><th>Assigned by</th><th></th></tr></thead><tbody id="tproj-tbl"></tbody></table></div>
-  <div class="field" style="margin-top:12px"><label>Add a project</label><input id="tproj-q" placeholder="Type at least 2 letters of the code or name…" autocomplete="off"></div>
-  <div id="tproj-res"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-tproj">Close</button></div>
-</div></div>
-
-<!-- MODAL: MANAGER'S BULK UPLOAD OF TEAM PROJECTS -->
-<div class="overlay" id="m-mbu"><div class="modal" style="max-width:760px">
-  <div class="modal-head"><div class="modal-title">⬆ Team project assignments — check and save</div><button class="x" data-close="m-mbu">×</button></div>
-  <div id="mbu-summary" style="margin-bottom:10px"></div>
-  <div class="tbl-wrap" style="max-height:380px"><table><thead><tr><th>Row</th><th>Result</th><th>Employee → project</th><th>Note</th></tr></thead><tbody id="mbu-rows"></tbody></table></div>
-  <div class="modal-foot"><button class="btn btn-ghost" data-close="m-mbu">Close</button><button class="btn btn-primary" id="mbu-save">Save</button></div>
 </div></div>
 
 <!-- MODAL: THEME -->
@@ -614,6 +566,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=28c4fae1db9f"></script>
-<script src="react.js?v=e5ef20c189d2"></script>
+<script src="app.js?v=465527c6e7fe"></script>
+<script src="react.js?v=2d76cc7245e4"></script>
 </body></html>

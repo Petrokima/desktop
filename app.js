@@ -1453,34 +1453,16 @@ async function loadSelf(){
   renderSelf();
 }
 function renderSelf(){
-  // the name line, "My requests" and "My profile" are React since 31 Oct 2026 (react/src/self): they draw from SD
+  // every self-service screen is React since 31 Oct 2026 (react/src/self, react/src/team): they draw from SD / SMIS
   if (typeof PKR !== 'undefined') PKR.render();
   if (!SD.emp) return;
-  // team approvals (managers only)
-  const team = (SD.team||[]).slice().sort((a,b) => (a.status==='Pending manager' ? 0 : 1) - (b.status==='Pending manager' ? 0 : 1) || String(b.period).localeCompare(String(a.period)));
-  /** @type {{ kind: string, r: any, when: string }[]} — r is a leave or a permission (see kind) */
-  const tReq = [...(SD.teamLeaves||[]).map(l => ({ kind:'leave', r:l, when:l.date_from })), ...(SD.teamPerms||[]).map(x => ({ kind:'perm', r:x, when:x.date }))]
-    .sort((a,b) => (waitingManager(a.r)?0:1) - (waitingManager(b.r)?0:1) || String(b.when).localeCompare(String(a.when))).slice(0, 60);
-  const waiting = team.filter(a => a.status==='Pending manager').length + tReq.filter(x => waitingManager(x.r)).length;
-  $('self-team-nav').style.display = (team.length || tReq.length || (SD.myTeam||[]).length) ? '' : 'none';
-  $('self-tatt-nav').style.display = (SD.myTeam||[]).length ? '' : 'none';   // 87: direct managers see their team's attendance
-  $('self-tproj-card').style.display = (SD.myTeam||[]).length ? '' : 'none';
-  $('self-tproj-tbl').innerHTML = (SD.myTeam||[]).map(m => `<tr><td class="strong">${esc(m.name_en || m.name_ar || m.id)} <span class="mono" style="color:var(--muted)">${esc(m.id)}</span></td><td>${esc(m.job_name||'')}</td>
-      <td class="num">${m.projects || '<span style="color:var(--muted)">none — any project</span>'}</td><td><button class="btn btn-ghost btn-sm" data-tproj="${esc(m.id)}">Manage</button></td></tr>`).join('');
-  $('self-treq-tbl').innerHTML = tReq.map(({kind, r}) => { const st = waitingManager(r) ? '<span class="chip c-orange">Waiting for you</span>' : r.manager_status==='Approved' && r.status==='Pending' ? '<span class="chip c-blue">Approved by you — waiting for HR</span>' : chip(r.status);
-    return `<tr><td class="strong">${esc(r.emp_name||r.emp_id)} <span class="mono" style="color:var(--muted)">${esc(r.emp_id)}</span></td>
-      <td>${kind==='leave' ? `🌴 ${esc(r.leave_type)} leave` : `✋ ${esc(r.type)}`}</td>
-      <td class="mono">${kind==='leave' ? `${esc(r.date_from)} → ${esc(r.date_to)} · ${fmt(r.days)} d` : `${esc(r.date)} · ${fmtHM(r.hours)}`}<div style="font-size:11px;color:var(--muted)">🕒 sent ${esc(fmtSent(r.created_at || r.requested_at))}</div></td>
-      <td style="white-space:normal;font-size:12px">${esc(r.reason||'')}</td><td>${st}${r.manager_note?`<div style="font-size:12px">💬 ${esc(r.manager_note)}</div>`:''}</td>
-      <td style="white-space:nowrap">${waitingManager(r) ? `<button class="btn btn-success btn-sm" data-treq-ok="${kind}:${r.id}">Approve</button> <button class="btn btn-ghost btn-sm" data-treq-no="${kind}:${r.id}">Reject</button>` : ''}</td></tr>`; }).join('')
-    || '<tr><td colspan="6" class="empty">No vacation or permission requests from your team</td></tr>';
-  $('self-team-badge').style.display = waiting ? '' : 'none'; $('self-team-badge').textContent = waiting;
-  const stTxt = { 'Pending manager':'<span class="chip c-orange">Waiting for you</span>', 'Pending HR':'<span class="chip c-blue">Approved by you — waiting for HR</span>', 'Approved':'<span class="chip c-green">Approved — will be paid</span>', 'Rejected':'<span class="chip c-red">Rejected</span>' };
-  $('self-team-tbl').innerHTML = team.map(a => `<tr><td class="strong">${esc(a.emp_name||a.emp_id)} <span class="mono" style="color:var(--muted)">${esc(a.emp_id)}</span>${a.job_name?`<div style="font-size:12px;color:var(--muted)">${esc(a.job_name)}</div>`:''}</td>
-      <td>${esc(periodLabel(a.period))}</td><td style="font-size:12px;white-space:normal">${(a.details||[]).map(x => `${x.days} day${x.days>1?'s':''} × ${fmt(x.rate)} at ${esc(x.project_name || x.project)}`).join('<br>')}</td>
-      <td class="num strong">${fmt(a.amount)}</td><td>${stTxt[a.status]||esc(a.status)}${a.manager_note?`<div style="font-size:12px">💬 ${esc(a.manager_note)}</div>`:''}${a.hr_note?`<div style="font-size:12px">HR: ${esc(a.hr_note)}</div>`:''}</td>
-      <td style="white-space:nowrap">${a.status==='Pending manager' ? `<button class="btn btn-success btn-sm" data-team-ok="${a.id}">Approve</button> <button class="btn btn-ghost btn-sm" data-team-no="${a.id}">Reject</button>` : ''}</td></tr>`).join('')
-    || '<tr><td colspan="6" class="empty">Nothing to approve</td></tr>';
+  // the menu: "✅ Team approvals" with everything waiting for me (the same count as react/src/team waitingCount), "👥 Team attendance"
+  const myTeam = SD.myTeam || [], team = SD.team || [], mis = (typeof SMIS !== 'undefined' && SMIS.team) || [];
+  const tReq = [...(SD.teamLeaves||[]), ...(SD.teamPerms||[])].sort((a,b) => (waitingManager(a)?0:1) - (waitingManager(b)?0:1)).slice(0, 60);
+  const waiting = team.filter(a => a.status==='Pending manager').length + tReq.filter(waitingManager).length + mis.filter(m => m.status === 'Waiting for manager').length;
+  $('self-team-nav').style.display = (team.length || tReq.length || myTeam.length || mis.length) ? '' : 'none';
+  $('self-tatt-nav').style.display = myTeam.length ? '' : 'none';   // 87: direct managers see their team's attendance
+  $('self-team-badge').style.display = waiting ? '' : 'none'; $('self-team-badge').textContent = String(waiting);
   // payslips tab
   const slips = [...(SD.slips||[])].sort((a,b)=>String(b.period).localeCompare(String(a.period)));
   $('self-slips').innerHTML = slips.map(l => `<tr><td class="strong">${esc(periodLabel(l.period))}</td><td class="num">${fmt(l.gross)}</td><td class="num neg">${fmt(l.deductions)}</td>
@@ -1511,26 +1493,7 @@ function updateBadges(){
   b('aa-badge', S.allowAppr.filter(a=>a.status==='Pending HR').length);
 }
 
-// the manager approves or rejects a team member's Project Allowance
-async function teamDecide(id, approve){
-  let note = null;
-  if (!approve){ note = prompt('Reason for rejecting (HR and the employee record will show it):'); if (note === null) return; }
-  const { error } = await sb.rpc('manager_decide_allowance', { p_id:id, p_approve:approve, p_note:note });
-  if (error) return toast(error.message,'err');
-  toast(approve ? 'Approved — sent to HR for the final approval' : 'Rejected'); await loadSelf();
-}
-$('self-team-tbl').addEventListener('click', e => { const ok=/** @type {PageEl} */ (e.target).closest('[data-team-ok]'); if (ok) return teamDecide(ok.dataset.teamOk, true);
-  const no=/** @type {PageEl} */ (e.target).closest('[data-team-no]'); if (no) return teamDecide(no.dataset.teamNo, false); });
-
-async function teamReqDecide(key, approve){
-  const [kind, id] = key.split(':'); let note = null;
-  if (!approve){ note = prompt('Reason for rejecting (the employee will see it):'); if (note === null) return; }
-  const { data, error } = await sb.rpc('manager_decide_request', { p_kind:kind, p_id:id, p_approve:approve, p_note:note });
-  if (error) return toast(error.message,'err');
-  toast(approve ? (/final/.test(data) ? 'Approved' : 'Approved — sent to HR for the final approval') : 'Rejected'); await loadSelf();
-}
-$('self-treq-tbl').addEventListener('click', e => { const ok=/** @type {PageEl} */ (e.target).closest('[data-treq-ok]'); if (ok) return teamReqDecide(ok.dataset.treqOk, true);
-  const no=/** @type {PageEl} */ (e.target).closest('[data-treq-no]'); if (no) return teamReqDecide(no.dataset.treqNo, false); });
+// (a manager's decisions on his team's requests, allowances and missions are React since 31 Oct 2026 — react/src/team)
 
 // ── payslips are shown only after the employee re-enters his password ──
 function lockSelfPay(){ $('self-pay-card').style.display = 'none'; $('self-pay-lock').style.display = ''; $('self-pay-pass').value = ''; $('self-pay-err').textContent = ''; }
@@ -1821,38 +1784,7 @@ function assignmentsAdded(rows){ S.empProjects = S.empProjects.concat(rows); ren
 /** @param {string} empId @param {string} code */
 function assignmentRemoved(empId, code){ S.empProjects = S.empProjects.filter(x => !(String(x.emp_id)===String(empId) && x.project_code===code)); renderAssign(); }
 
-// ── a manager on the desktop (My requests → Team approvals) ──
-let tprojEmp = null, tprojT;
-async function openTeamProj(empId){
-  tprojEmp = empId; const m = (SD.myTeam||[]).find(x => x.id === empId) || /** @type {FnResult<'my_team'>[number]} */ ({ id: empId });
-  const { data, error } = await sb.rpc('team_projects', { p_emp: empId }); if (error) return toast(error.message, 'err');
-  $('tproj-title').textContent = `📌 ${m.name_en || m.name_ar || empId} — ${(data||[]).length ? 'can check in only at these projects' : 'no projects: any project'}`;
-  $('tproj-tbl').innerHTML = (data||[]).map(p => `<tr><td class="mono">${esc(p.id)}</td><td>${esc(p.name||'')}</td><td>${esc(p.assigned_by||'')}</td><td><button class="icon-btn" data-tproj-rm="${esc(p.id)}" title="Close (a reason is required)">⊘</button></td></tr>`).join('')
-    || '<tr><td colspan="4" class="empty">No projects yet</td></tr>';
-  $('tproj-tbl').dataset.have = JSON.stringify((data||[]).map(p => p.id));
-  $('tproj-q').value=''; $('tproj-res').innerHTML=''; openM('m-tproj');
-}
-async function teamProjChangeDesk(code, add){
-  if (!add) return askReason('Remove project', `Remove project ${code} from this employee? The assignment is kept on record with your reason.`, 'Remove', async reason => {
-    await closeRecords('employee_projects', [{ emp_id: String(tprojEmp), project_code: code }], reason);
-    toast('Project removed');
-    const r = await sb.rpc('my_team'); if (SD) SD.myTeam = r.data || SD.myTeam; renderSelf(); openTeamProj(/** @type {string} */ (tprojEmp));
-  });
-  const res = await sb.from('employee_projects').insert({ emp_id: tprojEmp, project_code: code }).select();
-  if (res.error) return toast(res.error.message, 'err'); if (!(res.data && res.data.length)) return toast(NOPERM, 'err');
-  toast('Project added');
-  const r = await sb.rpc('my_team'); if (SD) SD.myTeam = r.data || SD.myTeam; renderSelf(); openTeamProj(tprojEmp);
-}
-$('tproj-q').addEventListener('input', () => { clearTimeout(tprojT); tprojT = setTimeout(async () => {
-  const q = $('tproj-q').value.trim(); if (q.length < 2){ $('tproj-res').innerHTML=''; return; }
-  const r = await sb.rpc('find_projects', { p_q: q }), have = new Set(JSON.parse($('tproj-tbl').dataset.have || '[]'));
-  $('tproj-res').innerHTML = (r.data||[]).filter(p => !have.has(p.id)).map(p => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)"><span><b class="mono">${esc(p.id)}</b> ${esc(p.name||'')}</span><button class="btn btn-primary btn-sm" data-tproj-add="${esc(p.id)}">+ Add</button></div>`).join('') || '<div style="color:var(--muted);font-size:13px">No matching projects</div>';
-}, 300); });
-document.addEventListener('click', e => {
-  const tp = /** @type {PageEl} */ (e.target).closest('[data-tproj]'); if (tp) return openTeamProj(tp.dataset.tproj);
-  const ta = /** @type {PageEl} */ (e.target).closest('[data-tproj-add]'); if (ta) return teamProjChangeDesk(ta.dataset.tprojAdd, true);
-  const tr = /** @type {PageEl} */ (e.target).closest('[data-tproj-rm]'); if (tr) return teamProjChangeDesk(tr.dataset.tprojRm, false);
-});
+// (a manager's "Your team's projects" window is React since 31 Oct 2026 — react/src/team)
 
 // (the employee window's "📌 Assigned projects" is React now — react/src/employee)
 
@@ -2045,62 +1977,7 @@ function empCols(){
     out.push([f[0], f[1].replace(/\s*\(.*\)\s*/,'').replace(/ — .*/,''), kind, false, kind==='pick' ? f[3].filter(Boolean) : kind==='bool' ? 'Yes / No' : kind==='emp' ? 'Manager\'s employee code' : '']); }));
   return out;
 }
-// ═════════════════════════════════════════════════════════
-//  MANAGER — bulk upload of his own team's project assignments (My requests → Team approvals)
-// ═════════════════════════════════════════════════════════
-/** @type {any[]} — manager bulk-assign rows read from the uploaded spreadsheet */
-let MBU = [];
-async function mbuTemplate(){
-  const XL = await loadSheetJs(), wb = XL.utils.book_new(), team = (SD && SD.myTeam) || [];
-  XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['Employee code','Project code']].concat(team.slice(0,1).map(m => [m.id, '']))), 'Data');
-  XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['Your team (codes you can use)','Name','Job']].concat(team.map(m => [m.id, m.name_en || m.name_ar || '', m.job_name || '']))), 'My team');
-  XL.writeFile(wb, 'petrokima-team-projects-template.xlsx'); toast('Template downloaded — the “My team” sheet lists the codes you can use');
-}
-async function mbuFile(){
-  const f = $('mbu-file').files[0]; if (!f) return;
-  try {
-    const grid = (await readFile(f)).filter(r => r.some(v => buTxt(v) !== '')); if (grid.length < 2) return toast('The file has no data rows','warn');
-    const hdr = grid[0].map(H), ie = hdr.findIndex(h => ['employeecode','employee','code','empcode','كودالموظف'].includes(h)), ip = hdr.findIndex(h => ['projectcode','project','كودالمشروع','المشروع'].includes(h));
-    if (ie < 0 || ip < 0) return toast('Use the template headings: Employee code, Project code','err');
-    const team = new Map(((SD && SD.myTeam) || []).map(m => [String(m.id), m])), found = new Map(), seen = new Map();
-    const codes = [...new Set(grid.slice(1).map(r => buTxt(r[ip])).filter(Boolean))];
-    const have = new Set();                                            // projects each team member already has
-    for (const e of [...new Set(grid.slice(1).map(r => buTxt(r[ie]).replace(/\.0$/,'')).filter(x => team.has(x)))]){
-      const r = await sb.rpc('team_projects', { p_emp: e }); (r.data || []).forEach(p => have.add(e + '|' + String(p.id).toLowerCase())); }
-    for (const c of codes){ const r = await sb.rpc('find_projects', { p_q: c }); const hit = (r.data || []).find(p => String(p.id).toLowerCase() === c.toLowerCase()); found.set(c.toLowerCase(), hit || null); }
-    MBU = grid.slice(1).map((r, i) => { const emp = buTxt(r[ie]).replace(/\.0$/,''), pc = buTxt(r[ip]), m = team.get(emp), p = found.get(pc.toLowerCase());
-      let res;
-      if (!m) res = { kind:'error', msg:`${emp || '(blank)'} is not in your team` };
-      else if (!pc) res = { kind:'error', msg:'Project code is missing' };
-      else if (!p) res = { kind:'error', msg:`Project “${pc}” not found (or not active)` };
-      else if (have.has(emp + '|' + String(p.id).toLowerCase())) res = { kind:'skip', label:`${m.name_en || m.name_ar || emp} → ${p.id}`, msg:'Already assigned' };
-      else { const k = emp + '|' + p.id; res = seen.has(k) ? { kind:'skip', msg:`Same as row ${seen.get(k)}` } : { kind:'new', emp, code:p.id, label:`${m.name_en || m.name_ar || emp} → ${p.id} · ${p.name || ''}` }; seen.set(k, i + 2); }
-      return { n: i + 2, res }; });
-    mbuRender(); openM('m-mbu');
-  } catch(e){ toast(e.message, 'err'); }
-  $('mbu-file').value = '';
-}
-function mbuRender(){
-  const c = k => MBU.filter(r => r.res.kind === k).length;
-  $('mbu-summary').innerHTML = `<span class="chip c-green">✅ ${c('new')} to add</span> <span class="chip c-grey">⏭ ${c('skip')} skipped</span> <span class="chip c-red">✗ ${c('error')} with problems</span>${c('saved') ? ` <span class="chip c-green">✓ ${c('saved')} saved</span>` : ''}`;
-  $('mbu-rows').innerHTML = MBU.map(r => `<tr><td class="mono">${r.n}</td><td>${{ new:'<span class="chip c-green">Add</span>', skip:'<span class="chip c-grey">Skip</span>', error:'<span class="chip c-red">Problem</span>', saved:'<span class="chip c-green">✓ Saved</span>', failed:'<span class="chip c-red">✗ Not saved</span>' }[r.res.kind]}</td>
-    <td>${esc(r.res.label || '')}</td><td style="color:${['error','failed'].includes(r.res.kind)?'var(--danger)':'var(--muted)'}">${esc(r.res.msg || '')}</td></tr>`).join('');
-  $('mbu-save').disabled = !c('new'); $('mbu-save').textContent = c('new') ? `Save ${c('new')}` : 'Nothing to save';
-}
-async function mbuSave(){
-  const todo = MBU.filter(r => r.res.kind === 'new'); $('mbu-save').disabled = true;
-  for (const r of todo){
-    const { data, error } = await sb.from('employee_projects').insert({ emp_id: r.res.emp, project_code: r.res.code }).select('emp_id');
-    if (error && (error.code === '23505' || /duplicate/i.test(error.message))) r.res = { ...r.res, kind:'skip', msg:'Already assigned' };
-    else if (error || !(data && data.length)) r.res = { ...r.res, kind:'failed', msg: error ? error.message : NOPERM };
-    else r.res = { ...r.res, kind:'saved', msg:'' };
-  }
-  mbuRender(); const s = MBU.filter(r => r.res.kind === 'saved').length;
-  toast(`${s} assignment${s===1?'':'s'} added for your team`); const t = await sb.rpc('my_team'); if (SD) SD.myTeam = t.data || SD.myTeam; renderSelf();
-}
-$('mbu-template').addEventListener('click', mbuTemplate);
-$('mbu-file').addEventListener('change', mbuFile);
-$('mbu-save').addEventListener('click', mbuSave);
+// (the manager's bulk upload of his team's project assignments is React since 31 Oct 2026 — react/src/team)
 
 // ═════════════════════════════════════════════════════════
 //  NET ↔ GROSS CALCULATOR (Egypt) — standalone tool, does not change the payroll
@@ -2763,16 +2640,8 @@ loadPeriodData = async function(){ const r = await _loadPeriodDataMs.apply(this,
 //  OUTSIDE MISSIONS in desktop SELF-SERVICE (66/68, 22 Oct 2026) — same rules as the phone:
 //  employee asks → direct manager → HR · manager assigns → employee acknowledges (or straight to HR if he does not use the app) → HR
 // ═════════════════════════════════════════════════════════
-/** @type {{ mine: Mission[], team: Mission[], assign: boolean, part: boolean, missing?: boolean }} — missions in self-service */
-let SMIS = { mine: [], team: [], assign: false, part: false };
-const smisWhen = m => `${m.date_from}${m.date_to !== m.date_from ? ' → ' + m.date_to : ''}${m.time_from ? ` · ${String(m.time_from).slice(0,5)}–${String(m.time_to).slice(0,5)}` : ''}`;
-function smisStatus(m, asManager){
-  if (m.origin === 'manager' && m.status === 'Waiting for HR')
-    return `<span class="chip c-blue">${m.no_app ? 'Sent to HR — does not use the app' : asManager ? 'Acknowledged — waiting for HR' : 'You acknowledged — waiting for HR'}</span>`;
-  if (m.status === 'Waiting for manager') return `<span class="chip c-orange">${asManager ? 'Waiting for you' : 'Waiting for your manager'}</span>`;
-  if (m.status === 'Waiting for employee') return `<span class="chip c-orange">${asManager ? 'Waiting for the employee to acknowledge' : 'Waiting for you to acknowledge'}</span>`;
-  return chip(m.status);
-}
+/** @type {{ mine: Mission[], team: Mission[], missing?: boolean }} — missions in self-service (read here, drawn by React) */
+let SMIS = { mine: [], team: [] };
 async function loadSelfMissions(){
   const id = SELF.me && SELF.me.emp_id; if (!id) return;
   const [a, b] = await Promise.all([
@@ -2781,87 +2650,10 @@ async function loadSelfMissions(){
   SMIS.missing = !!(a.error && /does not exist|schema cache/i.test(a.error.message));
   SMIS.mine = a.data || []; SMIS.team = b.data || [];
 }
-function renderSelfMissions(){
-  // "🚗 Outside mission", the missions assigned to me and my missions in "My requests" are React since 31 Oct 2026 (react/src/self)
-  // the manager's team
-  const myTeam = SD.myTeam || [];
-  $('smis-card').style.display = (myTeam.length || SMIS.team.length) && !SMIS.missing ? '' : 'none';
-  $('smis-assign').style.display = myTeam.length ? '' : 'none';
-  const L = SMIS.team.slice().sort((a, b) => ((a.status === 'Waiting for manager' ? 0 : 1) - (b.status === 'Waiting for manager' ? 0 : 1)) || String(b.created_at).localeCompare(String(a.created_at)));
-  $('smis-tbl').innerHTML = L.slice(0, 100).map(m => { const mine = m.status === 'Waiting for manager';
-    return `<tr><td class="strong">${esc(m.emp_name || m.emp_name_ar || m.emp_id)} <span class="mono" style="color:var(--muted)">${esc(m.emp_id)}</span>
-        <div style="font-size:11px;color:var(--muted)">${m.origin === 'manager' ? 'assigned by you' : 'requested by the employee'} · ${esc(fmtSent(m.created_at))}</div></td>
-      <td class="mono" style="white-space:nowrap">${esc(smisWhen(m))}</td>
-      <td style="white-space:normal;max-width:280px"><b>${esc(m.place)}</b>${m.purpose ? `<div style="font-size:12px;color:var(--muted)">${esc(m.purpose)}</div>` : ''}</td>
-      <td class="mono">${esc(m.project_code || '—')}</td>
-      <td>${smisStatus(m, true)}${m.hr_note ? `<div style="font-size:12px">HR: ${esc(m.hr_note)}</div>` : ''}</td>
-      <td style="white-space:nowrap">${mine ? `<button class="btn btn-success btn-sm" data-smis-ok="${esc(m.id)}">Approve</button> <button class="btn btn-ghost btn-sm" data-smis-no="${esc(m.id)}">Reject</button>` : ''}
-        ${m.origin === 'manager' && ['Waiting for employee', 'Waiting for HR'].includes(m.status) ? `<button class="btn btn-ghost btn-sm" data-smis-cancel="${esc(m.id)}">Cancel</button>` : ''}</td></tr>`; }).join('')
-    || '<tr><td colspan="6" class="empty">No missions yet — use “Assign a mission”</td></tr>';
-  const w = SMIS.team.filter(m => m.status === 'Waiting for manager').length;
-  if (w) { const b = $('self-team-badge'), n = (b.style.display === 'none' ? 0 : Number(b.textContent) || 0) + w; b.style.display = ''; b.textContent = n; $('self-team-nav').style.display = ''; }
-  if (SMIS.team.length) $('self-team-nav').style.display = '';
-}
-function openSelfMission(assign){
-  SMIS.assign = assign;
-  $('smis-title').textContent = assign ? '🚗 Assign a mission to your team' : '🚗 Request an outside mission';
-  $('smis-who-box').style.display = assign ? '' : 'none';
-  const team = SD.myTeam || [];
-  $('smis-all-l').textContent = `Select all (${team.length})`; $('smis-all').checked = false;
-  $('smis-who').innerHTML = team.map(m => `<label style="display:flex;gap:8px;align-items:center;padding:5px 0"><input type="checkbox" class="smis-w" value="${esc(m.id)}" style="width:auto">
-      <span>${esc(m.name_en || m.name_ar || m.id)} <span class="mono" style="color:var(--muted)">${esc(m.id)}</span>${m.job_name ? ` <span style="font-size:12px;color:var(--muted)">· ${esc(m.job_name)}</span>` : ''}</span></label>`).join('');
-  $('smis-cnt').textContent = '0 chosen';
-  ['smis-f', 'smis-t', 'smis-d'].forEach(i => $(i).value = todayStr());
-  ['smis-pl', 'smis-pu', 'smis-pr'].forEach(i => $(i).value = '');
-  smisKind(false); openM('m-smis');
-}
-function smisKind(p){ SMIS.part = p; $('smis-full').style.display = p ? 'none' : ''; $('smis-part').style.display = p ? '' : 'none';
-  $('smis-k-full').className = 'btn btn-sm ' + (p ? 'btn-ghost' : 'btn-primary'); $('smis-k-part').className = 'btn btn-sm ' + (p ? 'btn-primary' : 'btn-ghost'); }
-function smisCount(){ const n = document.querySelectorAll('.smis-w:checked').length, all = document.querySelectorAll('.smis-w').length;
-  $('smis-cnt').textContent = `${n} chosen`; $('smis-all').checked = n > 0 && n === all; }
-async function sendSelfMission(){
-  const p = SMIS.part, f = p ? $('smis-d').value : $('smis-f').value, to = p ? $('smis-d').value : $('smis-t').value;
-  const tf = p ? $('smis-tf').value : null, tt = p ? $('smis-tt').value : null, pl = $('smis-pl').value.trim();
-  if (!f || !to || to < f) return toast('The end date must be on or after the start date', 'warn');
-  if (p && (!tf || !tt || tt <= tf)) return toast('The end time must be after the start time', 'warn');
-  if (!pl) return toast('Write where the mission is', 'warn');
-  const who = SMIS.assign ? [...document.querySelectorAll('.smis-w:checked')].map(c => c.value) : null;
-  if (SMIS.assign && !(who || []).length) return toast('Choose at least one employee', 'warn');
-  const args = { p_from: f, p_to: to, p_time_from: tf, p_time_to: tt, p_place: pl, p_purpose: $('smis-pu').value.trim() || null, p_project: $('smis-pr').value.trim() || null };
-  $('smis-go').disabled = true;
-  const { error } = SMIS.assign ? await sb.rpc('assign_mission', { p_emps: who, ...args }) : await sb.rpc('request_mission', args);
-  $('smis-go').disabled = false;
-  if (error) return toast(error.message.replace(/^[A-Z_]+:\s*/, ''), 'err');
-  closeM('m-smis');
-  toast(SMIS.assign ? 'Mission sent — app users acknowledge it; the others go straight to HR' : (SD.manager ? 'Mission request sent to your direct manager' : 'Mission request sent to HR'));
-  await loadSelf();
-}
-async function smisRpc(name, args, msg){
-  const { error } = await sb.rpc(name, args);
-  if (error) return toast(error.message.replace(/^[A-Z_]+:\s*/, ''), 'err');
-  toast(msg); await loadSelf();
-}
-$('smis-assign').addEventListener('click', () => openSelfMission(true));
-$('smis-k-full').addEventListener('click', () => smisKind(false));
-$('smis-k-part').addEventListener('click', () => smisKind(true));
-$('smis-all').addEventListener('change', () => { document.querySelectorAll('.smis-w').forEach(c => c.checked = $('smis-all').checked); smisCount(); });
-$('smis-who').addEventListener('change', smisCount);
-$('smis-go').addEventListener('click', sendSelfMission);
-document.addEventListener('click', e => {
-  const a = /** @type {PageEl} */ (e.target).closest('[data-smis-ack]'); if (a) { a.disabled = true; return smisRpc('acknowledge_mission', { p_id: a.dataset.smisAck }, 'Thank you — your manager and HR are notified'); }
-  const ok = /** @type {PageEl} */ (e.target).closest('[data-smis-ok]'); if (ok) { ok.disabled = true; return smisRpc('manager_decide_mission', { p_id: ok.dataset.smisOk, p_approve: true }, 'Approved — sent to HR'); }
-  const no = /** @type {PageEl} */ (e.target).closest('[data-smis-no]'); if (no) { const note = prompt('Reason for rejecting (the employee will see it):'); if (note === null) return; if (!note.trim()) return toast('Write the reason', 'warn');
-    return smisRpc('manager_decide_mission', { p_id: no.dataset.smisNo, p_approve: false, p_note: note.trim() }, 'Rejected — the employee is notified'); }
-  const cx = /** @type {PageEl} */ (e.target).closest('[data-smis-cancel]'); if (cx) { const id = /** @type {string} */ (cx.dataset.smisCancel);
-    confirmDel('Cancel this mission?', async () => { const { error } = await sb.rpc('cancel_mission', { p_id: id }); if (error) throw new Error(error.message.replace(/^[A-Z_]+:\s*/, '')); toast('Mission cancelled'); await loadSelf(); });
-    $('del-title').textContent = 'Please confirm'; $('del-ok').textContent = 'Cancel mission'; }
-});
+// The missions on screen, the mission window and every mission button are React since 31 Oct 2026 (react/src/self, react/src/team).
 const _loadSelfMis = loadSelf;
 // @ts-expect-error — loadSelf is deliberately extended here (the new version wraps the earlier one)
 loadSelf = async function(){ try { await loadSelfMissions(); } catch (e) { console.warn(e); } return _loadSelfMis.apply(this, arguments); };
-const _renderSelfMis = renderSelf;
-// @ts-expect-error — renderSelf is deliberately extended here (the new version wraps the earlier one)
-renderSelf = function(){ const r = _renderSelfMis.apply(this, arguments); try { if (SD.emp) renderSelfMissions(); } catch (e) { console.warn(e); } return r; };
 
 // ═════════════════════════════════════════════════════════
 //  REPORT "Returns after check-out and undone check-outs" (22 Oct 2026, with 71-undo-checkout.sql)
@@ -3147,74 +2939,6 @@ $('ta-last').addEventListener('click', () => taCycle(true));
 $('ta-refresh').addEventListener('click', loadTeamAtt);
 $('ta-q').addEventListener('input', e => { TA.q = /** @type {PageEl} */ (e.target).value; renderTeamAtt(); });
 $('ta-body').addEventListener('click', e => { const r = /** @type {PageEl} */ (e.target).closest('[data-ta-emp]'); if (!r) return; TA.open = TA.open === r.dataset.taEmp ? null : r.dataset.taEmp; renderTeamAtt(); });
-
-// ═════════════════════════════════════════════════════════
-//  STATUS FILTERS (26 Oct 2026) — "All statuses" box on every table with a Status column
-//  · pages with their own data filter call stFill() from their render function
-//    (Vacations, Attendance, Projects, Loans, Project allowance rules)
-//  · smaller tables (self-service, Employee voice) are filtered on screen by domStatusFilter()
-//  Each option shows how many rows have that status with the page's other filters applied.
-// ═════════════════════════════════════════════════════════
-const ST_ORDER = ['Waiting for you','Waiting for manager','Waiting for employee','Waiting for board','Waiting for HR','Waiting','Pending',
-  'Pending manager','Pending HR','Requested','Answered','New','In review','In progress','Approved','Active','Present','Recorded','Completed',
-  'Accepted','Closed','Rejected','Returned','Cancelled'];
-function stSort(a, b){
-  const ia = ST_ORDER.indexOf(a), ib = ST_ORDER.indexOf(b);
-  if (ia !== ib) return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
-  return String(a).localeCompare(String(b));
-}
-// fills the status box with the statuses found in vals (with counts); keeps the current choice; returns it
-function stFill(id, vals){
-  const sel = $(id); if (!sel) return '';
-  const keep = sel.value, cnt = {};
-  vals.forEach(v => { if (v != null && v !== '') cnt[v] = (cnt[v] || 0) + 1; });
-  if (keep && !(keep in cnt)) cnt[keep] = 0;   // a chosen status with no rows stays chosen (shows 0)
-  const keys = Object.keys(cnt).sort(stSort);
-  sel.innerHTML = `<option value="">All statuses (${vals.length})</option>` + keys.map(k => `<option value="${esc(k)}">${esc(k)} (${cnt[k]})</option>`).join('');
-  sel.value = keep;
-  sel.classList.toggle('st-on', !!keep);
-  return keep;
-}
-
-// on-screen filter for a table body: adds the box to the card's toolbar and re-applies whenever the rows are redrawn
-function stCellText(td){
-  if (!td) return '';
-  const c = td.querySelector('.chip');
-  return (c ? c.textContent : (td.firstChild ? td.firstChild.textContent || '' : '')).replace(/\s+/g, ' ').trim();
-}
-function domStatusFilter(tbodyId){
-  const tb = $(tbodyId); if (!tb || tb.dataset.stf) return;
-  const table = tb.closest('table'), card = tb.closest('.card');
-  const col = [...table.querySelectorAll('thead th')].findIndex(th => th.textContent.trim() === 'Status');
-  if (col < 0 || !card) return;
-  tb.dataset.stf = '1';
-  let bar = card.querySelector('.toolbar');
-  if (!bar){ bar = document.createElement('div'); bar.className = 'toolbar'; card.insertBefore(bar, card.firstChild); }
-  let right = bar.querySelector('.toolbar-right');
-  if (!right){ right = document.createElement('div'); right.className = 'toolbar-right'; right.style.marginLeft = 'auto'; bar.appendChild(right); }
-  const sel = document.createElement('select');
-  sel.className = 'sel'; sel.id = tbodyId + '-st'; sel.title = 'Filter by status';
-  right.insertBefore(sel, right.firstChild);
-  let obs;
-  const apply = () => {
-    tb.querySelectorAll('tr.st-none').forEach(r => r.remove());
-    const rows = [...tb.children].filter(r => r.tagName === 'TR' && r.children.length > col && !r.querySelector(':scope > td.empty'));
-    const st = stFill(sel.id, rows.map(r => stCellText(r.children[col])));
-    let shown = 0;
-    rows.forEach(r => { const ok = !st || stCellText(r.children[col]) === st; r.style.display = ok ? '' : 'none'; if (ok) shown++; });
-    if (rows.length && !shown){
-      const tr = document.createElement('tr'); tr.className = 'st-none';
-      tr.innerHTML = `<td colspan="${table.querySelectorAll('thead th').length}" class="empty">Nothing with the status “${esc(st)}” — choose “All statuses”</td>`;
-      tb.appendChild(tr);
-    }
-    if (obs) obs.takeRecords();   // our own changes must not trigger another round
-  };
-  sel.addEventListener('change', apply);
-  obs = new MutationObserver(apply);
-  obs.observe(tb, { childList: true });
-  apply();
-}
-['smis-tbl', 'self-treq-tbl', 'self-team-tbl'].forEach(domStatusFilter);   // Employee voice and My requests: React (own status boxes)
 
 // ═════════════════════════════════════════════════════════
 //  DATES TYPED AS DAY-MONTH-YEAR (26 Oct 2026) — Mohammed: "type dates like 26102026, 01012026"

@@ -269,47 +269,10 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
     <div id="react-self-head"></div>
     <div id="self-req"><div id="react-self-req"></div></div>
     <div id="self-team" style="display:none"><div id="react-self-team"></div></div>
-    <div id="self-tatt" style="display:none">
-      <div class="card"><div class="toolbar" style="flex-wrap:wrap;gap:8px"><span class="toolbar-title">👥 My team's attendance</span>
-        <div class="toolbar-right" style="flex-wrap:wrap;gap:6px">
-          <span class="calv-seg"><button class="btn btn-sm on" id="ta-v-today">Today</button><button class="btn btn-sm" id="ta-v-period">Period</button></span>
-          <span id="ta-range" style="display:none;gap:6px;align-items:center;flex-wrap:wrap"><input type="date" class="sel" id="ta-from"> → <input type="date" class="sel" id="ta-to">
-            <button class="btn btn-ghost btn-sm" id="ta-this">This pay cycle</button><button class="btn btn-ghost btn-sm" id="ta-last">Last pay cycle</button></span>
-          <input class="sel" id="ta-q" placeholder="Search name, code, job" style="min-width:180px">
-          <button class="btn btn-ghost btn-sm" id="ta-refresh">⟳ Refresh</button></div></div>
-        <div class="foot" id="ta-sum" style="border-top:none;border-bottom:1px solid var(--border)"></div>
-        <div id="ta-body"></div>
-        <div class="foot">Your direct reports only. Late = first check-in after the latest allowed arrival; short = hours below the standard day (weekends and full-day missions excluded). "To settle" = missing check-outs, missing punches and offline times that HR still has to correct. Pay is never shown here.</div></div>
-    </div>
-    <div id="self-pcost" style="display:none">
-      <div class="alert a-info">Total labour cost charged to each project for an approved payroll month. No employee names or individual pay are shown. Small projects may be combined so nobody's pay can be worked out.</div>
-      <div class="card"><div class="toolbar"><span class="toolbar-title">Labour cost by project</span>
-        <div class="toolbar-right"><select class="sel" id="pc-period"></select><button class="btn btn-primary btn-sm" id="pc-xlsx">⬇ Excel</button></div></div>
-        <div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Name</th><th class="num">People</th><th class="num">Hours</th><th class="num">Total cost (EGP)</th><th class="num">Cost per hour</th></tr></thead><tbody id="pc-tbl"></tbody></table></div>
-        <div class="foot" id="pc-foot"></div></div>
-    </div>
-    <div id="self-att" style="display:none">
-  <div class="card" id="sc-card">
-    <div class="toolbar" style="flex-wrap:wrap;gap:8px"><span class="toolbar-title" id="sc-title">My attendance</span>
-      <div class="toolbar-right" style="flex-wrap:wrap;gap:6px">
-        <button class="btn btn-ghost btn-sm" id="sc-prev" title="Previous">◀</button>
-        <span id="sc-label" style="font-weight:600;min-width:170px;text-align:center"></span>
-        <button class="btn btn-ghost btn-sm" id="sc-next" title="Next">▶</button>
-        <button class="btn btn-ghost btn-sm" id="sc-today">Today</button>
-        <span class="calv-seg"><button class="btn btn-sm" id="sc-vm">Month</button><button class="btn btn-sm" id="sc-vw">Week</button></span>
-      </div></div>
-    <div id="sc-grid" class="calv"></div>
-    <div class="foot" id="sc-sum"></div>
-  </div>
-    </div>
-    <div id="self-pay" style="display:none">
-      <div class="card" id="self-pay-lock" style="max-width:420px;padding:22px;text-align:center"><div style="font-size:40px">🔒</div>
-        <div class="strong" style="font-size:16px;margin:6px 0">Your payslips are protected</div><div style="color:var(--muted);font-size:13px;margin-bottom:12px">Enter your password to view them.</div>
-        <input class="inp" id="self-pay-pass" type="password" autocomplete="current-password" placeholder="Password" style="width:100%;margin-bottom:10px">
-        <div id="sp-cap" style="display:none;margin-bottom:10px"></div><button class="btn btn-primary" id="self-pay-go" style="width:100%;justify-content:center">Show my payslips</button><div id="self-pay-err" style="color:var(--danger);font-size:13px;margin-top:8px"></div></div>
-      <div class="card" id="self-pay-card" style="display:none"><div class="toolbar"><span class="toolbar-title">My approved payslips</span><div class="toolbar-right"><button class="btn btn-ghost btn-sm" id="self-pay-relock">🔒 Lock</button></div></div>
-        <div class="tbl-wrap"><table><thead><tr><th>Payroll</th><th class="num">Gross</th><th class="num">Deductions</th><th class="num">Net pay</th><th></th></tr></thead><tbody id="self-slips"></tbody></table></div></div>
-    </div>
+    <div id="self-tatt" style="display:none"><div id="react-self-tatt"></div></div>
+    <div id="self-pcost" style="display:none"><div id="react-self-pcost"></div></div>
+    <div id="self-att" style="display:none"><div id="react-self-att"></div></div>
+    <div id="self-pay" style="display:none"><div id="react-self-pay"></div></div>
     <div id="self-prof" style="display:none"><div id="react-self-prof"></div></div>
   </main>
   </div>
@@ -566,6 +529,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=465527c6e7fe"></script>
-<script src="react.js?v=2d76cc7245e4"></script>
+<script src="app.js?v=86646daee679"></script>
+<script src="react.js?v=8f67afb6bc01"></script>
 </body></html>

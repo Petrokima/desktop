@@ -1463,19 +1463,13 @@ function renderSelf(){
   $('self-team-nav').style.display = (team.length || tReq.length || myTeam.length || mis.length) ? '' : 'none';
   $('self-tatt-nav').style.display = myTeam.length ? '' : 'none';   // 87: direct managers see their team's attendance
   $('self-team-badge').style.display = waiting ? '' : 'none'; $('self-team-badge').textContent = String(waiting);
-  // payslips tab
-  const slips = [...(SD.slips||[])].sort((a,b)=>String(b.period).localeCompare(String(a.period)));
-  $('self-slips').innerHTML = slips.map(l => `<tr><td class="strong">${esc(periodLabel(l.period))}</td><td class="num">${fmt(l.gross)}</td><td class="num neg">${fmt(l.deductions)}</td>
-    <td class="num pos strong">${fmt(l.net)}</td><td><button class="btn btn-ghost btn-sm" data-self-slip="${esc(l.period)}">View payslip</button></td></tr>`).join('')
-    || '<tr><td colspan="5" class="empty">No approved payslips yet — they appear here once HR and Finance approve a payroll month</td></tr>';
 }
 // The request windows (vacation, permission, HR request) and Cancel are React since 31 Oct 2026 (react/src/self/SelfDialogs).
 document.querySelectorAll('[data-spage]').forEach(t => t.addEventListener('click', () => {
   document.querySelectorAll('[data-spage]').forEach(x=>x.classList.toggle('active', x===t));
   ['req','team','tatt','pcost','att','pay','prof'].forEach(k => $('self-'+k).style.display = t.dataset.spage===k ? '' : 'none');
-  lockSelfPay();                                                     // payslips need the password every time
-  if (t.dataset.spage === 'pcost') loadProjectCosts();
-  if (t.dataset.spage === 'tatt') { if (!$('ta-from').value) { $('ta-from').value = periodStart(cycleOf(todayStr())); $('ta-to').value = todayStr(); } loadTeamAtt(); }   // part42
+  // every part is React since 31 Oct 2026: Team attendance, Project costs and My attendance load when opened, payslips lock again
+  if (typeof PKR !== 'undefined') PKR.selfPageShown(String(t.dataset.spage));
 }));
 $('self-back').addEventListener('click', () => { $('self').style.display='none'; $('app').style.display='block'; });
 
@@ -1494,25 +1488,7 @@ function updateBadges(){
 }
 
 // (a manager's decisions on his team's requests, allowances and missions are React since 31 Oct 2026 — react/src/team)
-
-// ── payslips are shown only after the employee re-enters his password ──
-function lockSelfPay(){ $('self-pay-card').style.display = 'none'; $('self-pay-lock').style.display = ''; $('self-pay-pass').value = ''; $('self-pay-err').textContent = ''; }
-async function unlockSelfPay(){
-  const pw = $('self-pay-pass').value; if (!pw) return;
-  $('self-pay-go').disabled = true;
-  // the account that is signed in right now — never a value left over from an earlier sign-in
-  const email = ((((await sb.auth.getSession()).data || {}).session || {}).user || {}).email || (SELF.me && SELF.me.email);
-  let cap; try { cap = await captchaToken('sp-cap', 'en'); } catch(e){ cap = undefined; }
-  const { error } = await sb.auth.signInWithPassword({ email, password: pw, options: cap ? { captchaToken: cap } : undefined });
-  $('self-pay-go').disabled = false;
-  if (error){ $('self-pay-err').textContent = /invalid|credentials/i.test(error.message) ? 'Wrong password' : error.message; return; }
-  if (!(await mfaAfterReauth())) { $('self-pay-err').textContent = 'The 6-digit code is needed to open payslips'; return; }
-  $('self-pay-lock').style.display = 'none'; $('self-pay-card').style.display = ''; $('self-pay-pass').value = '';
-}
-$('self-pay-go').addEventListener('click', unlockSelfPay);
-$('self-pay-pass').addEventListener('keydown', e => { if (e.key === 'Enter') unlockSelfPay(); });
-$('self-pay-relock').addEventListener('click', lockSelfPay);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && $('self-pay-card').style.display !== 'none') lockSelfPay(); });
+// (My payslips — the password lock and the list — is React since 31 Oct 2026: react/src/selfmore)
 
 // ═════════════════════════════════════════════════════════
 //  PAYROLL APPROVAL (permanent snapshot)
@@ -1590,7 +1566,6 @@ function exportRunCsv(run, period){
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download=`petrokima-payroll-${period}${S.runs.some(x=>x.period===period)?'-approved':'-draft'}.csv`; a.click(); toast('Payroll exported');
 }
-$('self-slips').addEventListener('click', e => { const b=/** @type {PageEl} */ (e.target).closest('[data-self-slip]'); if(b){ const l=(SD.slips||[]).find(x=>x.period===b.dataset.selfSlip); if(l) showSnapSlip(l, l.period); } });
 
 // Lock notices on pages whose data belongs to an approved cycle
 function renderLocks(){
@@ -1851,39 +1826,7 @@ async function publishProjectCosts(period, detail, quiet){
   if (error) return toast('Project costs not published: ' + error.message, 'err');
   toast(`${periodLabel(period)}: project costs published for Accounting — ${data.length} project line${data.length>1?'s':''}, total ${fmt(rows.reduce((s,r)=>s+r.total,0))} EGP`);
 }
-// ── the accountant's view (My requests → Project costs) ──
-/** @type {FnResult<'acct_project_costs'>} — project costs of the chosen month */
-let PC_ROWS = [];
-async function loadProjectCosts(){
-  const per = await sb.rpc('acct_cost_periods');
-  if (per.error) { $('pc-tbl').innerHTML = `<tr><td colspan="6" class="empty">${esc(per.error.message)}</td></tr>`; return; }
-  const keep = $('pc-period').value;
-  $('pc-period').innerHTML = (per.data||[]).map(x => `<option value="${esc(x.period)}">${esc(periodLabel(x.period))}</option>`).join('') || '<option value="">No months published yet</option>';
-  if (keep && (per.data||[]).some(x => x.period === keep)) $('pc-period').value = keep;
-  await showProjectCosts();
-}
-async function showProjectCosts(){
-  const p = $('pc-period').value;
-  if (!p){ PC_ROWS = []; $('pc-tbl').innerHTML = '<tr><td colspan="6" class="empty">No approved months have been published yet</td></tr>'; $('pc-foot').textContent=''; return; }
-  const { data, error } = await sb.rpc('acct_project_costs', { p_period: p });
-  if (error) { $('pc-tbl').innerHTML = `<tr><td colspan="6" class="empty">${esc(error.message)}</td></tr>`; return; }
-  PC_ROWS = data || [];
-  $('pc-tbl').innerHTML = PC_ROWS.map(r => `<tr><td class="mono">${esc(r.project_code || '—')}</td><td class="strong" style="white-space:normal">${esc(r.project_name || '')}${r.note ? `<div style="font-size:11px;color:var(--muted)">${esc(r.note)}</div>` : ''}</td>
-      <td class="num">${r.people}</td><td class="num">${fmt(r.hours)}</td><td class="num strong">${r.total == null ? '<span style="color:var(--muted)">withheld</span>' : fmt(r.total)}</td>
-      <td class="num">${r.total != null && num(r.hours) > 0 ? fmt(num(r.total) / num(r.hours)) : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">Nothing published for this month</td></tr>';
-  const tot = PC_ROWS.reduce((s,r) => s + num(r.total), 0);
-  $('pc-foot').textContent = `${periodLabel(p)} · ${PC_ROWS.length} line${PC_ROWS.length===1?'':'s'} · total shown ${fmt(tot)} EGP`;
-}
-$('pc-period').addEventListener('change', showProjectCosts);
-$('pc-xlsx').addEventListener('click', async () => {
-  if (!PC_ROWS.length) return toast('Nothing to download','warn');
-  const XL = await loadSheetJs(), p = $('pc-period').value;
-  // spreadsheet rows: a heading row, then text and numbers
-  const aoa = /** @type {any[][]} */ ([['Project','Name','People','Hours','Total cost (EGP)','Cost per hour','Note']]).concat(PC_ROWS.map(r => [r.project_code || '', r.project_name || '', r.people, num(r.hours),
-    r.total == null ? '' : num(r.total), r.total != null && num(r.hours) > 0 ? Math.round(num(r.total)/num(r.hours)*100)/100 : '', r.note || '']));
-  const wb = XL.utils.book_new(); XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(aoa), 'Project costs ' + p);
-  XL.writeFile(wb, `petrokima-project-costs-${p}.xlsx`); toast('Project costs downloaded');
-});
+// (the accountant's view — self-service → Project costs — is React since 31 Oct 2026: react/src/selfmore)
 
 // ═════════════════════════════════════════════════════════
 //  SIDEBAR — collapse to icons / expand (remembered on this computer)
@@ -2200,133 +2143,6 @@ renderDashboard = function(){
   _renderDashboardBase();
   const n = locFlagged().length, el = $('loc-badge'); if (el) { el.style.display = n ? '' : 'none'; el.textContent = String(n); }
 };
-
-// ═════════════════════════════════════════════════════════
-//  ATTENDANCE CALENDAR — monthly / weekly view of one employee
-//  HR: Attendance page → 📅 Calendar (any employee) · Employee: self-service → 🗓 My attendance (own only, RLS)
-// ═════════════════════════════════════════════════════════
-const CAL_WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-const CAL_START = 6;                                   // weeks start on Saturday
-const calISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-const calDate = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
-const calAdd = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-const calWeekStart = d => calAdd(d, -((d.getDay() - CAL_START + 7) % 7));
-
-function makeAttCalendar(p, opts){
-  /** @type {{ view: string, anchor: Date, emp: Employee | null, rows: AttendanceRow[], leaves: Leave[], loading: boolean, token: number, who?: any[] }} */
-  const st = { view: 'month', anchor: new Date(), emp: null, rows: [], leaves: [], loading: false, token: 0 };
-  const range = () => {
-    if (st.view === 'week') { const a = calWeekStart(st.anchor); return [a, calAdd(a, 6)]; }
-    const first = new Date(st.anchor.getFullYear(), st.anchor.getMonth(), 1), last = new Date(st.anchor.getFullYear(), st.anchor.getMonth() + 1, 0);
-    return [calWeekStart(first), calAdd(calWeekStart(last), 6)];
-  };
-  async function load(){
-    const emp = opts.getEmp(); st.emp = emp;
-    if (!emp) { $(p+'-grid').innerHTML = `<div class="empty" style="padding:30px">${esc(opts.emptyText || 'Choose an employee')}</div>`; $(p+'-sum').textContent = ''; label(); return; }
-    const [a, b] = range(), from = calISO(a), to = calISO(b), tk = ++st.token;
-    $(p+'-grid').innerHTML = '<div class="empty" style="padding:30px">Loading…</div>'; label();
-    const [att, lv, who] = await Promise.all([
-      sb.from('attendance').select('*').eq('emp_id', emp.id).gte('date', from).lte('date', to).order('date'),
-      sb.from('employee_leaves').select('*').eq('emp_id', emp.id).lte('date_from', to).gte('date_to', from),
-      opts.who ? sb.rpc('attendance_entered_by', { p_emp: emp.id, p_from: from, p_to: to }).then(r => r.error ? [] : (r.data || []), () => []) : Promise.resolve([]) ]);
-    if (tk !== st.token) return;                                       // a newer request is on its way
-    if (att.error) { $(p+'-grid').innerHTML = `<div class="empty" style="padding:30px">${esc(att.error.message)}</div>`; return; }
-    st.rows = att.data || []; st.leaves = (lv && lv.data) || []; st.who = who || [];
-    render();
-  }
-  function label(){
-    const [a, b] = range();
-    $(p+'-label').textContent = st.view === 'week'
-      ? `${a.toLocaleDateString('en-GB', { day:'numeric', month:'short' })} – ${b.toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' })}`
-      : st.anchor.toLocaleDateString('en-GB', { month:'long', year:'numeric' });
-    $(p+'-vm').classList.toggle('on', st.view === 'month'); $(p+'-vw').classList.toggle('on', st.view === 'week');
-    if (opts.title) $(p+'-title').textContent = opts.title(st.emp);
-  }
-  function dayInfo(ds){
-    const rows = st.rows.filter(r => r.date === ds);
-    const ins = rows.map(r => r.check_in).filter(Boolean).sort(), outs = rows.map(r => r.check_out).filter(Boolean).sort();
-    const noOut = rows.some(attNoOut);                                // missing check-out: hours not counted until settled
-    const hours = rows.reduce((s, r) => s + (attNoOut(r) ? 0 : num(r.total_hours)), 0);
-    const segs = rows.flatMap(r => Array.isArray(r.projects) ? r.projects : []);
-    const leave = st.leaves.find(l => l.date_from <= ds && l.date_to >= ds && !/reject|cancel/i.test(l.status || ''));
-    return { rows, in: ins[0] || '', out: noOut ? '' : (outs.length ? outs[outs.length - 1] : ''), hours, segs, leave, noOut,
-             open: !noOut && segs.some(s => s.in && !s.out), status: rows.map(r => r.status).find(Boolean) || '' };
-  }
-  // 🖐 fingerprint machine · 📱 phone · ✍ typed / changed by HR (who + when from the audit log, staff only) — 20 Oct 2026
-  function daySource(ds, rows){
-    if (!rows.length) return null;
-    const segs = rows.flatMap(r => Array.isArray(r.projects) ? r.projects : []);
-    const machine = rows.some(r => /machine|combined/i.test(r.source || '')) || segs.some(s => /machine/i.test(s.src || ''));
-    const phone   = rows.some(r => /mobile|combined/i.test(r.source || ''));
-    const handRow = rows.some(r => !/machine|mobile|combined/i.test(r.source || ''));
-    const who = (st.who || []).filter(w => w.day === ds), ins = who.find(w => w.action === 'INSERT'), upd = who.find(w => w.action === 'UPDATE');
-    const when = w => new Date(w.at).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
-    const hand = handRow || !!upd, icons = [], tip = [];
-    if (machine) { icons.push('🖐'); tip.push('🖐 Fingerprint machine' + (ins && !handRow ? ` — imported by ${ins.by_name} · ${when(ins)}` : '')); }
-    if (phone)   { icons.push('📱'); tip.push('📱 Phone check-in'); }
-    if (hand)    { icons.push('✍');
-      if (handRow) tip.push(ins ? `✍ Entered by ${ins.by_name} · ${when(ins)}` : '✍ Entered by HR');
-      if (upd)     tip.push(`✍ Changed by ${upd.by_name} · ${when(upd)}`); }
-    return icons.length ? { icons: icons.join(''), tip: tip.join('\n') } : null;
-  }
-  function cell(ds, inMonth, big){
-    const d = calDate(ds), today = calISO(new Date()), x = dayInfo(ds), emp = st.emp || /** @type {Employee} */ ({});
-    const weekend = (settings.weekendDays || []).includes(d.getDay()), hol = typeof holidayOn === 'function' ? holidayOn(ds) : null;
-    const before = emp.employment_date && ds < emp.employment_date, after = emp.resignation_date && ds > emp.resignation_date;
-    let body = '';
-    if (x.rows.length && (x.in || x.out || x.hours || x.noOut)) {
-      const late = x.in && x.in > (settings.lateAfter || '09:00') && x.in < (settings.eveningShiftAfter || '14:00');
-      body += `<div class="calv-time">In <b>${esc(x.in || '—')}</b>${late ? ' <span class="chip c-orange" style="padding:1px 6px">late</span>' : ''}</div>`
-           +  (x.noOut ? `<div class="calv-time" style="color:var(--danger)" title="No check-out recorded — HR must enter it">Out <b>⚠ missing</b></div>`
-                       : `<div class="calv-time">Out <b>${esc(x.out || (x.open ? 'open' : '—'))}</b></div>`)
-           +  `<div class="calv-hrs"${x.noOut ? ' style="color:var(--muted);font-weight:500" title="Not calculated until the check-out is recorded or settled by HR"' : ''}>${x.noOut ? 'not counted' : x.hours ? esc(fmtHM(x.hours)) : '—'}</div>`;
-      if (big && x.segs.length) body += `<div class="calv-prj">${x.segs.map(s => `${esc(s.code || 'No project')} ${esc(s.in || '')}–${esc(s.out || (x.noOut ? '?' : '…'))}${s.hours ? ' · ' + esc(fmtHM(s.hours)) : ''}`).join('<br>')}</div>`;
-    } else if (x.rows.length && x.status) {
-      body += `<span class="chip c-grey">${esc(x.status)}</span>`;
-    }
-    if (x.leave) body += `<span class="chip ${/approved/i.test(x.leave.status || '') ? 'c-blue' : 'c-grey'}">🌴 ${esc(x.leave.leave_type || 'Leave')}${/approved/i.test(x.leave.status || '') ? '' : ' (pending)'}</span>`;
-    else if (hol && !x.rows.length) body += `<span class="chip c-green">📅 ${esc(hol.name || 'Holiday')}</span>`;
-    else if (weekend && !x.rows.length) body += `<span style="color:var(--muted)">Weekend</span>`;
-    else if (!x.rows.length && ds < today && !before && !after && inMonth) body += `<span class="chip c-red">No attendance</span>`;
-    const cls = ['calv-cell', inMonth ? '' : 'out', ds === today ? 'today' : '', weekend ? 'wk' : '', big ? 'week' : ''].join(' ');
-    const src = daySource(ds, x.rows);
-    return `<div class="${cls}"><div class="calv-d"><span>${big ? CAL_WD[d.getDay()] + ' ' : ''}${d.getDate()}${big ? ' ' + d.toLocaleDateString('en-GB', { month:'short' }) : ''}</span>${src ? `<span class="calv-src" title="${esc(src.tip)}">${src.icons}</span>` : ''}</div>${body}</div>`;
-  }
-  function render(){
-    const [a, b] = range(), big = st.view === 'week', month = st.anchor.getMonth();
-    let html = '<div class="calv-grid">';
-    for (let i = 0; i < 7; i++) html += `<div class="calv-hd">${CAL_WD[(CAL_START + i) % 7]}</div>`;
-    for (let d = new Date(a); d <= b; d = calAdd(d, 1)) html += cell(calISO(d), big || d.getMonth() === month, big);
-    $(p+'-grid').innerHTML = html + '</div>';
-    // totals for the days shown (the month itself in month view)
-    const days = []; for (let d = new Date(a); d <= b; d = calAdd(d, 1)) if (big || d.getMonth() === month) days.push(calISO(d));
-    const info = days.map(dayInfo), worked = info.filter(x => x.hours > 0 || x.in), noOut = info.filter(x => x.noOut).length;
-    const total = info.reduce((s, x) => s + x.hours, 0), lvDays = info.filter(x => x.leave && /approved/i.test(x.leave.status || '')).length;
-    const today = calISO(new Date()), emp = st.emp || /** @type {Employee} */ ({});
-    const missing = days.filter((ds, i) => !info[i].rows.length && !info[i].leave && ds < today && isWorkday(ds)
-                                     && !(emp.employment_date && ds < emp.employment_date) && !(emp.resignation_date && ds > emp.resignation_date)).length;
-    $(p+'-sum').innerHTML = `<b>${worked.length}</b> day${worked.length === 1 ? '' : 's'} worked · <b>${esc(fmtHM(total))}</b> in total`
-      + (info.some(x => x.hours > 0) ? ` · average ${esc(fmtHM(total / info.filter(x => x.hours > 0).length))} a day` : '')
-      + (noOut ? ` · <span style="color:var(--danger)"><b>${noOut}</b> day${noOut === 1 ? '' : 's'} with a missing check-out (not counted)</span>` : '')
-      + (lvDays ? ` · <b>${lvDays}</b> leave day${lvDays === 1 ? '' : 's'}` : '')
-      + (missing ? ` · <span style="color:var(--danger)"><b>${missing}</b> working day${missing === 1 ? '' : 's'} with no attendance</span>` : '');
-  }
-  const move = n => { if (st.view === 'week') st.anchor = calAdd(st.anchor, 7 * n); else st.anchor = new Date(st.anchor.getFullYear(), st.anchor.getMonth() + n, 1); load(); };
-  $(p+'-prev').addEventListener('click', () => move(-1));
-  $(p+'-next').addEventListener('click', () => move(1));
-  $(p+'-today').addEventListener('click', () => { st.anchor = new Date(); load(); });
-  $(p+'-vm').addEventListener('click', () => { st.view = 'month'; load(); });
-  $(p+'-vw').addEventListener('click', () => { st.view = 'week'; load(); });
-  return { load, st };
-}
-
-// (HR's Calendar tab on the Attendance page is React since 31 Oct 2026 — react/src/attendance/AttCalendar.tsx, proven equal by
-//  calendar.golden.json. This factory still draws the employees' own "My attendance" calendar below.)
-// ── Employee: self-service → My attendance ──
-const SELF_CAL = makeAttCalendar('sc', {
-  getEmp: () => (typeof SD !== 'undefined' && SD && SD.emp) || null,
-  emptyText: 'Your employee record could not be found. Please contact HR.' });
-document.querySelector('[data-spage="att"]')?.addEventListener('click', () => SELF_CAL.load());
 
 // ═════════════════════════════════════════════════════════
 //  HR ALERTS · ANNUAL LEAVE BALANCE · CERTIFICATES   (database: 47-leave-entitlement-hr-alerts.sql)
@@ -2811,134 +2627,6 @@ async function checkoutRecorded(){
 const _loadPeriodDataCo = loadPeriodData;
 // @ts-expect-error — loadPeriodData is deliberately extended here (the new version wraps the earlier one)
 loadPeriodData = async function(){ const r = await _loadPeriodDataCo.apply(this, arguments); loadCheckoutBadge().catch(() => {}); return r; };
-
-// ═════════════════════════════════════════════════════════
-//  TEAM ATTENDANCE — direct managers see their direct reports (database file 87: team_attendance)
-//  Today: who is in (since when, where), who left, on leave / mission, no record yet.
-//  Period: per person — present days, late arrivals, short days, working days with no record, leave, mission, hours;
-//  click a person for the day-by-day list. No pay and no GPS points are ever loaded.
-// ═════════════════════════════════════════════════════════
-/** @type {{ view: string, data: any, open: any, q: string }} — team attendance (team_attendance() package) */
-let TA = { view:'today', data:null, open:null, q:'' };
-const taMin = t => { if (!t) return null; const [h, m] = String(t).split(':').map(Number); return h * 60 + (m || 0); };
-const taDays = (a, b) => { const out = []; for (let d = dObj(a), g = 0; dStr(d) <= b && g < 400; d.setDate(d.getDate() + 1), g++) out.push(dStr(d)); return out; };
-const taName = m => m ? (m.name_en || m.name_ar || m.id) : '';
-const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-
-async function loadTeamAtt(){
-  const box = $('ta-body'); if (!box) return;
-  const today = todayStr();
-  let from = today, to = today;
-  if (TA.view === 'period') {
-    from = $('ta-from').value || periodStart(cycleOf(today)); to = $('ta-to').value || today;
-    if (to < from) return toast('The end date is before the start date', 'warn');
-  }
-  box.innerHTML = '<div class="empty">Loading your team\'s attendance…</div>';
-  const { data, error } = await sb.rpc('team_attendance', { p_from: from, p_to: to });
-  if (error) { box.innerHTML = `<div class="alert a-warn">${/function|schema/i.test(error.message) ? 'This page needs <b>87-team-attendance.sql</b> — ask the administrator.' : esc(error.message)}</div>`; return; }
-  TA.data = data; TA.open = null; renderTeamAtt();
-}
-
-// what happened for one person on one day
-function taDay(d, m, D){
-  const R = D.rules, wk = (R.weekendDays || []).map(Number), today = D.today;
-  const rec = D.days.filter(x => x.emp_id === m.id && x.date === d);
-  const leave = D.leaves.find(l => l.emp_id === m.id && l.from <= d && l.to >= d);
-  const ms = D.missions.filter(x => x.emp_id === m.id && x.from <= d && x.to >= d);
-  const hol = D.holidays.find(h => h.date === d), weekend = wk.includes(dObj(d).getDay());
-  const lines = rec.flatMap(r => r.lines || []), flags = [...new Set(lines.map(l => l.flag).filter(Boolean))];
-  const working = rec.some(r => r.status === 'Present' || r.status === 'Half Day');
-  const ins = lines.map(l => l.in).filter(Boolean).sort(), outs = lines.map(l => l.out).filter(Boolean).sort();
-  const open = lines.some(l => l.in && !l.out);
-  const hours = rec.reduce((s, r) => s + num(r.total_hours), 0);
-  const firstIn = ins[0] || (rec[0] && rec[0].check_in) || '', lastOut = open ? '' : (outs[outs.length - 1] || (rec[0] && rec[0].check_out) || '');
-  const employed = (!m.employment_date || d >= m.employment_date) && (!m.resignation_date || d <= m.resignation_date);
-  let state = '', late = 0, short = 0;
-  if (!employed) state = 'not employed';
-  else if (working) {
-    state = open && d === today ? 'in' : open ? 'no check-out' : 'present';
-    if (!weekend && !hol && !m.exempt && rec.some(r => r.status === 'Present')) {
-      const lim = taMin(R.lateAfter), eve = taMin(R.eveningShiftAfter), fi = taMin(firstIn);
-      if (fi != null && fi < (eve ?? 0)) late = Math.max(0, fi - (lim ?? 0));   // a missing rule time counts as 00:00 (as before)
-      if (!open && !flags.length) short = Math.max(0, Math.round((num(R.hoursPerDay) - hours) * 60) - late);
-    }
-    if (ms.some(x => !x.time_from)) { late = 0; short = 0; }        // a full-day mission excuses the day
-  }
-  else if (rec.some(r => r.status === 'Absent')) state = 'absent';
-  else if (leave) state = 'leave';
-  else if (ms.length) state = 'mission';
-  else if (hol) state = 'holiday';
-  else if (weekend) state = 'weekend';
-  else if (d < today && !m.exempt) state = 'no record';
-  else if (d === today) state = 'not yet';
-  return { d, rec, leave, ms, hol, weekend, lines, flags, state, firstIn, lastOut, hours, late, short,
-           sites: [...new Set(lines.map(l => l.code ? (l.code + (l.site ? ' — ' + l.site : '')) : 'No project'))] };
-}
-function taChip(x){
-  const c = { in:'c-green', present:'c-green', 'no check-out':'c-orange', absent:'c-red', 'no record':'c-red', leave:'c-blue', mission:'c-blue', holiday:'c-grey', weekend:'c-grey', 'not yet':'c-grey', 'not employed':'c-grey' }[x.state] || 'c-grey';
-  const label = x.state === 'in' ? `In since ${x.firstIn}` : x.state === 'present' ? (x.lastOut ? `Left ${x.lastOut}` : 'Present')
-    : x.state === 'leave' ? `On ${x.leave.type} leave` : x.state === 'mission' ? `Mission · ${x.ms[0].place || ''}`
-    : x.state === 'holiday' ? (x.hol.name || 'Holiday') : x.state === 'not yet' ? 'No check-in yet' : x.state[0].toUpperCase() + x.state.slice(1);
-  return `<span class="chip ${c}">${esc(label)}</span>`;
-}
-const taNote = x => [x.late ? `late ${fmtHM(x.late / 60)}` : '', x.short ? `short ${fmtHM(x.short / 60)}` : '',
-  ...x.flags, ...x.ms.filter(m => m.time_from).map(m => `mission ${String(m.time_from).slice(0,5)}–${String(m.time_to).slice(0,5)}`)].filter(Boolean).join(' · ');
-
-function renderTeamAtt(){
-  const D = TA.data, box = $('ta-body'); if (!D) return;
-  const q = TA.q.trim().toLowerCase();
-  const members = (D.members || []).filter(m => !q || [m.id, m.name_en, m.name_ar, m.job_name].some(v => String(v || '').toLowerCase().includes(q)));
-  if (!(D.members || []).length) { box.innerHTML = '<div class="empty">Nobody reports directly to you in the HR system. If this is wrong, ask HR to set you as their direct manager.</div>'; return; }
-  if (TA.view === 'today') {
-    const rows = members.map(m => ({ m, x: taDay(D.today, m, D) }));
-    const n = s => rows.filter(r => r.x.state === s).length;
-    $('ta-sum').innerHTML = `<b>${rows.length}</b> in your team · <b>${n('in')}</b> in now · <b>${n('present')}</b> left · <b>${n('leave') + n('mission')}</b> on leave or mission · <b>${n('not yet')}</b> no check-in yet`;
-    box.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Today</th><th>In</th><th>Out</th><th class="num">Hours</th><th>Where</th><th>Notes</th></tr></thead><tbody>${
-      rows.map(({ m, x }) => `<tr><td class="strong">${esc(taName(m))} <span class="mono" style="color:var(--muted)">${esc(m.id)}</span><div style="font-size:11.5px;color:var(--muted)">${esc(m.job_name || '')}</div></td>
-        <td>${taChip(x)}</td><td class="mono">${esc(x.firstIn)}</td><td class="mono">${esc(x.lastOut)}</td><td class="num">${x.hours ? fmtHM(x.hours) : ''}</td>
-        <td>${esc(x.sites.join(', '))}</td><td style="font-size:12px;color:var(--warn)">${esc(taNote(x))}</td></tr>`).join('')
-      || '<tr><td colspan="7" class="empty">Nobody matches the search</td></tr>'}</tbody></table></div>`;
-    return;
-  }
-  const days = taDays(D.from, D.to);
-  const rows = members.map(m => {
-    const xs = days.map(d => taDay(d, m, D));
-    const c = s => xs.filter(x => x.state === s).length;
-    return { m, xs, present: c('present') + c('in') + c('no check-out'), norec: c('no record') + c('absent'), leave: c('leave'), mission: c('mission'),
-             lateN: xs.filter(x => x.late).length, lateM: xs.reduce((s, x) => s + x.late, 0), shortN: xs.filter(x => x.short).length, shortM: xs.reduce((s, x) => s + x.short, 0),
-             issues: xs.filter(x => x.flags.length || x.state === 'no check-out').length, hours: xs.reduce((s, x) => s + x.hours, 0) };
-  });
-  const T = k => rows.reduce((s, r) => s + r[k], 0);
-  $('ta-sum').innerHTML = `${esc(D.from)} → ${esc(D.to)} · <b>${rows.length}</b> people · <b>${T('norec')}</b> working day${T('norec') === 1 ? '' : 's'} with no record · <b>${T('lateN')}</b> late arrival${T('lateN') === 1 ? '' : 's'} · <b>${T('issues')}</b> day${T('issues') === 1 ? '' : 's'} for HR to settle. Click a name for the day-by-day list.`;
-  box.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>Employee</th><th class="num">Present</th><th class="num">No record</th><th class="num">Late</th><th class="num">Short days</th><th class="num">Leave</th><th class="num">Mission</th><th class="num">Hours</th><th class="num">To settle</th></tr></thead><tbody>${
-    rows.map(r => `<tr class="click" data-ta-emp="${esc(r.m.id)}"><td class="strong">${TA.open === r.m.id ? '▾' : '▸'} ${esc(taName(r.m))} <span class="mono" style="color:var(--muted)">${esc(r.m.id)}</span><div style="font-size:11.5px;color:var(--muted)">${esc(r.m.job_name || '')}</div></td>
-      <td class="num">${r.present}</td><td class="num" style="${r.norec ? 'color:var(--danger);font-weight:600' : ''}">${r.norec}</td>
-      <td class="num">${r.lateN ? `${r.lateN} · ${fmtHM(r.lateM / 60)}` : '0'}</td><td class="num">${r.shortN ? `${r.shortN} · ${fmtHM(r.shortM / 60)}` : '0'}</td>
-      <td class="num">${r.leave}</td><td class="num">${r.mission}</td><td class="num">${fmtHM(r.hours)}</td><td class="num" style="${r.issues ? 'color:var(--warn);font-weight:600' : ''}">${r.issues}</td></tr>`
-      + (TA.open === r.m.id ? `<tr><td colspan="9" style="background:var(--bg2,rgba(127,127,127,.06))"><table style="width:100%"><thead><tr><th>Date</th><th>Day</th><th>Status</th><th>In</th><th>Out</th><th class="num">Hours</th><th>Where</th><th>Notes</th></tr></thead><tbody>${
-          r.xs.filter(x => x.state !== 'not employed').map(x => `<tr><td class="mono">${esc(x.d)}</td><td>${DOW[dObj(x.d).getDay()]}</td><td>${taChip(x)}</td><td class="mono">${esc(x.firstIn)}</td><td class="mono">${esc(x.lastOut)}</td>
-            <td class="num">${x.hours ? fmtHM(x.hours) : ''}</td><td>${esc(x.sites.join(', '))}</td><td style="font-size:12px;color:var(--warn)">${esc(taNote(x))}</td></tr>`).join('')}</tbody></table></td></tr>` : '')).join('')
-    || '<tr><td colspan="9" class="empty">Nobody matches the search</td></tr>'}</tbody></table></div>`;
-}
-
-function taSetView(v){
-  TA.view = v;
-  $('ta-v-today').classList.toggle('on', v === 'today'); $('ta-v-period').classList.toggle('on', v === 'period');
-  $('ta-range').style.display = v === 'period' ? 'flex' : 'none';
-  loadTeamAtt();
-}
-function taCycle(back){
-  const c = cycleOf(todayStr()), [y, mo] = c.split('-').map(Number), p = back ? (mo === 1 ? `${y - 1}-12` : `${y}-${pad(mo - 1)}`) : c;
-  $('ta-from').value = periodStart(p); $('ta-to').value = back ? periodEnd(p) : todayStr(); loadTeamAtt();
-}
-$('ta-v-today').addEventListener('click', () => taSetView('today'));
-$('ta-v-period').addEventListener('click', () => taSetView('period'));
-$('ta-this').addEventListener('click', () => taCycle(false));
-$('ta-last').addEventListener('click', () => taCycle(true));
-['ta-from', 'ta-to'].forEach(id => $(id).addEventListener('change', loadTeamAtt));
-$('ta-refresh').addEventListener('click', loadTeamAtt);
-$('ta-q').addEventListener('input', e => { TA.q = /** @type {PageEl} */ (e.target).value; renderTeamAtt(); });
-$('ta-body').addEventListener('click', e => { const r = /** @type {PageEl} */ (e.target).closest('[data-ta-emp]'); if (!r) return; TA.open = TA.open === r.dataset.taEmp ? null : r.dataset.taEmp; renderTeamAtt(); });
 
 // ═════════════════════════════════════════════════════════
 //  DATES TYPED AS DAY-MONTH-YEAR (26 Oct 2026) — Mohammed: "type dates like 26102026, 01012026"

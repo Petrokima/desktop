@@ -448,14 +448,12 @@ function buildLists(){
   $('dl-proj').innerHTML = S.projects.filter(p => p.status !== 'Inactive' && p.status !== 'Completed')
                             .map(p => `<option value="${esc(p.id)} — ${esc(p.name||'')}"></option>`).join('');
   const depts = [...new Set(S.employees.map(e=>e.department).filter(Boolean))].sort();
-  const units = [...new Set(S.employees.map(e=>e.unit).filter(Boolean))].sort();
   const dOpts = '<option value="">All departments</option>' + depts.map(d=>`<option>${esc(d)}</option>`).join('');
-  ['emp-dept','rep-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
-  const uv=$('emp-unit').value; $('emp-unit').innerHTML='<option value="">All units</option>'+units.map(u=>`<option>${esc(u)}</option>`).join(''); $('emp-unit').value=uv;
+  ['rep-dept'].forEach(id => { const v=$(id).value; $(id).innerHTML=dOpts; $(id).value=v; });
 }
 
 // Pages are prepared when they are opened (the payroll calculation, reports and labour cost are the heavy ones)
-const PAGE_RENDER = { dashboard:()=>renderDashboard(), employees:()=>renderEmployees(), projects:()=>renderProjects(),
+const PAGE_RENDER = { dashboard:()=>renderDashboard(), projects:()=>renderProjects(),
   loans:()=>renderLoans(), reports:()=>renderReports(), permissions:()=>renderPermissions(),
   leaves:()=>renderLeaves(), exempt:()=>renderExempt(), penalties:()=>renderPenalties(), holidays:()=>renderHolidays(), hrreq:()=>renderHrRequests(),
   reporting:()=>renderReporting(), history:()=>renderHistory(), parrules:()=>renderParRules(), approvals:()=>renderApprovals(), assign:()=>renderAssign(), calc:()=>renderCalc(), news:()=>renderNewsPage() };
@@ -802,21 +800,8 @@ function renderDashboard(){
 // ═════════════════════════════════════════════════════════
 //  RENDER — EMPLOYEES
 // ═════════════════════════════════════════════════════════
-function renderEmployees(){
-  const q=$('emp-q').value.trim().toLowerCase(), d=$('emp-dept').value, u=$('emp-unit').value, st=$('emp-status').value;
-  const list = S.employees.filter(e =>
-    (!st || (e.status||'Active')===st) && orgMatch(e,'emp') &&
-    (!q || [e.id,e.name_ar,e.name_en,e.job_name,e.national_id].some(v => String(v||'').toLowerCase().includes(q))));
-  const act = S.employees.filter(e=>e.status!=='Inactive').length;
-  $('emp-sub').textContent = `${act} active · ${S.employees.length - act} inactive · ${S.employees.length} total`;
-  $('emp-tbl').innerHTML = list.map(e => `<tr class="click" data-emp="${esc(e.id)}">
-    <td class="mono">${esc(e.id)}</td><td class="ar strong">${esc(e.name_ar)}</td><td class="strong">${esc(e.name_en)}</td>
-    <td>${esc(e.department)}</td><td>${esc(e.unit)}</td><td>${esc(e.job_name)}</td>
-    <td>${e.manager_id ? esc(empName(empById(e.manager_id))||e.manager_id) : (e.top_of_org ? '<span class="chip c-blue">Top</span>' : (e.status!=='Inactive' ? '<span class="chip c-orange">not set</span>' : ''))}</td>
-    <td>${chip(e.contract_type)}</td><td>${chip(e.insurance)}</td><td>${chip(e.status||'Active')}${e.attendance_exempt?' <span class="chip c-blue">Exception</span>':''}${e.blacklisted?' <span class="chip c-red" title="On the blacklist — cannot be re-employed">⛔ Blacklist</span>':''}</td></tr>`).join('')
-    || '<tr><td colspan="10" class="empty">No employees match these filters</td></tr>';
-  $('emp-foot').textContent = `Showing ${list.length} of ${S.employees.length}. Click any row to view or edit.`;
-}
+// The list moved to React 31 Oct 2026 (react/src/employees); the employee window (part5) still calls this after a save.
+function renderEmployees(){ if (typeof PKR !== 'undefined') PKR.render(); }
 
 // ═════════════════════════════════════════════════════════
 //  EMPLOYEE MODAL
@@ -1162,7 +1147,6 @@ document.addEventListener('click', async ev => {
 });
 
 // inputs
-['emp-q','emp-dept','emp-unit','emp-status'].forEach(id => $(id).addEventListener('input', renderEmployees));
 $('emp-save').addEventListener('click', saveEmp);
 $('emp-pkg').addEventListener('click', e => { if (/** @type {PageEl} */ (e.target).id==='pk-add') addPackageRow(); });
 $('set-save').addEventListener('click', saveSettings);
@@ -2199,7 +2183,7 @@ function allowanceApprovalsUpdated(rows){
 // ═════════════════════════════════════════════════════════
 //  DEPARTMENT + UNIT FILTERS — on every page that lists employees
 // ═════════════════════════════════════════════════════════
-const ORG_PAGES = { emp:()=>renderEmployees(),
+const ORG_PAGES = {
   rep:()=>{ if (repCur) runReport(); } };
 // does this employee match the department and unit chosen on page p?
 function orgMatch(e, p){

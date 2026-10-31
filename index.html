@@ -420,21 +420,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 </div>
 
 <!-- EMPLOYEES -->
-<div class="page" id="page-employees">
-  <div class="page-header"><div><div class="page-title">Employees</div><div class="page-sub" id="emp-sub"></div></div>
-    <button class="btn btn-primary" data-act="new-emp">+ Add Employee</button></div>
-  <div class="card">
-    <div class="toolbar"><span class="toolbar-title">Employee Register</span>
-      <div class="toolbar-right">
-        <input class="inp" id="emp-q" placeholder="Search code, Arabic or English name…">
-        <select class="sel" id="emp-dept"><option value="">All departments</option></select>
-        <select class="sel" id="emp-unit"><option value="">All units</option></select>
-        <select class="sel" id="emp-status"><option value="Active">Active</option><option value="Inactive">Inactive</option><option value="">All</option></select>
-      </div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Arabic Name</th><th>English Name</th><th>Department</th><th>Unit</th><th>Job</th><th>Direct manager</th><th>Contract</th><th>Insurance</th><th>Status</th></tr></thead><tbody id="emp-tbl"></tbody></table></div>
-    <div class="foot" id="emp-foot"></div>
-  </div>
-</div>
+<div class="page" id="page-employees"><div id="react-employees"></div></div>   <!-- drawn by React: react/src/employees -->
 
 <!-- ATTENDANCE -->
 <div class="page" id="page-attendance"><div id="react-attendance"></div>   <!-- drawn by React: react/src/attendance -->
@@ -841,6 +827,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=f321dabc0ac1"></script>
-<script src="react.js?v=c226d78bfb2b"></script>
+<script src="app.js?v=4306c0228842"></script>
+<script src="react.js?v=040258dd19de"></script>
 </body></html>

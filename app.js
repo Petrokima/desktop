@@ -223,6 +223,13 @@ let SIGNIN = { mode: 'login' };
 let SETUP_ERR = '';
 function signInCard(state){ SIGNIN = state; if (typeof PKR !== 'undefined') PKR.render(); }
 let ME = null;
+// The frame (top bars + menus) is React since 2 Nov 2026 (react/src/frame). The old code keeps the counts behind the menu badges
+// (one setter for all eleven: perm, lv, hr, ms, co, dq, rl, hra, loc, voice, aa) and the period the loaded data is for.
+/** @type {Record<string, number>} */
+const NAVB = {};
+/** a menu badge's count changed (0 = hidden) @param {string} key @param {number} n */
+function navBadge(key, n){ NAVB[key] = n; if (typeof PKR !== 'undefined') PKR.badgesChanged(); }   // only the menu redraws
+let SHOWN_PERIOD = '';
 const ROLE_LABEL = { admin:'Admin', hr:'HR', hr_officer:'HR Officer', employee:'Employee' };
 const PAY_FIELDS = ['salary','housing','transport','daily_pay','hour_pay','delay_hour_pay','insurance_amount'];
 const isOfficer = () => !!(ME && ME.role === 'hr_officer');
@@ -293,9 +300,8 @@ async function afterLogin(user){
   document.body.classList.toggle('can-admin', r==='admin');
   document.body.classList.toggle('can-var',   ['admin','hr','finance','hr_officer'].includes(r));   // variable (monthly) entries
   document.body.classList.toggle('is-officer', r==='hr_officer');
-  $('me-name').textContent = me.full_name || user.email; $('me-role').textContent = ROLE_LABEL[r];
   if (me.full_name) localStorage.setItem('approver', me.full_name);   // review fix: never the previous user's name on a shared PC
-  $('btn-myprofile').style.display = me.emp_id ? '' : 'none';
+  if (typeof PKR !== 'undefined') PKR.render();                       // the top bar: name, role, 🙋 Me (react/src/frame)
   $('login').style.display='none'; $('app').style.display='block';
   await loadAll();
 }
@@ -305,12 +311,9 @@ function showFirstLogin(me, user){
 }
 let SELF = null;
 async function showSelf(me, user){
-  setTimeout(() => { const n = $('self-pcost-nav'); if (n) n.style.display = me && me.acct_reports ? '' : 'none'; }, 0);
   $('app').style.display='none'; $('login').style.display='none'; $('self').style.display='block';
   SELF = { me, user };
-  $('self-back').style.display = me.role!=='employee' ? '' : 'none';
-  $('self-role').textContent = ROLE_LABEL[me.role] || 'Employee';
-  $('self-name').textContent = me.full_name || user.email;
+  if (typeof PKR !== 'undefined') PKR.render();   // the top bar and menu (react/src/frame): name, role, ← Back, 📊 Project costs
   await loadSelf();
 }
 async function signOut(){ try { await sb.auth.signOut(); } catch(e){} location.reload(); }
@@ -405,7 +408,7 @@ let DIRTY = new Set(), LOAD_MS = 0;
 function currentPage(){ const p = document.querySelector('.page.active'); return p ? p.id.replace('page-','') : 'dashboard'; }
 function renderPageIfNeeded(name){ if (DIRTY.has(name) && PAGE_RENDER[name]) { DIRTY.delete(name); PAGE_RENDER[name](); } }
 function renderAll(){
-  $('period-badge').textContent = 'Period ' + periodLabel(settings.period);
+  SHOWN_PERIOD = settings.period;   // the top bar's period badge (react/src/frame)
   DIRTY = new Set(Object.keys(PAGE_RENDER));
   // always kept current: the dashboard, the menu badges, lock and period notices
   renderPageIfNeeded('dashboard'); renderPageIfNeeded('reporting'); renderLocks(); renderPeriodHint();
@@ -874,9 +877,8 @@ const closeError = m => String(m).replace(/^.*?\b(NO_DELETE|CLOSE_REASON|NOT_CLO
 function showPage(name){
   renderPageIfNeeded(name);
   document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active', p.id==='page-'+name));
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.page===name));
   window.scrollTo(0,0);
-  if (typeof PKR !== 'undefined') PKR.pageShown(name);   // React screens that load fresh data when opened
+  if (typeof PKR !== 'undefined') PKR.pageShown(name);   // React screens that load fresh data when opened; the menu highlights it
 }
 
 document.addEventListener('click', async ev => {
@@ -904,7 +906,7 @@ document.addEventListener('click', async ev => {
 // inputs
 // (Esc closes the top React window — react/src/main.tsx; every window is React since 31 Oct 2026)
 
-setInterval(()=>{ $('clock').textContent = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); }, 1000);
+// (the top-bar clock is React since 2 Nov 2026 — react/src/frame)
 
 
 
@@ -1218,7 +1220,7 @@ function permUsed(empId, month, exceptId){
 // (also used elsewhere) and what a saved / decided / deleted permission changes in the rest of the app.
 function renderPermissions(){
   const pend = S.permissions.filter(readyForHR).length;
-  $('perm-badge').style.display = pend ? '' : 'none'; $('perm-badge').textContent = String(pend);
+  navBadge('perm', pend);
   if (typeof PKR !== 'undefined') PKR.render();
 }
 /** a permission saved (new) or decided in the React page @param {Permission} row */
@@ -1360,23 +1362,18 @@ async function loadSelf(){
 function renderSelf(){
   // every self-service screen is React since 31 Oct 2026 (react/src/self, react/src/team): they draw from SD / SMIS
   if (typeof PKR !== 'undefined') PKR.render();
-  if (!SD.emp) return;
-  // the menu: "✅ Team approvals" with everything waiting for me (the same count as react/src/team waitingCount), "👥 Team attendance"
-  const myTeam = SD.myTeam || [], team = SD.team || [], mis = (typeof SMIS !== 'undefined' && SMIS.team) || [];
-  const tReq = [...(SD.teamLeaves||[]), ...(SD.teamPerms||[])].sort((a,b) => (waitingManager(a)?0:1) - (waitingManager(b)?0:1)).slice(0, 60);
-  const waiting = team.filter(a => a.status==='Pending manager').length + tReq.filter(waitingManager).length + mis.filter(m => m.status === 'Waiting for manager').length;
-  $('self-team-nav').style.display = (team.length || tReq.length || myTeam.length || mis.length) ? '' : 'none';
-  $('self-tatt-nav').style.display = myTeam.length ? '' : 'none';   // 87: direct managers see their team's attendance
-  $('self-team-badge').style.display = waiting ? '' : 'none'; $('self-team-badge').textContent = String(waiting);
+  // (the menu — ✅ Team approvals with its count, 👥 Team attendance — is React since 2 Nov 2026: react/src/frame teamMenu)
 }
 // The request windows (vacation, permission, HR request) and Cancel are React since 31 Oct 2026 (react/src/self/SelfDialogs).
-document.querySelectorAll('[data-spage]').forEach(t => t.addEventListener('click', () => {
-  document.querySelectorAll('[data-spage]').forEach(x=>x.classList.toggle('active', x===t));
-  ['req','team','tatt','pcost','att','pay','prof'].forEach(k => $('self-'+k).style.display = t.dataset.spage===k ? '' : 'none');
-  // every part is React since 31 Oct 2026: Team attendance, Project costs and My attendance load when opened, payslips lock again
-  if (typeof PKR !== 'undefined') PKR.selfPageShown(String(t.dataset.spage));
-}));
-$('self-back').addEventListener('click', () => { $('self').style.display='none'; $('app').style.display='block'; });
+/** a self-service part picked in the menu (React — react/src/frame SelfNav) @param {string} part */
+function showSelfPart(part){
+  ['req','team','tatt','pcost','att','pay','prof'].forEach(k => $('self-'+k).style.display = part===k ? '' : 'none');
+  // every part is React since 31 Oct 2026: Team attendance, Project costs and My attendance load when opened, payslips lock again;
+  // the menu highlights the part opened
+  if (typeof PKR !== 'undefined') PKR.selfPageShown(part);
+}
+/** ← Back to HR app (self-service top bar) */
+function backToHrApp(){ $('self').style.display='none'; $('app').style.display='block'; }
 
 // ═════════════════════════════════════════════════════════
 //  HR SIDE: vacation decisions, HR requests page, badges
@@ -1386,10 +1383,9 @@ function renderHrRequests(){ if (typeof PKR !== 'undefined') PKR.render(); }
 /** a request HR just handled (React Handle window) → the list, the dashboard and the menu badge @param {HrRequest} row */
 function hrRequestSaved(row){ S.hrreq = S.hrreq.map(x => x.id === row.id ? row : x); renderHrRequests(); renderDashboard(); }
 function updateBadges(){
-  const b=(id,n)=>{ const el=$(id); if(!el) return; el.style.display=n?'':'none'; el.textContent=n; };
-  b('lv-badge', S.leaves.filter(readyForHR).length);
-  b('hr-badge', S.hrreq.filter(r=>r.status==='Pending'||r.status==='In progress').length);
-  b('aa-badge', S.allowAppr.filter(a=>a.status==='Pending HR').length);
+  navBadge('lv', S.leaves.filter(readyForHR).length);
+  navBadge('hr', S.hrreq.filter(r=>r.status==='Pending'||r.status==='In progress').length);
+  navBadge('aa', S.allowAppr.filter(a=>a.status==='Pending HR').length);
 }
 
 // (a manager's decisions on his team's requests, allowances and missions are React since 31 Oct 2026 — react/src/team)
@@ -1472,7 +1468,7 @@ function renderLocks(){
 // ═════════════════════════════════════════════════════════
 function renderReporting(){
   const n = activeEmps().filter(e => !e.manager_id && !e.top_of_org).length;
-  const b=$('rl-badge'); b.style.display = n ? '' : 'none'; b.textContent = String(n);
+  navBadge('rl', n);
   if (typeof PKR !== 'undefined') PKR.render();
 }
 /** the React page gave these employees a manager → keep the loaded data and redraw what uses it
@@ -1679,76 +1675,12 @@ async function publishProjectCosts(period, detail, quiet){
 }
 // (the accountant's view — self-service → Project costs — is React since 31 Oct 2026: react/src/selfmore)
 
-// ═════════════════════════════════════════════════════════
-//  SIDEBAR — collapse to icons / expand (remembered on this computer)
-// ═════════════════════════════════════════════════════════
-(function sidebarToggle(){
-  // split each menu item into its icon and its name, so the name can be hidden
-  document.querySelectorAll('.sidebar .nav-item').forEach(it => {
-    const tn = [...it.childNodes].find(n => n.nodeType === 3 && String(n.textContent).trim()); if (!tn) return;
-    const m = String(tn.textContent).trim().match(/^(\S+)\s+([\s\S]+)$/); if (!m) return;
-    const ico = document.createElement('span'); ico.className = 'nav-ico'; ico.textContent = m[1];
-    const txt = document.createElement('span'); txt.className = 'nav-txt'; txt.textContent = m[2];
-    it.insertBefore(ico, tn); it.insertBefore(txt, tn); it.removeChild(tn);
-    if (!it.title) it.title = m[2].trim();                  // the name appears when hovering over the icon
-  });
-  const apply = mini => {
-    document.body.classList.toggle('nav-mini', mini);
-    document.querySelectorAll('.nav-toggle').forEach(b => { b.title = mini ? 'Expand menu' : 'Collapse menu';
-      b.innerHTML = mini ? '<span>☰</span>' : '<span>☰</span><span class="nav-txt">Collapse menu</span>'; });
-  };
-  document.querySelectorAll('.sidebar').forEach(sb => {
-    const b = document.createElement('button'); b.className = 'nav-toggle'; b.type = 'button';
-    b.addEventListener('click', () => { const mini = !document.body.classList.contains('nav-mini'); localStorage.setItem('pk_nav_mini', mini ? '1' : '0'); apply(mini); if (window.paintNavSections) window.paintNavSections(); });
-    sb.insertBefore(b, sb.firstChild);
-  });
-  apply(localStorage.getItem('pk_nav_mini') === '1');
-})();
-
-// ═════════════════════════════════════════════════════════
-//  SIDEBAR SECTIONS — click a heading (e.g. WORKFORCE) to fold / unfold its pages (remembered)
-// ═════════════════════════════════════════════════════════
-(function sidebarSections(){
-  const KEY = 'pk_nav_closed';
-  const closed = new Set(JSON.parse(localStorage.getItem(KEY) || '[]'));
-  const groups = [];                                         // [{ label, key, items[] }]
-  document.querySelectorAll('.sidebar').forEach((sb, si) => {
-    let cur = null;
-    [...sb.children].forEach(el => {
-      if (el.classList.contains('nav-label')){
-        const key = si + ':' + el.textContent.trim().toLowerCase();
-        el.insertAdjacentHTML('beforeend', '<span class="sec-dot" title="Something is waiting in this section"></span><span class="sec-arrow"></span>');
-        cur = { label: el, key, items: [] }; groups.push(cur);
-        el.addEventListener('click', () => { closed.has(key) ? closed.delete(key) : closed.add(key); localStorage.setItem(KEY, JSON.stringify([...closed])); paint(); });
-      } else if (cur && el.classList.contains('nav-item')) cur.items.push(el);
-    });
-  });
-  function paint(){
-    groups.forEach(g => {
-      const shut = closed.has(g.key);
-      g.label.classList.toggle('sec-closed', shut);
-      g.label.querySelector('.sec-arrow').textContent = shut ? '▸' : '▾';
-      g.label.title = shut ? 'Show this section' : 'Fold this section';
-      const mini = document.body.classList.contains('nav-mini');      // icon-only menu: headings are hidden, so show every icon
-      g.items.forEach(it => it.classList.toggle('sec-hide', shut && !mini));
-      const alert = g.items.some(it => [...it.querySelectorAll('.chip')].some(c => c.style.display !== 'none' && c.textContent.trim() && c.textContent.trim() !== '0'));
-      g.label.classList.toggle('has-alert', alert);
-    });
-  }
-  paint();
-  // keep the red dots current whenever the counters change
-  if (typeof updateBadges === 'function'){
-    const _ub = updateBadges;
-    // @ts-expect-error — updateBadges is deliberately extended here (the new version wraps the earlier one)
-    updateBadges = function(){ const r = _ub.apply(this, arguments); paint(); return r; };
-  }
-  window.paintNavSections = paint;
-})();
+// (the menus — ☰ Collapse menu, folding a section heading, its red dot — are React since 2 Nov 2026: react/src/frame)
 
 // ═════════════════════════════════════════════════════════
 //  PHONE / SMALL SCREENS — ☰ opens the menu over the page; picking a page closes it
 // ═════════════════════════════════════════════════════════
-$('menu-btn').addEventListener('click', () => document.body.classList.toggle('nav-open'));
+// (☰ itself is React — react/src/frame AppTopBar)
 $('nav-backdrop').addEventListener('click', () => document.body.classList.remove('nav-open'));
 document.addEventListener('click', e => { if (/** @type {PageEl} */ (e.target).closest('#app .sidebar .nav-item[data-page]')) document.body.classList.remove('nav-open'); });
 
@@ -1813,7 +1745,7 @@ async function loadVoice(){
     sb.from('training_requests').select('status'), sb.from('manager_actions').select('status')]);
   const open = (f.data || []).filter(x => x.status !== 'Closed').length + (h.data || []).filter(x => x.status === 'New').length
     + (t.data || []).filter(x => x.status === 'New').length + (m.data || []).filter(x => x.status === 'Waiting for HR').length;
-  const b = $('voice-badge'); if (b){ b.textContent = String(open); b.style.display = open ? '' : 'none'; }
+  navBadge('voice', open);
 }
 /** after an answer in the React window: the badge, and the board member's dashboard card when it is shown */
 async function voiceChanged(){
@@ -1927,7 +1859,7 @@ const _renderDashboardBase = renderDashboard;
 // @ts-expect-error — renderDashboard is deliberately extended here (the new version wraps the earlier one)
 renderDashboard = function(){
   _renderDashboardBase();
-  const n = locFlagged().length, el = $('loc-badge'); if (el) { el.style.display = n ? '' : 'none'; el.textContent = String(n); }
+  navBadge('loc', locFlagged().length);
 };
 
 // ═════════════════════════════════════════════════════════
@@ -1956,7 +1888,7 @@ async function loadHRAlerts(){
   if (typeof PKR !== 'undefined') PKR.render();
 }
 const hraOpen = () => HRA.list.filter(a => !a.done);
-function hraBadge(){ const n = hraOpen().length, el = $('hra-badge'); if (el){ el.style.display = n ? '' : 'none'; el.textContent = n; } }
+function hraBadge(){ navBadge('hra', hraOpen().length); }
 // The HR alerts PAGE is React since 30 Oct 2026 (react/src/hralerts, incl. the national-ID requests of the old part31).
 // Kept here: the list (HRA) for the dashboard banner + menu badge, the rules (HR_RULES) used by leave balances.
 // Bridge for React: after a decision / document review the list is read again and the dashboard redrawn.
@@ -2094,17 +2026,9 @@ afterLogin = async function(){ const r = await _afterLogin27b.apply(this, argume
 (function fitWidth(){
   const KEY = 'pk_fit_width';
   let on = false; try { on = localStorage.getItem(KEY) === '1'; } catch (e) {}
-  const btns = [];
-  document.querySelectorAll('.topbar-right').forEach(bar => {
-    const b = document.createElement('button');
-    b.type = 'button'; b.className = 'btn btn-ghost btn-sm fit-btn';
-    b.title = 'Fit wide tables to the screen width (click again for normal size)';
-    const chip = bar.querySelector('.user-chip');
-    chip ? bar.insertBefore(b, chip) : bar.appendChild(b);
-    b.addEventListener('click', () => { on = !on; try { localStorage.setItem(KEY, on ? '1' : '0'); } catch (e) {} label(); fit(); });
-    btns.push(b);
-  });
-  function label(){ btns.forEach(b => { b.textContent = on ? '↔ Normal size' : '↔ Fit width'; b.classList.toggle('btn-primary', on); b.classList.toggle('btn-ghost', !on); }); }
+  // the button itself is React since 2 Nov 2026 (react/src/frame FitButton, in both top bars); it asks these two:
+  window.fitWidthOn = () => on;
+  window.toggleFitWidth = () => { on = !on; try { localStorage.setItem(KEY, on ? '1' : '0'); } catch (e) {} fit(); if (typeof PKR !== 'undefined') PKR.render(); };
 
   const targets = () => [...document.querySelectorAll('#app .page.active, #self .main')].filter(el => el.offsetParent !== null);
   function fit(){
@@ -2132,7 +2056,7 @@ afterLogin = async function(){ const r = await _afterLogin27b.apply(this, argume
   document.addEventListener('click', ev => { if (/** @type {PageEl} */ (ev.target).closest('[data-page],[data-nav],[data-spage],.tab,.seg button')) later(); }, true);
   const mo = new MutationObserver(later);
   document.querySelectorAll('#app .main, #self .main').forEach(m => mo.observe(m, { childList: true, subtree: true }));
-  label(); later();
+  later();
 })();
 
 // ═════════════════════════════════════════════════════════
@@ -2217,7 +2141,7 @@ renderDashboard = function(){
 //  changes elsewhere: an approved mission day has no late / early deduction → the payroll month is reloaded.
 // ═════════════════════════════════════════════════════════
 /** @param {number} n */
-function setMissionsBadge(n){ const b = $('ms-badge'); if (b) { b.style.display = n ? '' : 'none'; b.textContent = String(n); } }
+function setMissionsBadge(n){ navBadge('ms', n); }
 async function loadMissionsBadge(){
   const { count, error } = await sb.from('employee_missions').select('id', { count: 'exact', head: true }).eq('status', 'Waiting for HR');
   if (!error) setMissionsBadge(count || 0);
@@ -2377,7 +2301,7 @@ REPORTS.push({ id:'emp-missing', g:'HR', t:'Missing employee data',
 //  the period data loads).
 // ═════════════════════════════════════════════════════════
 /** @param {number} n */
-function setDataRequestsBadge(n){ const b = $('dq-badge'); if (b) { b.style.display = n ? '' : 'none'; b.textContent = String(n); } }
+function setDataRequestsBadge(n){ navBadge('dq', n); }
 async function loadDataRequestsBadge(){
   const [a, c] = await Promise.all([
     sb.from('data_requests').select('id', { count: 'exact', head: true }).eq('status', 'Answered'),
@@ -2396,7 +2320,7 @@ loadPeriodData = async function(){ const r = await _loadPeriodDataDq.apply(this,
 //  month after HR recorded a check-out (the attendance record changed).
 // ═════════════════════════════════════════════════════════
 /** @param {number} n */
-function setCheckoutBadge(n){ const b = $('co-badge'); if (b) { b.style.display = n ? '' : 'none'; b.textContent = String(n); } }
+function setCheckoutBadge(n){ navBadge('co', n); }
 async function loadCheckoutBadge(){
   const { count, error } = await sb.from('checkout_requests').select('id', { count: 'exact', head: true }).eq('status', 'Waiting');
   if (!error) setCheckoutBadge(count || 0);

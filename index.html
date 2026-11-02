@@ -34,6 +34,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter','Segoe UI',Tahom
 .sidebar{width:210px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);padding:16px 0;position:sticky;top:56px;height:calc(100vh - 56px);overflow-y:auto}
 .sidebar{transition:width .15s ease}
 .nav-toggle{display:flex;align-items:center;gap:10px;margin:0 10px 10px;padding:8px 12px;border-radius:var(--rs);cursor:pointer;color:var(--muted);font-size:13px;font-weight:600;border:1px solid var(--border);background:transparent;width:calc(100% - 20px);font-family:inherit}
+#react-top,#react-nav,#react-self-top,#react-self-nav{display:contents}   /* React frame mounts: as if their lines sat directly in the bar / menu */
 .nav-toggle:hover{color:var(--text);background:var(--hover)}
 
 body.nav-mini .sidebar{width:64px}
@@ -214,25 +215,9 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 
 
 <div id="self" style="display:none">
-  <div class="topbar">
-    <div class="logo"><div class="logo-mark">PETROKIMA</div><div><div class="logo-name">HR</div><div class="logo-sub">My profile</div></div></div>
-    <div class="topbar-right"><button class="btn btn-ghost btn-sm" id="self-back" style="display:none">← Back to HR app</button>
-      <div class="user-chip"><span id="self-name"></span><span class="chip c-blue" id="self-role">Employee</span>
-      <button class="btn btn-ghost btn-sm" data-act="theme" title="Choose a colour theme">🎨</button>
-      <button class="btn btn-ghost btn-sm" data-act="chpass" title="Change password">🔑</button>
-      <button class="btn btn-ghost btn-sm" data-act="signout">Sign out</button></div></div>
-  </div>
+  <div class="topbar"><div id="react-self-top"></div></div>   <!-- drawn by React: react/src/frame -->
   <div class="layout">
-  <nav class="sidebar" id="self-nav">
-    <div class="nav-label">Self-service</div>
-    <div class="nav-item active" data-spage="req">📋 My requests</div>
-    <div class="nav-item" data-spage="team" id="self-team-nav" style="display:none">✅ Team approvals <span class="chip c-orange" id="self-team-badge" style="margin-left:auto;display:none"></span></div>
-    <div class="nav-item" data-spage="tatt" id="self-tatt-nav" style="display:none">👥 Team attendance</div>
-    <div class="nav-item" data-spage="pcost" id="self-pcost-nav" style="display:none">📊 Project costs</div>
-    <div class="nav-item" data-spage="att">🗓 My attendance</div>
-    <div class="nav-item" data-spage="pay">💰 My payslips</div>
-    <div class="nav-item" data-spage="prof">👤 My profile</div>
-  </nav>
+  <nav class="sidebar" id="self-nav"><div id="react-self-nav"></div></nav>
   <main class="main" style="max-width:1100px">
     <div id="react-self-head"></div>
     <div id="self-req"><div id="react-self-req"></div></div>
@@ -249,60 +234,9 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div id="loader"><div class="spin" style="width:28px;height:28px"></div><div id="loader-msg">Loading data…</div></div>
 
 <div id="app" style="display:none">
-<div class="topbar">
-  <button class="menu-btn" id="menu-btn" type="button" aria-label="Menu">☰</button>
-  <div class="logo"><div class="logo-mark">PETROKIMA</div><div><div class="logo-name">HR</div><div class="logo-sub">Attendance &amp; Payroll System</div></div></div>
-  <div class="topbar-right">
-    <span class="badge" title="Connected to the HR database"><span class="dot"></span>Online</span>
-    <span class="badge" id="period-badge">—</span>
-    <span class="badge" id="clock">--:--</span>
-    <button class="btn btn-ghost btn-sm" data-act="reload" title="Reload all data">⟳ Refresh</button>
-    <div class="user-chip"><span id="me-name"></span><span class="chip c-blue" id="me-role"></span>
-      <button class="btn btn-ghost btn-sm" data-act="myprofile" id="btn-myprofile" style="display:none" title="My own requests and profile">🙋 Me</button>
-      <button class="btn btn-ghost btn-sm" data-act="theme" title="Choose a colour theme">🎨</button>
-      <button class="btn btn-ghost btn-sm" data-act="chpass" title="Change password">🔑</button>
-      <button class="btn btn-ghost btn-sm" data-act="signout">Sign out</button></div>
-  </div>
-</div>
+<div class="topbar"><div id="react-top"></div></div>   <!-- drawn by React: react/src/frame (top bar + the left menu) -->
 <div class="layout">
-<nav class="sidebar">
-  <div class="nav-label">Overview</div>
-  <div class="nav-item active" data-page="dashboard">▦ Dashboard</div>
-  <div class="nav-item" data-page="reports">📊 Reports</div>
-  <div class="nav-label">Workforce</div>
-  <div class="nav-item" data-page="employees">👥 Employees</div>
-  <div class="nav-item" data-page="attendance">🗓 Attendance</div>
-  <div class="nav-item" data-page="permissions">✋ Permissions <span class="chip c-orange" id="perm-badge" style="margin-left:auto;display:none"></span></div>
-  <div class="nav-item" data-page="leaves">🌴 Vacations <span class="chip c-orange" id="lv-badge" style="margin-left:auto;display:none"></span></div>
-  <div class="nav-item" data-page="hrreq">📨 HR requests <span class="chip c-orange" id="hr-badge" style="margin-left:auto;display:none"></span></div>
-  <div class="nav-item" data-page="missions">🚗 Missions <span class="chip c-orange" id="ms-badge" style="margin-left:auto;display:none"></span></div>
-  <div class="nav-item" data-page="coreq">🚪 Check-outs to record <span class="chip c-orange" id="co-badge" style="margin-left:auto;display:none"></span></div>
-  <div class="nav-item" data-page="dreq">📝 Data requests <span class="chip c-orange" id="dq-badge" style="margin-left:auto;display:none"></span></div>
-  <div class="nav-item" data-page="reporting">🧭 Reporting lines <span class="chip c-orange" id="rl-badge" style="margin-left:auto;display:none"></span></div>
-  <div class="nav-item" data-page="exempt">⭐ Exception rule</div>
-  <div class="nav-item" data-page="hralerts">🔔 HR alerts <span class="chip c-red" id="hra-badge" style="margin-left:auto;display:none"></span></div>
-  <div class="nav-item" data-page="locations">📍 Location checks <span class="chip c-orange" id="loc-badge" style="margin-left:auto;display:none"></span></div>
-  <div class="nav-item" data-page="assign">📌 Project assignments</div>
-  <div class="nav-item" data-page="bulk">⬆ Bulk upload</div>
-  <div class="nav-item" data-page="news">📢 Announcements</div>
-  <div class="nav-item" data-page="voice">💬 Employee voice <span class="chip c-orange" id="voice-badge" style="display:none;margin-inline-start:auto"></span></div>
-  <div class="nav-item" data-page="projects">🏗 Projects</div>
-  <div class="nav-label">Payroll</div>
-  <div class="nav-item" data-page="monthly">✎ Monthly Entries</div>
-  <div class="nav-item" data-page="penalties">⚠ Penalties</div>
-  <div class="nav-item" data-page="loans">💳 Loans</div>
-  <div class="nav-item" data-page="payroll">💰 Payroll Run</div>
-  <div class="nav-item" data-page="history">🗄 Payroll history</div>
-  <div class="nav-item" data-page="calc">🧮 Net ↔ Gross calculator</div>
-  <div class="nav-item" data-page="parrules">💼 Project allowance rules</div>
-  <div class="nav-item" data-page="approvals">✅ Allowance approvals <span class="chip c-orange" id="aa-badge" style="margin-left:auto;display:none"></span></div>
-  <div class="nav-label">Config</div>
-  <div class="nav-item" data-page="holidays">📅 Public holidays</div>
-  <div class="nav-item admin-only" data-page="users">🔐 Users &amp; roles</div>
-  <div class="nav-item admin-only" data-page="audit">🧾 Audit log</div>
-  <div class="nav-item" data-page="closed">⊘ Cancelled &amp; closed</div>
-  <div class="nav-item" data-page="settings">⚙ Settings</div>
-</nav>
+<nav class="sidebar"><div id="react-nav"></div></nav>
 <main class="main">
 
 <!-- DASHBOARD -->
@@ -429,6 +363,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <datalist id="dl-emp"></datalist>
 <datalist id="dl-proj"></datalist>
 <div id="toast"></div>
-<script src="app.js?v=4577107e1cb7"></script>
-<script src="react.js?v=31881f79da7a"></script>
+<script src="app.js?v=2b0139d32e3a"></script>
+<script src="react.js?v=313eb9bda52c"></script>
 </body></html>

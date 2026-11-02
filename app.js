@@ -160,6 +160,11 @@ function toast(msg, type='ok'){
   if (typeof PKR !== 'undefined') PKR.toastShown();
 }
 const LOADING = { on: false, msg: 'Loading data…' };
+// The page itself is React since 2 Nov 2026 (react/src/app). The old code says which of the four screens are shown — the same
+// values it wrote before into style.display ('' = as the page starts, 'none', 'flex', 'block'); React draws them at once.
+const SCREEN = { setup: '', login: 'none', app: 'none', self: 'none' };
+/** @param {Partial<typeof SCREEN>} part */
+function setScreens(part){ Object.assign(SCREEN, part); if (typeof PKR !== 'undefined') PKR.screensChanged(); }
 /** @param {boolean} on @param {string} [msg] the words (kept when none is given) */
 function loader(on, msg){ LOADING.on = on; if (msg) LOADING.msg = msg; if (typeof PKR !== 'undefined') PKR.loadingChanged(); }
 /** @returns {Employee | undefined} */
@@ -237,13 +242,13 @@ const PAY_FIELDS = ['salary','housing','transport','daily_pay','hour_pay','delay
 const isOfficer = () => !!(ME && ME.role === 'hr_officer');
 async function startApp(url,key){
   sb = lib().createClient(url,key);
-  $('setup').style.display='none';
+  setScreens({ setup: 'none' });
   DB_HOST = url.replace(/^https?:\/\//,'');          // shown on the Settings page (React: react/src/settings)
   const { data } = await sb.auth.getSession();
   if (data && data.session) await afterLogin(data.session.user); else showLogin();
 }
 function showLogin(msg){
-  $('app').style.display='none'; $('login').style.display='flex';
+  setScreens({ app: 'none', login: 'flex' });
   signInCard({ mode: 'login', msg: msg || undefined });
 }
 // ── CAPTCHA on every password sign-in (Cloudflare Turnstile, 25 Oct 2026) ──
@@ -285,7 +290,7 @@ async function afterLogin(user){
   const { data } = await sb.from('app_users').select('*').eq('id', user.id);
   const me = data && data[0];
   /** @param {'norole' | 'locked' | 'manager'} kind */
-  const stop = kind => { $('app').style.display='none'; $('login').style.display='flex'; signInCard({ mode: 'noaccess', kind, email: user.email }); };
+  const stop = kind => { setScreens({ app: 'none', login: 'flex' }); signInCard({ mode: 'noaccess', kind, email: user.email }); };
   if (!me || !me.role) return stop('norole');
   if (!me.active) return stop('locked');
   if (me.must_change_password) return showFirstLogin(me, user);
@@ -304,16 +309,16 @@ async function afterLogin(user){
   document.body.classList.toggle('is-officer', r==='hr_officer');
   if (me.full_name) localStorage.setItem('approver', me.full_name);   // review fix: never the previous user's name on a shared PC
   if (typeof PKR !== 'undefined') PKR.render();                       // the top bar: name, role, 🙋 Me (react/src/frame)
-  $('login').style.display='none'; $('app').style.display='block';
+  setScreens({ login: 'none', app: 'block' });
   await loadAll();
 }
 function showFirstLogin(me, user){
-  $('app').style.display='none'; $('self').style.display='none'; $('login').style.display='flex';
+  setScreens({ app: 'none', self: 'none', login: 'flex' });
   signInCard({ mode: 'first', name: me.full_name || user.email, user });
 }
 let SELF = null;
 async function showSelf(me, user){
-  $('app').style.display='none'; $('login').style.display='none'; $('self').style.display='block';
+  setScreens({ app: 'none', login: 'none', self: 'block' });
   SELF = { me, user };
   if (typeof PKR !== 'undefined') PKR.render();   // the top bar and menu (react/src/frame): name, role, ← Back, 📊 Project costs
   await loadSelf();
@@ -870,9 +875,8 @@ const closeError = m => String(m).replace(/^.*?\b(NO_DELETE|CLOSE_REASON|NOT_CLO
 // ═════════════════════════════════════════════════════════
 function showPage(name){
   renderPageIfNeeded(name);
-  document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active', p.id==='page-'+name));
+  if (typeof PKR !== 'undefined') PKR.pageShown(name);   // React shows the page (react/src/app), the menu highlights it, screens that load fresh data do
   window.scrollTo(0,0);
-  if (typeof PKR !== 'undefined') PKR.pageShown(name);   // React screens that load fresh data when opened; the menu highlights it
 }
 
 document.addEventListener('click', async ev => {
@@ -1359,13 +1363,12 @@ function renderSelf(){
 // The request windows (vacation, permission, HR request) and Cancel are React since 31 Oct 2026 (react/src/self/SelfDialogs).
 /** a self-service part picked in the menu (React — react/src/frame SelfNav) @param {string} part */
 function showSelfPart(part){
-  ['req','team','tatt','pcost','att','pay','prof'].forEach(k => $('self-'+k).style.display = part===k ? '' : 'none');
-  // every part is React since 31 Oct 2026: Team attendance, Project costs and My attendance load when opened, payslips lock again;
-  // the menu highlights the part opened
+  // React shows that part (react/src/app) and the menu highlights it; Team attendance, Project costs and My attendance load when
+  // opened, payslips lock again
   if (typeof PKR !== 'undefined') PKR.selfPageShown(part);
 }
 /** ← Back to HR app (self-service top bar) */
-function backToHrApp(){ $('self').style.display='none'; $('app').style.display='block'; }
+function backToHrApp(){ setScreens({ self: 'none', app: 'block' }); }
 
 // ═════════════════════════════════════════════════════════
 //  HR SIDE: vacation decisions, HR requests page, badges
@@ -1659,7 +1662,7 @@ async function publishProjectCosts(period, detail, quiet){
 //  PHONE / SMALL SCREENS — ☰ opens the menu over the page; picking a page closes it
 // ═════════════════════════════════════════════════════════
 // (☰ itself is React — react/src/frame AppTopBar)
-$('nav-backdrop').addEventListener('click', () => document.body.classList.remove('nav-open'));
+// (the dark area beside the menu, #nav-backdrop, closes it itself — React, react/src/app)
 document.addEventListener('click', e => { if (/** @type {PageEl} */ (e.target).closest('#app .sidebar .nav-item[data-page]')) document.body.classList.remove('nav-open'); });
 
 // ═════════════════════════════════════════════════════════
@@ -2033,7 +2036,8 @@ afterLogin = async function(){ const r = await _afterLogin27b.apply(this, argume
   window.addEventListener('resize', later);
   document.addEventListener('click', ev => { if (/** @type {PageEl} */ (ev.target).closest('[data-page],[data-nav],[data-spage],.tab,.seg button')) later(); }, true);
   const mo = new MutationObserver(later);
-  document.querySelectorAll('#app .main, #self .main').forEach(m => mo.observe(m, { childList: true, subtree: true }));
+  // the page is React (react/src/app): it hands over its two main areas once drawn
+  window.fitWidthWatch = areas => areas.forEach(m => { if (m) mo.observe(m, { childList: true, subtree: true }); });
   later();
 })();
 
@@ -2320,10 +2324,10 @@ const EMBED_URL = 'https://hckkrzghxxhauotyqlqr.supabase.co';
 const EMBED_KEY = 'sb_publishable_yyfkPLo6M7XDe3lwurctmw_6wsmB-2M';
 (function boot(){
   const embedded = EMBED_KEY && !EMBED_KEY.startsWith('PASTE-');
-  if (embedded){ localStorage.setItem('sb_url', EMBED_URL); localStorage.setItem('sb_key', EMBED_KEY); $('setup').style.display = 'none'; }
+  if (embedded){ localStorage.setItem('sb_url', EMBED_URL); localStorage.setItem('sb_key', EMBED_KEY); setScreens({ setup: 'none' }); }
   const url = embedded ? EMBED_URL : localStorage.getItem('sb_url'), key = embedded ? EMBED_KEY : localStorage.getItem('sb_key');
   // (the connection card is React — react/src/signin: it starts with the saved address and key, and shows SETUP_ERR)
-  if (!lib()){ SETUP_ERR = 'The app could not load. Check your internet connection and reload.'; $('setup').style.display='flex'; return; }
-  if (url && key) startApp(url, key).catch(e => { SETUP_ERR = 'Auto-connect failed: '+e.message; if (typeof PKR !== 'undefined') PKR.render(); $('setup').style.display='flex'; $('app').style.display='none'; });
+  if (!lib()){ SETUP_ERR = 'The app could not load. Check your internet connection and reload.'; setScreens({ setup: 'flex' }); return; }
+  if (url && key) startApp(url, key).catch(e => { SETUP_ERR = 'Auto-connect failed: '+e.message; if (typeof PKR !== 'undefined') PKR.render(); setScreens({ setup: 'flex', app: 'none' }); });
 })();
 

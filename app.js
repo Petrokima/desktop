@@ -215,92 +215,28 @@ let SHOWN_PERIOD = '';
 const ROLE_LABEL = { admin:'Admin', hr:'HR', hr_officer:'HR Officer', employee:'Employee' };
 const PAY_FIELDS = ['salary','housing','transport','daily_pay','hour_pay','delay_hour_pay','insurance_amount'];
 const isOfficer = () => !!(ME && ME.role === 'hr_officer');
-async function startApp(url,key){
-  sb = lib().createClient(url,key);
-  setScreens({ setup: 'none' });
-  DB_HOST = url.replace(/^https?:\/\//,'');          // shown on the Settings page (React: react/src/settings)
-  const { data } = await sb.auth.getSession();
-  if (data && data.session) await afterLogin(data.session.user); else showLogin();
-}
-function showLogin(msg){
-  setScreens({ app: 'none', login: 'flex' });
-  signInCard({ mode: 'login', msg: msg || undefined });
-}
-// ── CAPTCHA on every password sign-in (Cloudflare Turnstile, 25 Oct 2026) ──
-//  TURNSTILE_SITE_KEY = the PUBLIC site key of the widget "Petrokima HR sign-in". Empty = no CAPTCHA (nothing is shown, nothing sent).
-//  Supabase checks the token only once "CAPTCHA protection" is switched on (Authentication → Attack Protection); before that it is ignored.
-//  Each token is good for one sign-in: a fresh one is taken for every attempt. Usually nothing is shown; Cloudflare shows a small box
-//  to tick only when it is not sure the person is human.
-const TURNSTILE_SITE_KEY = '0x4AAAAAAFkp9jltaXJo9weC';   // widget "Petrokima HR sign-in" (public key)
-let tsLoad = null;
-function loadTurnstile(){
-  if (window.turnstile) return Promise.resolve(window.turnstile);
-  if (tsLoad) return tsLoad;
-  tsLoad = new Promise((res, rej) => {
-    const s = document.createElement('script'); s.async = true;
-    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-    s.onload = () => window.turnstile ? res(window.turnstile) : rej(new Error('captcha-load'));
-    s.onerror = () => { tsLoad = null; rej(new Error('captcha-load')); };
-    document.head.appendChild(s);
-    setTimeout(() => { if (!window.turnstile) { tsLoad = null; rej(new Error('captcha-load-timeout')); } }, 15000);   // never wait for ever
-  });
-  return tsLoad;
-}
-async function captchaToken(boxId, lang){
-  if (!TURNSTILE_SITE_KEY) return undefined;
-  const box = document.getElementById(boxId); if (!box) return undefined;
-  const ts = await loadTurnstile();
-  return new Promise((resolve, reject) => {
-    let id = null, done = false;
-    const finish = (fn, v) => { if (done) return; done = true; clearTimeout(timer); setTimeout(() => { try { ts.remove(id); } catch(e){} box.style.display = 'none'; }, 0); fn(v); };
-    const timer = setTimeout(() => finish(reject, new Error('captcha-timeout')), 90000);
-    box.innerHTML = ''; box.style.display = 'block';
-    id = ts.render(box, { sitekey: TURNSTILE_SITE_KEY, action: 'signin', appearance: 'interaction-only', language: lang || 'auto',
-      callback: tok => finish(resolve, tok),
-      'error-callback': code => { finish(reject, new Error('captcha-failed ' + code)); return true; },
-      'timeout-callback': () => finish(reject, new Error('captcha-timeout')) });
-  });
-}
-async function afterLogin(user){
-  const { data } = await sb.from('app_users').select('*').eq('id', user.id);
-  const me = data && data[0];
-  /** @param {'norole' | 'locked' | 'manager'} kind */
-  const stop = kind => { setScreens({ app: 'none', login: 'flex' }); signInCard({ mode: 'noaccess', kind, email: user.email }); };
-  if (!me || !me.role) return stop('norole');
-  if (!me.active) return stop('locked');
-  if (me.must_change_password) return showFirstLogin(me, user);
-  // Admin / HR / HR Officer: the 6-digit code (two-step sign-in) before staff powers
-  if (STAFF_ROLES.includes(me.role) && !(await mfaGate(me, user))) return;
-  if (me.role==='employee') return showSelf(me, user);
-  if (me.role==='manager') return stop('manager');
-  ME = { ...me, email:user.email };
-  PK_ERR.user(ME);                                    // error reports carry only the login's number and role
-  const r = me.role;
-  document.body.classList.toggle('can-hr',    r==='admin' || r==='hr');
-  document.body.classList.toggle('can-pay',   r==='admin' || r==='finance');
-  document.body.classList.toggle('can-set',   r==='admin' || r==='finance');
-  document.body.classList.toggle('can-admin', r==='admin');
-  document.body.classList.toggle('can-var',   ['admin','hr','finance','hr_officer'].includes(r));   // variable (monthly) entries
-  document.body.classList.toggle('is-officer', r==='hr_officer');
-  if (me.full_name) localStorage.setItem('approver', me.full_name);   // review fix: never the previous user's name on a shared PC
-  if (typeof PKR !== 'undefined') PKR.render();                       // the top bar: name, role, 🙋 Me (react/src/frame)
-  setScreens({ login: 'none', app: 'block' });
-  await loadAll();
-}
-function showFirstLogin(me, user){
-  setScreens({ app: 'none', self: 'none', login: 'flex' });
-  signInCard({ mode: 'first', name: me.full_name || user.email, user });
-}
+// Start-up and signing in are React since 2 Nov 2026 (react/src/session/session.ts: connecting, the sign-in card, who may enter,
+// the role's powers on the page, the two-step code, the Cloudflare check, signing out). These old names forward there; the state
+// stays here (sb, ME, SELF, SIGNIN, DB_HOST — and SEC in part23). startApp hides the connection card at once, as before.
+/** @param {string} url @param {string} key */
+async function startApp(url,key){ setScreens({ setup: 'none' }); return (await pkr()).startApp(url, key); }
+/** @param {string} [msg] */
+function showLogin(msg){ if (typeof PKR !== 'undefined') return PKR.showLogin(msg); pkr().then(k => k.showLogin(msg)); }   // at once, as before
+/** @param {{ id: string, email?: string | null }} user */
+async function afterLogin(user){ return (await pkr()).afterLogin(user); }
+/** @param {any} me @param {any} user */
+function showFirstLogin(me, user){ if (typeof PKR !== 'undefined') return PKR.showFirstLogin(me, user); pkr().then(k => k.showFirstLogin(me, user)); }
 let SELF = null;
-async function showSelf(me, user){
-  setScreens({ app: 'none', login: 'none', self: 'block' });
-  SELF = { me, user };
-  if (typeof PKR !== 'undefined') PKR.render();   // the top bar and menu (react/src/frame): name, role, ← Back, 📊 Project costs
-  await loadSelf();
-}
-async function signOut(){ try { await sb.auth.signOut(); } catch(e){} location.reload(); }
+/** @param {any} me @param {any} user */
+async function showSelf(me, user){ return (await pkr()).showSelf(me, user); }
+async function signOut(){ return (await pkr()).signOut(); }
 // (change password is a React window since 31 Oct 2026 — react/src/windows)
-async function disconnect(){ try { if (sb) await sb.auth.signOut(); } catch(e){} localStorage.removeItem('sb_url'); localStorage.removeItem('sb_key'); location.reload(); }
+async function disconnect(){ return (await pkr()).disconnect(); }
+// TURNSTILE_SITE_KEY = the PUBLIC site key of the Cloudflare check "Petrokima HR sign-in" (empty = no check). It stays HERE: desktop/build.js
+// empties it for the on-prem copy (works without internet); react/src/session reads it through the bridge.
+const TURNSTILE_SITE_KEY = '0x4AAAAAAFkp9jltaXJo9weC';   // widget "Petrokima HR sign-in" (public key)
+/** @param {string} boxId @param {string} [lang] @returns {Promise<string | undefined>} */
+async function captchaToken(boxId, lang){ return (await pkr()).captchaToken(boxId, lang); }
 
 // ═════════════════════════════════════════════════════════
 //  LOAD
@@ -1641,27 +1577,15 @@ const STAFF_ROLES = ['admin','hr','hr_officer'];
 let SEC = { require_staff_mfa:false, enrolled:false, aal:'aal1', ready:false };
 
 // the two two-step windows (React since 31 Oct 2026 — react/src/signin) must not close by clicking beside them or pressing Esc
+// (kept here: these listeners must come before part28's / part29's, as they always did)
 const twoStepOpen = () => !!document.querySelector('#m-code.open, #m-2fa.open');
 document.addEventListener('click', e => { if (e.target && (/** @type {PageEl} */ (e.target).id === 'm-code' || /** @type {PageEl} */ (e.target).id === 'm-2fa')) e.stopImmediatePropagation(); }, true);
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && twoStepOpen()) e.stopImmediatePropagation(); }, true);
 
-async function loadSecurity(){
-  try {
-    const { data, error } = await sb.rpc('my_security_status');
-    if (error) throw error;
-    SEC = { ...data, ready:true };
-  } catch (e) { SEC = { require_staff_mfa:false, enrolled:false, aal:'aal1', ready:false }; }   // database update 40 not run yet
-  return SEC;
-}
-async function verifiedFactor(){
-  const { data, error } = await sb.auth.mfa.listFactors();
-  if (error) throw error;
-  return ((data && data.totp) || []).find(f => f.status === 'verified') || null;
-}
-async function currentAal(){
-  const { data } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
-  return data || { currentLevel:'aal1', nextLevel:'aal1' };
-}
+// (loadSecurity, currentAal: React since 2 Nov 2026 — react/src/session/session.ts; verifiedFactor was unused and is gone)
+/** @returns {Promise<typeof SEC>} */
+async function loadSecurity(){ return (await pkr()).loadSecurity(); }
+async function currentAal(){ return (await pkr()).currentAal(); }
 
 // ── the 6-digit code window and the authenticator set-up window are React since 31 Oct 2026 (react/src/signin) ──
 /** @param {{ title?: string, cancelText?: string }} [opts] @returns {Promise<boolean>} true when the code was right */
@@ -1669,34 +1593,9 @@ function askCode(opts = {}){ return /** @type {NonNullable<typeof PKR>} */ (PKR)
 /** @param {{ forced?: boolean }} [opts] @returns {Promise<boolean>} true when an authenticator was set up */
 function setupTwoStep(opts = {}){ return /** @type {NonNullable<typeof PKR>} */ (PKR).setupTwoStep(opts); }
 
-// ── called by afterLogin for Admin / HR / HR Officer. true = carry on, false = stop (a window took over) ──
-async function mfaGate(me, user){
-  let lvl;
-  try { lvl = await currentAal(); } catch (e) { return true; }
-  if (lvl.currentLevel === 'aal2') { await loadSecurity(); return true; }
-  if (lvl.nextLevel === 'aal2') {                       // has an authenticator → always ask for the code
-    const ok = await askCode();
-    if (!ok) { signOut(); return false; }
-    await loadSecurity(); return true;
-  }
-  await loadSecurity();
-  if (SEC.require_staff_mfa) {                          // required but not set up yet → must set it up now
-    const ok = await setupTwoStep({ forced:true });
-    if (!ok) { signOut(); return false; }
-    await loadSecurity(); return true;
-  }
-  if (SEC.ready) setTimeout(() => toast('Protect your account: set up two-step sign-in (Users & roles → 📱, or ask the administrator).', 'warn'), 1500);
-  return true;
-}
-
-// after re-typing the password (payslips), a staff session must enter the code again
-async function mfaAfterReauth(){
-  try {
-    const lvl = await currentAal();
-    if (lvl.currentLevel === 'aal1' && lvl.nextLevel === 'aal2') return await askCode({ title:'Enter your 6-digit code', cancelText:'Cancel' });
-  } catch (e) {}
-  return true;
-}
+// ── the two-step step after the password (Admin / HR / HR Officer) and after re-typing it: React (react/src/session) ──
+async function mfaGate(){ return (await pkr()).mfaGate(); }
+async function mfaAfterReauth(){ return (await pkr()).mfaAfterReauth(); }
 
 // ── Users & roles: the two-step card and the 2-step column are React now (react/src/users, 30 Oct 2026);
 //    it uses loadSecurity() and setupTwoStep() above through the bridge.
@@ -1880,17 +1779,8 @@ function officerPatch(client){
   };
   client.__officerPatch = true;
 }
-const _startApp27 = startApp;
-// @ts-expect-error — startApp is deliberately extended here (the new version wraps the earlier one)
-startApp = async function(){ const r = await _startApp27.apply(this, arguments); officerPatch(sb); return r; };
-const _afterLogin27 = afterLogin;
-// @ts-expect-error — afterLogin is deliberately extended here (the new version wraps the earlier one)
-afterLogin = async function(){ officerPatch(sb); return _afterLogin27.apply(this, arguments); };
-// HR officers: show the employee Save / New employee / Bulk upload controls (pay stays hidden)
-const _afterLogin27b = afterLogin;
-// @ts-expect-error — afterLogin is deliberately extended here (the new version wraps the earlier one)
-afterLogin = async function(){ const r = await _afterLogin27b.apply(this, arguments);
-  document.body.classList.toggle('can-master', !!(ME && ['admin','hr','hr_officer'].includes(ME.role))); return r; };
+// (officerPatch runs after connecting and before every sign-in check, and can-master is set after it — React since 2 Nov 2026:
+//  react/src/session/session.ts startApp / afterLogin)
 
 // ── HR officers: penalties in days / hours show no money — handled in the React Penalties page (bridge penaltyValue).
 
@@ -1971,13 +1861,7 @@ function idleCheck(){
 }
 setInterval(idleCheck, 1000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) idleCheck(); });   // a computer waking from sleep
-// the sign-in screen explains why the user was signed out
-const showLoginBeforeIdle = showLogin;
-// @ts-expect-error — showLogin is deliberately extended here (the new version wraps the earlier one)
-showLogin = function(msg){
-  let idle = false; try { idle = sessionStorage.getItem('pk_idle_out') === '1'; sessionStorage.removeItem('pk_idle_out'); } catch(e){}
-  showLoginBeforeIdle(msg || (idle ? 'You were signed out automatically after 10 minutes without activity. Please sign in again.' : undefined));
-};
+// (the sign-in screen explains why the user was signed out: React since 2 Nov 2026 — react/src/session/session.ts showLogin)
 // (the "still there?" window is React — react/src/windows; its buttons call idleSignOut / idleTouch through the bridge)
 
 // ═════════════════════════════════════════════════════════

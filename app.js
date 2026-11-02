@@ -488,298 +488,21 @@ document.addEventListener('click', async ev => {
 // ═════════════════════════════════════════════════════════
 //  REPORTS
 // ═════════════════════════════════════════════════════════
-const C = (k,l,t='text',s=false) => ({k,l,t,s});
+// The Reports PAGE is React since 31 Oct 2026, the report CALCULATIONS since 2 Nov 2026 (react/src/reports/calc.ts — every report of
+// this part and those parts 26, 37, 38 and 39 added; proven equal by reportcalc.golden.json). Kept here: three small helpers other
+// parts use, and the old names, which forward to React SYNCHRONOUSLY (the bridge and the payroll page's project costs call them).
 const activeEmps = () => S.employees.filter(e => e.status!=='Inactive');
-const daysUntil = d => d ? Math.round((new Date(d+'T00:00:00').getTime() - new Date(todayStr()+'T00:00:00').getTime())/86400000) : null;
 const inPeriod = d => d && d >= periodStart(settings.period) && d <= periodEnd(settings.period);
 function projName(c){ if(!c) return '(unallocated)'; const p=S.projects.find(x=>String(x.id)===String(c)); return p ? (p.name||'') : ''; }
-function groupBy(arr, fn){ const m={}; arr.forEach(x=>{ const k=fn(x)||'(blank)'; (m[k]=m[k]||[]).push(x); }); return m; }
-
-// Labour cost: each employee's gross pay is charged to projects in proportion to attendance hours.
-// Monthly amounts entered against a specific project go straight to that project instead.
-function laborCost(){
-  const detail=[];
-  computeAll().forEach(r => {
-    const id=String(r.emp.id), hrs={}, direct={};
-    S.attendance.filter(a=>String(a.emp_id)===id).forEach(a=>(a.projects||[]).forEach(x=>{ hrs[x.code]=(hrs[x.code]||0)+num(x.hours); }));
-    S.monthly.filter(m=>String(m.emp_id)===id && m.project_code).forEach(m=>{ const el=elByCode(m.element_code); if(el && el.element_type==='Addition') direct[m.project_code]=(direct[m.project_code]||0)+num(m.amount); });
-    if (!r.snapshot){ const ap = approvedAllowance(r.emp); if (ap) (ap.details||[]).forEach(x => { direct[x.project] = (direct[x.project]||0) + num(x.amount); }); }
-    if (r.snapshot) r.lines.filter(l => /— automatic$/.test(l.name) && l.project).forEach(l => { direct[l.project] = (direct[l.project]||0) + l.amount; });
-    const directTot = Object.values(direct).reduce((s,v)=>s+v,0), pool = r.gross - directTot;
-    const totH = Object.values(hrs).reduce((s,v)=>s+v,0);
-    const codes = new Set([...Object.keys(hrs), ...Object.keys(direct)]);
-    if (!totH && Math.abs(pool)>0.004) codes.add('');
-    codes.forEach(c => { const h=hrs[c]||0, share = totH ? h/totH : (c===''?1:0), alloc=pool*share, d=direct[c]||0;
-      detail.push({ emp:r.emp, code:c, hours:h, share, alloc, direct:d, total:alloc+d }); });
-  });
-  return detail;
-}
-
-const REPORTS = [
-  // ── ATTENDANCE ──────────────────────────────────────────
-  { id:'att-daily', g:'Attendance', t:'Daily attendance register',
-    d:'Every attendance record between the two dates, with each project line and its times. For one day, click “Today” or type the same date in both boxes.',
-    build:p => ({ cols:[C('date','Date','date'),C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('status','Status'),C('in','Check-in','mono'),C('out','Check-out','mono'),C('hours','Hours','num',true),C('ot','OT','num',true),C('late','Late','num',true),C('early','Early','num',true),C('split','Project lines')],
-      rows:S.attendance.slice().sort((x,y)=>String(x.date).localeCompare(String(y.date))||String(x.emp_id).localeCompare(String(y.emp_id),undefined,{numeric:true})).map(a=>{ const e=empOrBlank(a.emp_id), R=dayRules(a,e); return { date:a.date, code:a.emp_id, name:a.emp_name||empName(e), department:e.department, status:a.status,
-        in:a.check_in, out:attNoOut(a) ? 'MISSING' : a.check_out, hours:attNoOut(a) ? 0 : num(a.total_hours), ot:R.ot, late:R.late, early:R.early, split:(a.projects||[]).map(x=>`${x.code}${x.in?' '+x.in+'–'+x.out:''} (${fmt(x.hours)}h)`).join(' | ') }; }) }) },
-  { id:'att-missing', g:'Attendance', t:'Missing attendance',
-    d:'Working days between the two dates on which an employee has no attendance record, no approved vacation and no approved mission — use it to chase supervisors before payroll closes. Weekends, public holidays and future days are skipped. For one day, click “Today” or type the same date in both boxes.',
-    build:p => { const days=[], end = p.to < todayStr() ? p.to : todayStr();
-      for (const d=dObj(p.from); dStr(d)<=end; d.setDate(d.getDate()+1)) { const x=dStr(d); if (isWorkday(x)) days.push(x); }
-      const cols=[C('date','Date','date'),C('dow','Day'),C('code','Code','id'),C('name_ar','Arabic name','ar'),C('name_en','English name','strong'),C('department','Department'),C('unit','Unit'),C('job','Job')];
-      if (!days.length) return { cols, rows:[], note:'No working day to check between these dates (weekends, public holidays and future days are skipped)' };
-      const has=new Set(S.attendance.map(a=>String(a.emp_id)+'|'+a.date)), rows=[];
-      days.forEach(x => S.employees.forEach(e => {
-        const emp = (!e.employment_date || String(e.employment_date).slice(0,10)<=x) && (e.status!=='Inactive' || (e.resignation_date && String(e.resignation_date).slice(0,10)>=x));
-        if (!emp || has.has(String(e.id)+'|'+x) || leaveOn(e.id,x) || missionsOn(e.id,x).length) return;
-        rows.push({ date:x, dow:DAYS[dObj(x).getDay()], code:e.id, name_ar:e.name_ar, name_en:e.name_en, department:e.department, unit:e.unit, job:e.job_name }); }));
-      return { cols, rows, note:`${days.length} working day${days.length===1?'':'s'} checked` }; } },
-  { id:'att-monthly', g:'Attendance', t:'Monthly attendance summary',
-    d:'One line per active employee between the two dates: days by status, total hours and overtime. Employees with zero records stand out.',
-    build:p => ({ cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('records','Records','int',true),C('present','Present','int',true),C('half','Half day','int',true),C('annual','Annual leave','int',true),C('sick','Sick leave','int',true),C('absent','Absent','int',true),C('hours','Hours','num',true),C('ot','OT hours','num',true),C('late','Late hours','num',true),C('early','Early hours','num',true),C('waived','Waived','num',true),C('vac','Vacation days','num',true),C('unpaid','of which unpaid','num',true)],
-      rows:activeEmps().map(e=>{ const A=S.attendance.filter(a=>String(a.emp_id)===String(e.id)), c=s=>A.filter(a=>a.status===s).length, R=A.map(a=>dayRules(a,e));
-        return { code:e.id, name:empName(e), department:e.department, records:A.length, present:c('Present'), half:c('Half Day'), annual:c('Annual Leave'), sick:c('Sick Leave'), absent:c('Absent'),
-          hours:A.reduce((s,a)=>s+(attNoOut(a)?0:num(a.total_hours)),0), ot:R.reduce((s,r)=>s+r.ot,0), late:R.reduce((s,r)=>s+r.late,0), early:R.reduce((s,r)=>s+r.early,0), waived:R.reduce((s,r)=>s+r.waived,0),
-          vac:S.leaves.filter(l=>String(l.emp_id)===String(e.id)&&l.status==='Approved').reduce((s,l)=>s+leaveDaysIn(l,p.from,p.to),0),
-          unpaid:S.leaves.filter(l=>String(l.emp_id)===String(e.id)&&l.status==='Approved'&&l.leave_type==='Unpaid').reduce((s,l)=>s+leaveDaysIn(l,p.from,p.to),0) }; }) }) },
-  { id:'att-leave', g:'Attendance', t:'Absence & leave',
-    d:'Employees with any absence, leave or half day between the two dates, with the dates.',
-    build:() => ({ cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('absent','Absent','int',true),C('annual','Annual','int',true),C('sick','Sick','int',true),C('half','Half day','int',true),C('dates','Dates')],
-      rows:activeEmps().map(e=>{ const A=S.attendance.filter(a=>String(a.emp_id)===String(e.id) && a.status!=='Present'), c=s=>A.filter(a=>a.status===s).length;
-        return A.length ? { code:e.id, name:empName(e), department:e.department, absent:c('Absent'), annual:c('Annual Leave'), sick:c('Sick Leave'), half:c('Half Day'),
-          dates:A.sort((x,y)=>x.date.localeCompare(y.date)).map(a=>`${a.date.slice(5)} ${a.status}`).join(', ') } : null; }).filter(Boolean) }) },
-  { id:'att-ot', g:'Attendance', t:'Overtime', param:'view',
-    d:'Overtime between the two dates: on each day, the hours above the standard day (after the minimum-hours rule), valued at the multiplier × hour pay. The “Days” column shows each date; choose “One line per day” for the full detail (check-in, check-out, hours worked). Exception employees are excluded; a day with a missing punch or a time to confirm counts only after HR corrects it.',
-    build:p => { const mult=num(settings.otMultiplier), D=[];
-      S.attendance.forEach(a=>{ const e=empById(a.emp_id); if(!e) return; const R=dayRules(a,e); if(!(R.ot>0)) return; D.push({ a, e, R, rate:empRates(e).hourly }); });
-      D.sort((x,y)=>x.a.date.localeCompare(y.a.date) || String(x.e.id).localeCompare(String(y.e.id),undefined,{numeric:true}));
-      const kind = x => x.R.holiday ? 'Public holiday' : x.R.weekend ? 'Weekend' : 'Working day', r2 = v => Math.round(v*100)/100;
-      if (p.view==='day') return { cols:[C('date','Date','date'),C('dow','Day'),C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('unit','Unit'),C('in','Check-in','mono'),C('out','Check-out','mono'),C('worked','Hours worked','num',true),C('std','Standard day','num'),C('kind','Day type'),C('hours','OT hours','num',true),C('rate','Hour pay','num'),C('mult','Multiplier','num'),C('value','OT value','num',true)],
-        rows:D.map(x=>({ date:x.a.date, dow:DAYS[dObj(x.a.date).getDay()], code:x.e.id, name:empName(x.e), department:x.e.department, unit:x.e.unit, in:x.a.check_in, out:x.a.check_out, worked:num(x.a.total_hours),
-          std:num(settings.hoursPerDay), kind:kind(x), hours:x.R.ot, rate:x.rate, mult, value:r2(x.R.ot*x.rate*mult) })) };
-      const G={}; D.forEach(x=>{ const g=G[x.e.id]=G[x.e.id]||{ e:x.e, rate:x.rate, h:0, days:[] }; g.h+=x.R.ot; g.days.push(`${x.a.date.slice(8,10)}/${x.a.date.slice(5,7)} ${fmt(x.R.ot)}h`); });
-      return { cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('unit','Unit'),C('n','Days','int',true),C('days','Days with overtime (date · hours)'),C('hours','OT hours','num',true),C('rate','Hour pay','num'),C('mult','Multiplier','num'),C('value','OT value','num',true)],
-        rows:Object.values(G).map(g=>({ code:g.e.id, name:empName(g.e), department:g.e.department, unit:g.e.unit, n:g.days.length, days:g.days.join(' · '), hours:r2(g.h), rate:g.rate, mult, value:r2(g.h*g.rate*mult) })) }; } },
-
-  { id:'att-late', g:'Attendance', t:'Late arrivals & early leaves',
-    d:'Every day with late arrival or short hours, the part waived by an approved permission, and the deduction at delay hour pay. Exception employees are excluded.',
-    build:() => ({ cols:[C('date','Date','date'),C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('in','In','mono'),C('out','Out','mono'),C('worked','Worked','num'),C('late','Late','num',true),C('early','Early','num',true),C('waived','Waived','num',true),C('net','Deducted hours','num',true),C('rate','Delay hour pay','num'),C('ded','Deduction','num',true)],
-      rows:S.attendance.map(a=>{ const e=empById(a.emp_id); if(!e) return null; const R=dayRules(a,e); if(!R.lateRaw && !R.earlyRaw) return null;
-        const rate=num(e.delay_hour_pay)||num(e.hour_pay), net=R.late+R.early;
-        return { date:a.date, code:a.emp_id, name:empName(e), department:e.department, in:a.check_in, out:a.check_out, worked:num(a.total_hours), late:R.lateRaw, early:R.earlyRaw, waived:R.waived, net, rate, ded:net*rate }; })
-        .filter(x => x !== null).sort((a,b)=>a.date.localeCompare(b.date)) }) },
-  { id:'att-perm', g:'Attendance', t:'Permission requests',
-    d:'All late-arrival and early-leave permission requests between the two dates with their decision, and how many each employee has used.',
-    build:() => ({ cols:[C('date','Date','date'),C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('type','Type'),C('hours','Hours','num',true),C('reason','Reason'),C('status','Status'),C('by','Decided by'),C('used','Approved this month','int')],
-      rows:S.permissions.map(p=>{ const e=empOrBlank(p.emp_id); return { date:p.date, code:p.emp_id, name:empName(e), department:e.department, type:p.type, hours:num(p.hours), reason:p.reason, status:p.status, by:p.decided_by, used:permUsed(p.emp_id, monthOf(p.date)) }; })
-        .sort((a,b)=>a.date.localeCompare(b.date)) }) },
-  { id:'att-exempt', g:'Attendance', t:'Exception employees',
-    d:'Employees on the exception rule — no delay deduction and no overtime. Change this on the employee record.',
-    build:() => ({ cols:[C('code','Code','id'),C('name_ar','Arabic name','ar'),C('name','English name','strong'),C('department','Department'),C('unit','Unit'),C('job','Job')],
-      rows:activeEmps().filter(e=>e.attendance_exempt).map(e=>({ code:e.id, name_ar:e.name_ar, name:e.name_en, department:e.department, unit:e.unit, job:e.job_name })) }) },
-
-  { id:'lv-register', g:'Vacations', t:'Vacation register',
-    d:'Every approved vacation overlapping the two dates, with the days that fall inside them.',
-    build:p => { const ps=p.from, pe=p.to;
-      return { cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('type','Type'),C('from','From','date'),C('to','To','date'),C('days','Total days','num',true),C('inp','Days in range','num',true),C('reason','Reason'),C('by','Entered by')],
-        rows:S.leaves.filter(l=>l.status==='Approved' && l.date_from<=pe && l.date_to>=ps).map(l=>{ const e=empOrBlank(l.emp_id); return { code:l.emp_id, name:empName(e), department:e.department, type:l.leave_type, from:l.date_from, to:l.date_to, days:num(l.days), inp:leaveDaysIn(l,ps,pe), reason:l.reason, by:l.entered_by }; })
-          .sort((a,b)=>a.from.localeCompare(b.from)) }; } },
-  { id:'lv-balance', g:'Vacations', t:'Annual leave balance',
-    d:'Entitlement, days taken and days remaining for the year of the current period. Casual leave counts against annual leave unless switched off in Settings.',
-    build:() => { const y=settings.period.slice(0,4), take=(id,t)=>S.leaves.filter(l=>String(l.emp_id)===String(id)&&l.status==='Approved'&&l.leave_type===t).reduce((s,l)=>s+leaveDaysIn(l,`${y}-01-01`,`${y}-12-31`),0);
-      return { cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('ent','Entitlement','num',true),C('annual','Annual taken','num',true),C('casual','Casual taken','num',true),C('rem','Remaining','num',true),C('sick','Sick taken','num',true),C('unpaid','Unpaid taken','num',true)],
-        rows:activeEmps().map(e=>({ code:e.id, name:empName(e), department:e.department, ent:annualEntitlement(e), annual:take(e.id,'Annual'), casual:take(e.id,'Casual'), rem:annualEntitlement(e)-annualTaken(e.id), sick:take(e.id,'Sick'), unpaid:take(e.id,'Unpaid') })) }; } },
-  { id:'lv-today', g:'Vacations', t:'Who is on vacation',
-    d:'Employees on approved vacation at any time between the two dates. For one day, click “Today” or type the same date in both boxes.',
-    build:p => ({ cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('job','Job'),C('type','Type'),C('from','From','date'),C('to','To','date'),C('inr','Days in range','num',true),C('back','Back on','date')],
-      rows:S.leaves.filter(l=>l.status==='Approved' && l.date_from<=p.to && l.date_to>=p.from).map(l=>{ const e=empOrBlank(l.emp_id); const b=dObj(l.date_to); do { b.setDate(b.getDate()+1); } while(!isWorkday(dStr(b)));
-        return { code:l.emp_id, name:empName(e), department:e.department, job:e.job_name, type:l.leave_type, from:l.date_from, to:l.date_to, inr:leaveDaysIn(l,p.from,p.to), back:dStr(b) }; }) }) },
-
-  { id:'att-absence', g:'Attendance', t:'Absence deductions',
-    d:'Unexcused absent days in the payroll cycle and the deduction at daily pay. Weekends, public holidays and days covered by approved leave are not deducted.',
-    build:() => ({ cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('days','Absent days','int',true),C('dates','Dates'),C('rate','Daily pay','num'),C('ded','Deduction','num',true)],
-      rows:computeAll().filter(r=>r.absentDays).map(r=>{ const l=/** @type {Partial<PayLine>} */ (r.lines.find(x=>String(x.code)===String(settings.codeAbsent))||{});
-        return { code:r.emp.id, name:empName(r.emp), department:r.emp.department, days:r.absentDays, dates:(String(l.note||'').match(/\((.*)\)/)||[])[1]||'', rate:empRates(r.emp).daily, ded:r.absence }; }) }) },
-  { id:'pay-penalties', g:'Payroll', t:'Penalties',
-    d:'Penalties whose incident date falls between the two dates, with their value, the payroll they are deducted in, who requested them and who recorded them.',
-    build:() => ({ cols:[C('date','Incident','date'),C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('pen','Penalty'),C('amt','Amount','num',true),C('per','Payroll','mono'),C('reason','Reason'),C('req','Requested by'),C('rec','Recorded by'),C('status','Status')],
-      rows:S.penalties.map(x=>{ const e=empOrBlank(x.emp_id); return { date:x.incident_date, code:x.emp_id, name:empName(e), department:e.department, pen:penLabel(x), amt:x.status==='Approved'?penaltyValue(x):0, per:x.apply_period, reason:x.reason, req:x.requested_by, rec:x.recorded_by, status:x.status }; })
-        .sort((a,b)=>a.date.localeCompare(b.date)) }) },
-  { id:'pay-holiday', g:'Payroll', t:'Public holiday work',
-    d:'Employees who worked on a public holiday between the two dates and the extra pay they receive.',
-    build:() => { const R=[]; S.attendance.filter(a=>isHoliday(a.date) && (a.status==='Present'||a.status==='Half Day')).forEach(a=>{ const e=empById(a.emp_id)||/** @type {Employee} */ ({id:a.emp_id}), rate=empRates(e).daily, x=num(settings.holidayExtraDays)||1, f=a.status==='Present'?1:0.5;
-        R.push({ date:a.date, hol:(holidayOn(a.date)||/** @type {Holiday} */ ({})).name, code:a.emp_id, name:empName(e), department:e.department, hours:num(a.total_hours), rate, pay:rate*x*f }); });
-      return { cols:[C('date','Date','date'),C('hol','Holiday'),C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('hours','Hours worked','num',true),C('rate','Daily pay','num'),C('pay','Extra pay','num',true)], rows:R.sort((a,b)=>a.date.localeCompare(b.date)) }; } },
-
-  { id:'att-mobile', g:'Attendance', t:'Mobile check-in log',
-    d:'Every check-in and check-out tapped on the mobile app between the two dates — time, site and GPS location. Taps made with no internet are marked offline: their time comes from the phone clock, corrected by the server when the phone reconnected. This log is permanent and cannot be edited.',
-    build:() => ({ cols:[C('date','Date','date'),C('time','Time','mono'),C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('ev','Event'),C('site','Site','id'),C('sname','Site name'),C('acc','GPS accuracy (m)','int'),C('dist','Distance from site'),C('warn','Location warnings'),C('map','Location','link'),C('how','Recorded'),C('state','Status')],
-      rows:S.clocks.map(c=>{ const e=empOrBlank(c.emp_id); return { date:c.local_date, time:c.local_time, code:c.emp_id, name:empName(e), department:e.department, ev:c.event_type==='in'?'Check in':'Check out',
-        how: (c.offline ? `📴 offline · sent ${String(c.received_at||'').slice(0,16).replace('T',' ')} UTC` : 'online') + (c.location_exempt ? ' · ⚠ no location (exception)' : ''),
-        state: /corrected/.test(c.time_method||'') ? '⚠ phone clock was wrong — time corrected' : 'OK',
-        site:c.project_code||'', sname:c.project_code?projName(c.project_code):(c.event_type==='in'?'No project':''), acc:c.accuracy, map: mapUrl(c) || '',
-        dist: c.distance_m != null ? (c.distance_m >= 1000 ? (c.distance_m/1000).toFixed(1)+' km' : c.distance_m+' m') : '',
-        warn: (c.location_flags||[]).map(f => (typeof LOC_FLAG !== 'undefined' && LOC_FLAG[f] ? LOC_FLAG[f][0] : f)).join(', ') + (c.applied === false ? (c.location_flags && c.location_flags.length ? ' · ' : '') + 'kept for review: ' + (c.review_note||'') : '') }; })
-        .sort((a,b)=>(String(a.date)+String(a.time)).localeCompare(String(b.date)+String(b.time))) }) },
-  { id:'att-review', g:'Attendance', t:'Offline check-ins to review',
-    d:'Check-ins made with no internet and sent later. The Petrokima Android app (new version) also sends the phone\'s “time since switched on” counter, which the user cannot change: the server then records the REAL time (✓ verified), and if the phone clock had been changed it shows ⚠ Phone clock was changed and tells HR. Without the counter (iPhone, older apps, or the phone restarted) the time comes from the phone clock: the server compares it with its own when the phone reconnects and corrects any difference. A tap that reached the server more than 5 minutes after its time is marked ⏳ HR to confirm: that day has no deductions or overtime until HR checks the time on the Attendance page and saves it, and the month cannot be approved before. Taps more than 72 hours old, or earlier than one already recorded, are refused and stay on the phone — HR records those manually.',
-    build:() => ({ cols:[C('state','Status','strong'),C('date','Date','date'),C('time','Time recorded','mono'),C('claimed','Phone showed','mono'),C('recv','Sent (Cairo time)','mono'),C('delay','Hours until sent','num'),C('code','Code','id'),C('name','Employee'),C('ev','Event'),C('site','Site','id'),C('map','Location','link')],
-      rows:S.clocks.filter(c=>c.offline).map(c=>{ const e=empOrBlank(c.emp_id), corr=/corrected/.test(c.time_method||''), delay = c.received_at ? (new Date(c.received_at).getTime()-new Date(c.at).getTime())/3600000 : null;
-        const tz = String(e.entity||'').toLowerCase().includes('saudi') ? 'Asia/Riyadh' : 'Africa/Cairo', changed = /clock was changed/.test(c.time_method || ''), verified = /counter \(verified\)/.test(c.time_method || '');
-        return { state: changed ? '⚠ Phone clock was changed — real time recorded' : /^Offline — sent/.test(c.review_note || '') ? ((c.location_flags||[]).includes('phone_restarted') ? '⏳ HR to confirm (phone restarted)' : '⏳ HR to confirm the time') : verified ? '✓ Real time verified' : corr ? '⚠ Phone clock was wrong' : 'OK', date:c.local_date, time:c.local_time,
-          claimed: (c.phone_said_at || c.client_at) ? new Date(/** @type {string} */ (c.phone_said_at || c.client_at)).toLocaleString('en-GB',{ timeZone: tz, hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short' }) : '',
-          recv: c.received_at ? new Date(c.received_at).toLocaleString('en-GB',{ timeZone: tz, hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short' }) : '', delay: delay==null ? '' : Math.round(delay*100)/100,
-          code:c.emp_id, name:empName(e), ev:c.event_type==='in'?'Check in':'Check out', site:c.project_code||'(no project)', map:mapUrl(c)||'' }; })
-        .sort((a,b)=>Number(/^(OK|✓)/.test(a.state))-Number(/^(OK|✓)/.test(b.state)) || (String(a.date)+String(a.time)).localeCompare(String(b.date)+String(b.time))) }) },
-
-  { id:'att-fix', g:'Attendance', t:'Missing punches to correct',
-    d:'Days with only one fingerprint-machine punch, days over 16 hours, offline phone taps sent late (time to confirm), and phone check-ins with no check-out on a past day. They carry no deductions or overtime until HR opens the record on the Attendance page, checks the times and saves. The month cannot be approved while any remain.',
-    build:() => { const R=[]; S.attendance.forEach(a => (a.projects||[]).forEach(x => { if (x.missing || x.review || x.forgotten || (x.in && !x.out && a.date < todayStr())) { const e=empOrBlank(a.emp_id);
-        R.push({ issue: x.missing ? 'Missing punch' : x.review ? (x.why === 'offline' ? 'Offline time to confirm' : 'Over 16 hours') : 'Missing phone check-out', source: a.source==='Machine' ? 'Fingerprint machine' : a.source==='Mobile' ? 'Phone' : (a.source||''),
-                 date:a.date, code:a.emp_id, name:empName(e), department:e.department, in:x.in||'', out:x.out||'', hours:x.hours }); } }));
-      return { cols:[C('issue','Issue','strong'),C('source','Source'),C('date','Date','date'),C('code','Code','id'),C('name','Employee'),C('department','Department'),C('in','In','mono'),C('out','Out','mono'),C('hours','Hours','num')],
-        rows:R.sort((a,b)=>a.date.localeCompare(b.date)||String(a.code).localeCompare(String(b.code),undefined,{numeric:true})) }; } },
-  { id:'att-open', g:'Attendance', t:'Open and forgotten check-ins',
-    d:'Employees still checked in, and phone check-ins with no check-out on a past day (a check-in on the next day never closes them). Correct forgotten ones on the Attendance page before closing payroll.',
-    build:() => { const R=[]; S.attendance.forEach(a => (a.projects||[]).forEach(x => { if (!x.out && x.in) { const e=empOrBlank(a.emp_id);
-        R.push({ state: a.date===todayStr() && !x.forgotten ? 'On site now' : 'Missing check-out — needs correction', date:a.date, code:a.emp_id, name:empName(e), department:e.department, site:x.code, sname:projName(x.code), since:x.in }); } }));
-      return { cols:[C('state','Status','strong'),C('date','Date','date'),C('code','Code','id'),C('name','Employee'),C('department','Department'),C('site','Site','id'),C('sname','Site name'),C('since','Checked in','mono')],
-        rows:R.sort((a,b)=>a.state.localeCompare(b.state)||a.date.localeCompare(b.date)) }; } },
-
-  { id:'hr-assignments', g:'HR', t:'Project assignments',
-    d:'Which projects each employee is assigned to (they can check in only at these). Who assigned each project and when.',
-    build:() => ({ cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('unit','Unit'),C('job','Job'),C('pcode','Project','mono'),C('pname','Project name'),C('by','Assigned by'),C('role','As'),C('when','When','mono')],
-      rows:S.empProjects.map(a => { const e = empOrBlank(a.emp_id); return { code:a.emp_id, name:empName(e), department:e.department, unit:e.unit, job:e.job_name,
-        pcode:a.project_code, pname:projName(a.project_code), by:a.assigned_by, role:a.assigned_role, when:fmtSent(a.assigned_at) }; })
-        .sort((x,y) => String(x.code).localeCompare(String(y.code), undefined, { numeric:true }) || String(x.pcode).localeCompare(String(y.pcode))) }) },
-  { id:'att-phone-alerts', g:'Attendance', t:'Phone sign-in attempts',
-    d:'Refused sign-ins on the phone app: someone using another employee\'s phone (🚨), or an employee on a phone that is not his registered one. Repeated tries within 30 minutes count as one entry.',
-    build:() => ({ cols:[C('when','Last attempt','mono'),C('kind','What happened','strong'),C('code','Tried by','id'),C('name','Name'),C('owner','Phone belongs to'),C('label','Phone'),C('tries','Tries','num'),C('status','Review')],
-      rows:S.phoneAlerts.map(a => ({ when:fmtSent(a.last_at), _date:String(a.last_at||'').slice(0,10), kind: a.kind==='other_employee_phone' ? '🚨 Another employee\'s phone' : 'ℹ Unregistered phone',
-        code:a.attempted_emp_id, name:a.attempted_name || empName(empById(a.attempted_emp_id)), owner: a.owner_emp_id ? `${a.owner_emp_id} ${a.owner_name || empName(empById(a.owner_emp_id))}` : '—',
-        label:a.device_label || '', tries:a.attempts, status: a.reviewed ? `✓ ${a.reviewed_by || ''}${a.review_note ? ' — ' + a.review_note : ''}` : 'Open' })) }) },
-  { id:'att-phones', g:'Attendance', t:'Registered phones',
-    d:'Which phone each active employee uses for the mobile app, when it was registered and last used. Reset a phone from the employee record.',
-    build:() => ({ cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('state','Phone'),C('label','Device'),C('reg','Registered','date'),C('seen','Last used','mono')],
-      rows:activeEmps().map(e=>{ const d=S.devices.find(x=>String(x.emp_id)===String(e.id)); return { code:e.id, name:empName(e), department:e.department, state:d?'Registered':'Not yet',
-        label:d?d.device_label:'', reg:d?String(d.registered_at).slice(0,10):'', seen:d?String(d.last_seen).slice(0,16).replace('T',' '):'' }; })
-        .sort((a,b)=>a.state.localeCompare(b.state)||String(a.code).localeCompare(String(b.code),undefined,{numeric:true})) }) },
-
-  // ── PROJECTS & COST ─────────────────────────────────────
-  { id:'prj-hours', g:'Projects & cost', t:'Labour hours by project',
-    d:'Hours worked on each project between the two dates, with the number of people and attendance days.',
-    build:() => { const m={}; S.attendance.forEach(a=>(a.projects||[]).forEach(x=>{ const r=m[x.code]=m[x.code]||{h:0,e:new Set(),d:0}; r.h+=num(x.hours); r.e.add(String(a.emp_id)); r.d++; }));
-      return { cols:[C('code','Project','id'),C('name','Name','strong'),C('hours','Hours','num',true),C('emps','Employees','int'),C('lines','Attendance lines','int',true),C('avg','Avg hours / employee','num')],
-        rows:Object.entries(m).sort((a,b)=>b[1].h-a[1].h).map(([c,r])=>({ code:c, name:projName(c), hours:r.h, emps:r.e.size, lines:r.d, avg:r.h/r.e.size })) }; } },
-  { id:'prj-cost', g:'Projects & cost', t:'Labour cost by project',
-    d:'Each employee\'s gross pay charged to projects in proportion to their attendance hours; monthly amounts entered against a project go straight to it. Employees with no attendance fall under "(unallocated)". Employer social insurance is not included.',
-    build:() => { const agg={}; laborCost().forEach(x=>{ const r=agg[x.code]=agg[x.code]||{h:0,a:0,d:0,e:new Set()}; r.h+=x.hours; r.a+=x.alloc; r.d+=x.direct; r.e.add(String(x.emp.id)); });
-      return { cols:[C('code','Project','id'),C('name','Name','strong'),C('emps','Employees','int'),C('hours','Hours','num',true),C('alloc','Allocated pay','num',true),C('direct','Direct allowances','num',true),C('total','Total cost','num',true),C('cph','Cost / hour','num')],
-        rows:Object.entries(agg).map(([c,r])=>({ code:c||'—', name:projName(c), emps:r.e.size, hours:r.h, alloc:r.a, direct:r.d, total:r.a+r.d, cph:r.h?(r.a+r.d)/r.h:0 })).sort((a,b)=>b.total-a.total) }; } },
-  { id:'prj-cost-detail', g:'Projects & cost', t:'Labour cost detail (employee × project)',
-    d:'The line-by-line allocation behind the labour cost report — one row per employee per project. Ideal for pivoting.',
-    build:() => ({ cols:[C('code','Employee','id'),C('name','Name','strong'),C('department','Department'),C('pcode','Project','id'),C('pname','Project name'),C('hours','Hours','num',true),C('share','Share','pct'),C('alloc','Allocated pay','num',true),C('direct','Direct','num',true),C('total','Total','num',true)],
-      rows:laborCost().map(x=>({ code:x.emp.id, name:empName(x.emp), department:x.emp.department, pcode:x.code||'—', pname:projName(x.code), hours:x.hours, share:x.share, alloc:x.alloc, direct:x.direct, total:x.total })) }) },
-  { id:'prj-log', g:'Projects & cost', t:'Project site log',
-    d:'Every project line between the two dates with its check-in and check-out — who was on which site, and when. Search by project code to see one site.',
-    build:() => ({ cols:[C('date','Date','date'),C('pcode','Project','id'),C('pname','Project name'),C('code','Employee','id'),C('name','Name','strong'),C('in','Check-in','mono'),C('out','Check-out','mono'),C('hours','Hours','num',true)],
-      rows:S.attendance.flatMap(a=>(a.projects||[]).map(x=>({ date:a.date, pcode:x.code, pname:projName(x.code), code:a.emp_id, name:a.emp_name, department:(empOrBlank(a.emp_id)).department, in:x.in||'', out:x.out||'', hours:num(x.hours) })))
-        .sort((a,b)=>a.date.localeCompare(b.date)||String(a.pcode).localeCompare(String(b.pcode))) }) },
-
-  // ── PAYROLL ─────────────────────────────────────────────
-  { id:'pay-register', g:'Payroll', t:'Payroll register',
-    d:'Pay for every active employee in the period. For one column per salary element, use Export CSV on the Payroll Run page.',
-    build:() => ({ cols:[C('code','Code','id'),C('name_ar','Arabic name','ar'),C('name','English name','strong'),C('department','Department'),C('days','Days paid'),C('basic','Basic','num',true),C('oadd','Other add.','num',true),C('ot','OT','num',true),C('hol','Holiday work','num',true),C('gross','Gross','num',true),C('si','Soc. ins.','num',true),C('loans','Loans','num',true),C('delay','Late & early','num',true),C('abs','Absence','num',true),C('pen','Penalties','num',true),C('oded','Other ded.','num',true),C('net','Net','num',true)],
-      rows:computeAll().map(r=>({ code:r.emp.id, name_ar:r.emp.name_ar, name:r.emp.name_en, department:r.emp.department, days:r.partial?`${r.days} / ${num(settings.daysPerMonth)||30}${r.joiner?' joiner':''}${r.leaver?' leaver':''}`:'full', basic:r.basic, oadd:r.otherAdd-r.holiday, ot:r.ot, hol:r.holiday, gross:r.gross, si:r.si, loans:r.loans, delay:r.delay, abs:r.absence, pen:r.penalty, oded:r.otherDed-r.delay-r.absence-r.penalty, net:r.net })) }) },
-  { id:'pay-summary', g:'Payroll', t:'Payroll summary by group', param:'group',
-    d:'Headcount and pay totals grouped by department, unit, entity or contract type.',
-    build:p => { const G=groupBy(computeAll(), r=>r.emp[p.group]); const T=(L,k)=>L.reduce((s,r)=>s+r[k],0);
-      return { cols:[C('grp','Group','strong'),C('n','Headcount','int',true),C('basic','Basic','num',true),C('gross','Gross','num',true),C('si','Soc. ins.','num',true),C('loans','Loans','num',true),C('oded','Other ded.','num',true),C('net','Net','num',true),C('avg','Avg net','num')],
-        rows:Object.entries(G).map(([k,L])=>({ grp:k, n:L.length, basic:T(L,'basic'), gross:T(L,'gross'), si:T(L,'si'), loans:T(L,'loans'), oded:T(L,'otherDed'), net:T(L,'net'), avg:T(L,'net')/L.length })).sort((a,b)=>b.net-a.net) }; } },
-  { id:'pay-elements', g:'Payroll', t:'Salary element summary',
-    d:'Total of each salary element for the period — use it to reconcile with the general ledger.',
-    build:() => { const m={}; computeAll().forEach(r=>r.lines.forEach(l=>{ const k=String(l.code); const x=m[k]=m[k]||{name:l.name,type:l.type,n:new Set(),amt:0}; x.amt+=l.amount; x.n.add(String(r.emp.id)); }));
-      return { cols:[C('code','Code','id'),C('name','Element','strong'),C('type','Type'),C('n','Employees','int'),C('add','Additions','num',true),C('ded','Deductions','num',true)],
-        rows:Object.entries(m).map(([c,x])=>({ code:c==='0'?'—':c, name:x.name, type:x.type, n:x.n.size, add:x.type==='Addition'?x.amt:0, ded:x.type==='Deduction'?x.amt:0 })).sort((a,b)=>(a.type===b.type?0:a.type==='Addition'?-1:1)||num(a.code)-num(b.code)) }; } },
-  { id:'pay-si', g:'Payroll', t:'Social insurance',
-    d:'Insured employees with their insurable amount and employee share for the period.',
-    build:() => ({ cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('insno','Insurance no.','id'),C('entity','Entity'),C('base','Insurable amount','num',true),C('rate','Rate %','num'),C('share','Employee share','num',true)],
-      rows:computeAll().filter(r=>String(r.emp.insurance||'').toLowerCase()==='insured').map(r=>{ const sa=String(r.emp.entity||'').toLowerCase().includes('saudi');
-        return { code:r.emp.id, name:empName(r.emp), department:r.emp.department, insno:r.emp.insurance_number, entity:r.emp.entity, base:num(r.emp.insurance_amount), rate:sa?num(settings.siRateSA):num(settings.siRateEG), share:r.si }; }) }) },
-  { id:'pay-bank', g:'Payroll', t:'Bank transfer & cash list',
-    d:'Net pay by payment method, bank and account — the list you send to the bank or hand to the cashier.',
-    build:() => { const R=computeAll().map(r=>({ code:r.emp.id, name_ar:r.emp.name_ar, name:r.emp.name_en, department:r.emp.department, method:r.emp.payment_method||'(not set)', bank:(r.emp.bank_branch||'').trim(), account:r.emp.bank_account, net:r.net }))
-        .sort((a,b)=>a.method.localeCompare(b.method)||a.bank.localeCompare(b.bank)||String(a.code).localeCompare(String(b.code),undefined,{numeric:true}));
-      const G=groupBy(R,r=>r.method);
-      return { cols:[C('code','Code','id'),C('name_ar','Arabic name','ar'),C('name','English name','strong'),C('method','Method'),C('bank','Bank'),C('account','Account','id'),C('net','Net pay','num',true)], rows:R,
-        note:Object.entries(G).map(([k,L])=>`${k}: ${L.length} employees, ${fmt(L.reduce((s,r)=>s+r.net,0))} EGP`).join(' · ') }; } },
-  { id:'pay-loans', g:'Payroll', t:'Loans',
-    d:'All staff loans with the amount settled, the balance outstanding and this period\'s deduction.',
-    build:() => ({ cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('ref','Reference','mono'),C('amt','Loan','num',true),C('months','Months','int'),C('inst','Instalment','num'),C('start','First deduction','mono'),C('settled','Settled','num',true),C('out','Outstanding','num',true),C('now','This period','num',true),C('end','Last instalment','mono'),C('pp','Postponed months'),C('status','Status')],
-      rows:S.loans.map(l=>{ const e=empOrBlank(l.emp_id); return { code:l.emp_id, name:empName(e), department:e.department, ref:l.reference, amt:num(l.loan_amount), months:num(l.periods), inst:num(l.installment),
-        start:l.start_period, settled:num(l.amount_settled), out:num(l.loan_amount)-num(l.amount_settled), now:loanInstalment(l,settings.period), end:loanEnd(l), pp:(l.postponed||[]).join(', '), status:l.status }; }) }) },
-
-  // ── HR ──────────────────────────────────────────────────
-  { id:'hr-headcount', g:'HR', t:'Headcount analysis', param:'group',
-    d:'Active headcount split by gender, contract type and insurance status.',
-    build:p => { const G=groupBy(activeEmps(), e=>e[p.group]); const c=(L,k,v)=>L.filter(e=>String(e[k]||'').toLowerCase()===v.toLowerCase()).length;
-      return { cols:[C('grp','Group','strong'),C('n','Active','int',true),C('m','Male','int',true),C('f','Female','int',true),C('perm','Permanent','int',true),C('temp','Temporary','int',true),C('con','Contract','int',true),C('ins','Insured','int',true),C('nins','Not insured','int',true)],
-        rows:Object.entries(G).map(([k,L])=>({ grp:k, n:L.length, m:c(L,'gender','Male'), f:c(L,'gender','Female'), perm:c(L,'contract_type','Permanent'), temp:c(L,'contract_type','Temporary'), con:c(L,'contract_type','Contract'), ins:c(L,'insurance','Insured'), nins:c(L,'insurance','Non insured') })).sort((a,b)=>b.n-a.n) }; } },
-  { id:'hr-master', g:'HR', t:'Employee master list',
-    d:'Every employee (active and inactive) with every field on file. Export for a complete HR extract.',
-    build:() => { const F=EMP_FIELDS.flatMap(s=>s[1]).filter(f => !isOfficer() || !PAY_FIELDS.includes(f[0]));
-      return { cols:F.map(([k,l,t])=>C(k,l, k==='name_ar'?'ar' : ['id','national_id','insurance_number','bank_account'].includes(k)?'id' : t==='number'?'num' : t==='date'?'date':'text')),
-        rows:[...S.employees].sort((a,b)=>String(a.id).localeCompare(String(b.id),undefined,{numeric:true})).map(e=>Object.fromEntries(F.map(([k])=>[k, k==='manager_id' ? (e.manager_id ? `${e.manager_id} — ${empName(empById(e.manager_id))}` : (e.top_of_org?'(top of organisation)':'')) : e[k]]))) }; } },
-  { id:'hr-movement', g:'HR', t:'Joiners & leavers',
-    d:'Employees whose employment date or resignation date falls between the two dates. “Days paid” is shown for dates inside the current payroll cycle.',
-    build:() => ({ cols:[C('type','Movement','strong'),C('code','Code','id'),C('name','Employee'),C('department','Department'),C('job','Job'),C('contract','Contract'),C('date','Date','date'),C('paid','Days paid','int')],
-      rows:[...S.employees.filter(e=>e.employment_date).map(e=>({type:'Joiner',e,date:String(e.employment_date).slice(0,10)})),
-            ...S.employees.filter(e=>e.resignation_date).map(e=>({type:'Leaver',e,date:String(e.resignation_date).slice(0,10)}))]
-        .sort((a,b)=>a.date.localeCompare(b.date))
-        .map(x=>({ type:x.type, code:x.e.id, name:empName(x.e), department:x.e.department, job:x.e.job_name, contract:x.e.contract_type, date:x.date, paid:inPeriod(x.date) ? employment(x.e, settings.period).days : null })) }) },
-  { id:'hr-alerts', g:'HR', t:'Probation & ID expiry alerts',
-    d:'Probation periods ending within 30 days, and national IDs expired or expiring within 60 days (active employees).',
-    build:() => { const R=[]; activeEmps().forEach(e=>{
-        const p=daysUntil(e.probation_end_date); if (p!==null && p>=0 && p<=30) R.push({alert:'Probation ending',e,date:e.probation_end_date,days:p});
-        const n=daysUntil(e.national_id_expiry); if (n!==null && n<=60) R.push({alert:n<0?'National ID expired':'National ID expiring',e,date:e.national_id_expiry,days:n}); });
-      return { cols:[C('alert','Alert','strong'),C('code','Code','id'),C('name','Employee'),C('department','Department'),C('date','Date','date'),C('days','Days left','int')],
-        rows:R.sort((a,b)=>a.days-b.days).map(x=>({ alert:x.alert, code:x.e.id, name:empName(x.e), department:x.e.department, date:x.date, days:x.days })) }; } },
-  { id:'hr-quality', g:'HR', t:'Data quality checks',
-    d:'Gaps that will cause wrong payslips or rejected bank transfers. Fix these before going live.',
-    build:() => { const R=[], add=(issue,e)=>R.push({issue,code:e.id,name:empName(e),department:e.department});
-      const pkg=new Set(S.fixed.filter(r=>fixedActive(r,settings.period)).map(r=>String(r.emp_id)));
-      activeEmps().forEach(e=>{
-        if(!pkg.has(String(e.id))) add('No fixed salary package this period',e);
-        if(!num(e.hour_pay)) add('No hour pay — overtime falls back to basic ÷ days ÷ hours',e);
-        const ins=String(e.insurance||'').toLowerCase()==='insured';
-        if(ins && !e.insurance_number) add('Insured but no insurance number',e);
-        if(ins && !num(e.insurance_amount)) add('Insured but insurable amount is zero',e);
-        if(String(e.payment_method||'').toLowerCase()==='bank' && !e.bank_account) add('Paid by bank but no account number',e);
-        if(!e.payment_method) add('No payment method',e);
-        if(!e.national_id) add('Missing national ID',e);
-        else if(String(e.nationality||'Egyptian').toLowerCase().startsWith('egypt') && !/^\d{14}$/.test(String(e.national_id))) add('National ID is not 14 digits',e);
-        if(!e.department) add('No department',e);
-        if(!e.manager_id && !e.top_of_org) add('No direct manager',e);
-        if(S.attendance.some(a=>String(a.emp_id)===String(e.id) && attNoOut(a))) add('Missing phone check-out in this cycle',e);
-      });
-      return { cols:[C('issue','Issue','strong'),C('code','Code','id'),C('name','Employee'),C('department','Department')], rows:R,
-        note:Object.entries(groupBy(R,r=>r.issue)).map(([k,L])=>`${k}: ${L.length}`).join(' · ') }; } },
-];
-
-// The Reports PAGE is React since 31 Oct 2026 (react/src/reports — list, dates, filters, columns, table, exports). Kept here: the
-// report definitions above (+ those added by parts 26, 37, 38, 39) and their calculations, which use the payroll / attendance engine.
-const MONEY_REPORT = r => r.g==='Payroll' || r.id==='prj-cost' || r.id==='prj-cost-detail';
-/** one report's columns and rows. For dates outside the loaded payroll cycle the page passes that range's data (attendance, phone
- *  taps, permissions, vacations, missions, penalties, undone check-outs): it is swapped into S only while the report is built.
+/** the reports as the page lists them */
+function reportDefs(){ return payEngine().reportDefs(); }
+/** pay figures: HR officers never see these @param {{ id: string, g: string }} r */
+function MONEY_REPORT(r){ return payEngine().MONEY_REPORT(r); }
+/** one report's columns and rows (other dates' lists swapped in while it runs)
  * @param {string} id @param {{ from: string, to: string, group: string, view: string }} p @param {any} D */
-function reportBuild(id, p, D){
-  const r = REPORTS.find(x => x.id === id); if (!r) throw new Error('This report no longer exists');
-  if (!D) return r.build(p);
-  /** @type {(keyof typeof S)[]} */ const keys = ['attendance','clocks','permissions','leaves','missions','penalties','undos'];
-  const old = {};
-  keys.forEach(k => { old[k] = S[k]; S[k] = D[k]; });
-  try { return r.build(p); } finally { keys.forEach(k => { S[k] = old[k]; }); }
-}
+function reportBuild(id, p, D){ return payEngine().reportBuild(id, p, D); }
+/** each employee's gross pay charged to projects (labour cost) */
+function laborCost(){ return payEngine().laborCost(); }
 function renderReports(){ if (typeof PKR !== 'undefined') PKR.render(); }
 /** opens a report on the Reports page (dashboard banners) @param {string} id */
 function openReport(id){ if (typeof PKR !== 'undefined') PKR.openReport(id); }
@@ -1441,22 +1164,7 @@ function lbText(b, reqDays, type, alreadyIn){
 // (the vacation windows' balance hints are React now — react/src/vacations/LeaveDialog and react/src/self/SelfDialogs; so is
 //  self-service's annual balance card — react/src/self)
 
-// report: Annual leave balance
-const repLB = REPORTS.find(r => r.id === 'lv-balance');
-if (repLB){
-  repLB.d = 'For the year of the current period: days earned (15 / 21 / 30 a year by service and insurance, part-year when joining), carried in from last year, taken, pending and remaining — plus the emergency days allowed and used.';
-  repLB.build = () => {
-    const y = Number(settings.period.slice(0, 4)), by = new Map((LB_ALL.rows || []).map(b => [String(b.emp_id), b]));
-    const take = (id, t) => S.leaves.filter(l => String(l.emp_id) === String(id) && l.status === 'Approved' && l.leave_type === t).reduce((s, l) => s + leaveDaysIn(l, `${y}-01-01`, `${y}-12-31`), 0);
-    return { cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('rate','Days a year now','num'),C('carry','Carried in','num',true),C('ent','Earned this year','num',true),
-                   C('taken','Taken','num',true),C('pend','Pending','num',true),C('rem','Remaining','num',true),C('emcap','Emergency allowed','num',true),C('emused','Emergency taken','num',true),
-                   C('from','May request from','date'),C('sick','Sick taken','num',true),C('unpaid','Unpaid taken','num',true)],
-      rows: LB_ALL.year === y ? activeEmps().map(e => { const b = by.get(String(e.id)) || {};
-        return { code:e.id, name:empName(e), department:e.department, rate:num(b.rate_today), carry:num(b.carry_in), ent:num(b.entitlement), taken:num(b.taken), pend:num(b.pending),
-                 rem:num(b.remaining), emcap:num(b.emergency_cap), emused:num(b.emergency_taken), from:b.eligible_from || '', sick:take(e.id, 'Sick'), unpaid:take(e.id, 'Unpaid') }; }) : [],
-      note: LB_ALL.year === y ? '' : 'Loading the balances…' };
-  };
-}
+// (the report "Annual leave balance" moved to React 2 Nov 2026 — react/src/reports/calc.ts; it reads LB_ALL through the bridge)
 /** the leave balances of all staff for the report "Annual leave balance" (the React Reports page asks when it opens it) @param {number} y */
 async function loadLeaveBalances(y){
   const { data, error } = await sb.rpc('leave_balances', { p_year:y });
@@ -1640,33 +1348,7 @@ async function loadSelfMissions(){ return (await pkr()).loadSelfMissions(); }   
 // ═════════════════════════════════════════════════════════
 S.undos = [];
 // (the undone check-outs of the period are read after every period load into S.undos — react/src/data/load.ts loadPeriodData)
-const hmMin = s => { const m = /^(\d{1,2}):(\d{2})/.exec(String(s || '')); return m ? +m[1] * 60 + +m[2] : null; };
-function dayGaps(a){
-  const segs = (a.projects || []).filter(x => x.in && x.out && !x.forgotten).map(x => ({ x, i: hmMin(x.in), o: hmMin(x.out) }))
-    .filter(s => s.i !== null && s.o !== null).sort((p, q) => p.i - q.i);
-  const gaps = [];
-  for (let k = 1; k < segs.length; k++) { const g = segs[k].i - segs[k - 1].o; if (g > 0) gaps.push({ from: segs[k - 1].x.out, to: segs[k].x.in, min: g }); }
-  return { segs, gaps };
-}
-REPORTS.push({ id:'att-returns', g:'Attendance', t:'Returns after check-out and undone check-outs',
-  d:'Days where an employee checked out and later checked in again (the time away is NOT counted in his hours), and check-outs the employee undid within 5 minutes. Switching site is not a gap — travel between sites is counted.',
-  build:() => {
-    const und = {}; (S.undos || []).forEach(u => { const k = u.emp_id + '|' + u.date; (und[k] = und[k] || []).push(u.out_time); });
-    const R = [];
-    S.attendance.forEach(a => {
-      const { segs, gaps } = dayGaps(a), u = und[a.emp_id + '|' + a.date] || [];
-      if (!gaps.length && !u.length) return;
-      const e = empOrBlank(a.emp_id), away = gaps.reduce((s, g) => s + g.min, 0);
-      R.push({ date:a.date, code:a.emp_id, name:empName(e), department:e.department, unit:e.unit,
-        periods: segs.map(s => `${s.x.in}–${s.x.out}${s.x.code ? ' ' + s.x.code : ''}`).join(' · '), n: segs.length,
-        gapsTxt: gaps.map(g => `${g.from} → ${g.to}`).join(' · '), away: away / 60, longest: gaps.length ? Math.max(...gaps.map(g => g.min)) / 60 : 0,
-        hours: num(a.total_hours), undone: u.length ? `↩ ${u.length} (at ${u.sort().join(', ')})` : '' });
-    });
-    return { cols:[C('date','Date','date'),C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('unit','Unit'),
-        C('periods','Periods (check-in – check-out)'),C('n','Periods','int'),C('gapsTxt','Away (out → back in)'),C('away','Time away (h)','num',true),
-        C('longest','Longest absence (h)','num'),C('hours','Hours counted','num'),C('undone','Undone check-outs')],
-      rows: R.sort((p, q) => p.date.localeCompare(q.date) || String(p.code).localeCompare(String(q.code), undefined, { numeric:true })) };
-  } });
+// (dayGaps and the report itself moved to React 2 Nov 2026 — react/src/reports/calc.ts)
 
 // ═════════════════════════════════════════════════════════
 //  BIRTH DATE FROM THE EGYPTIAN NATIONAL ID (23 Oct 2026, with 73-birth-date-from-national-id.sql)
@@ -1682,17 +1364,7 @@ function birthFromNid(nid){
   if (m < 1 || m > 12 || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
-REPORTS.push({ id:'emp-birth-id', g:'HR', t:'Birth date different from national ID',
-  d:'Employees whose recorded birth date does not match the date written in their Egyptian national ID (digits 2–7). Check the ID card: either the birth date or the ID number was typed wrong. A wrong birth date affects the leave entitlement at age 50, the first-sign-in question and the birthday greeting.',
-  build:() => {
-    const rows = (S.employees || []).map(e => ({ e, idb: birthFromNid(e.national_id) }))
-      .filter(x => x.idb && x.e.birth_date && String(x.e.birth_date).slice(0, 10) !== x.idb)
-      .map(({ e, idb }) => ({ code:e.id, name:empName(e), status:e.status, department:e.department, rec:String(e.birth_date).slice(0, 10), idb,
-        diff: String(e.birth_date).slice(0, 4) !== /** @type {string} — rows without one were filtered out */ (idb).slice(0, 4) ? 'Year differs' : String(e.birth_date).slice(5, 7) !== /** @type {string} */ (idb).slice(5, 7) ? 'Month differs' : 'Day differs' }));
-    return { cols:[C('code','Code','id'),C('name','Employee','strong'),C('status','Status'),C('department','Department'),
-        C('rec','Recorded birth date','date'),C('idb','Birth date in the national ID','date'),C('diff','Difference')],
-      rows: rows.sort((a, b) => String(a.code).localeCompare(String(b.code), undefined, { numeric:true })) };
-  } });
+// (the report "Birth date different from national ID" moved to React 2 Nov 2026 — react/src/reports/calc.ts)
 
 // ── National ID: exactly 14 digits (with 74-national-id-14-digits.sql) — the employee window (React) keeps digits only, stops at 14,
 // shows "n / 14 digits" and refuses Save otherwise; the database refuses it too.
@@ -1733,15 +1405,7 @@ function employeeMissing(r, withPay){
   }
   return m;
 }
-REPORTS.push({ id:'emp-missing', g:'HR', t:'Missing employee data',
-  d:'Active employees with empty fields that apply to them. HR cannot save an employee until these are filled; new employees cannot be added with gaps.',
-  build:() => {
-    const pay = !isOfficer();
-    const rows = (S.employees || []).filter(e => e.status !== 'Inactive').map(e => ({ e, m: employeeMissing(e, pay) })).filter(x => x.m.length)
-      .map(({ e, m }) => ({ code:e.id, name:empName(e), department:e.department, unit:e.unit, n:m.length, fields:m.map(x => x[1]).join(', ') }));
-    return { cols:[C('code','Code','id'),C('name','Employee','strong'),C('department','Department'),C('unit','Unit'),C('n','Missing','int'),C('fields','Fields to fill')],
-      rows: rows.sort((a, b) => b.n - a.n || String(a.code).localeCompare(String(b.code), undefined, { numeric:true })) };
-  } });
+// (the report "Missing employee data" moved to React 2 Nov 2026 — react/src/reports/calc.ts)
 
 // ═════════════════════════════════════════════════════════
 //  DATA REQUESTS — HR asks employees to update their own data on the phone (23 Oct 2026, 77 + 78)

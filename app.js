@@ -1834,33 +1834,10 @@ function officerPatch(client){
 //  · At 9 minutes a window warns "You will be signed out in 60 seconds" with a button to stay signed in.
 //  · At 10 minutes the app signs out and shows the sign-in screen with an explanation.
 // ═════════════════════════════════════════════════════════
-const IDLE_LIMIT_MS = 10 * 60 * 1000, IDLE_WARN_MS = 9 * 60 * 1000, IDLE_KEY = 'pk_last_active';
-let idleLast = Date.now(), idleOut = false;
-function idleStore(t){ try { localStorage.setItem(IDLE_KEY, String(t)); } catch(e){} }
-function idleRead(){ try { return Number(localStorage.getItem(IDLE_KEY)) || 0; } catch(e){ return 0; } }
-function idleSignedIn(){ return !!(typeof ME !== 'undefined' && ME && sb); }
-function idleTouch(){
-  const now = Date.now();
-  if (now - idleLast > 5000) { idleLast = now; idleStore(now); }     // write at most every 5 s
-  else idleLast = now;
-  if (typeof PKR !== 'undefined') PKR.idleWarning(null);           // the warning window (React — react/src/windows) closes
-}
-['mousemove','mousedown','keydown','wheel','scroll','touchstart'].forEach(ev => document.addEventListener(ev, idleTouch, { passive:true, capture:true }));
-async function idleSignOut(){
-  if (idleOut) return; idleOut = true;
-  try { sessionStorage.setItem('pk_idle_out', '1'); } catch(e){}
-  try { await sb.auth.signOut(); } catch(e){}
-  location.reload();
-}
-function idleCheck(){
-  if (!idleSignedIn() || idleOut) return;
-  const last = Math.max(idleLast, idleRead()), quiet = Date.now() - last;
-  if (quiet >= IDLE_LIMIT_MS) return idleSignOut();
-  // the warning window is React (react/src/windows): it shows the seconds left
-  if (typeof PKR !== 'undefined') PKR.idleWarning(quiet >= IDLE_WARN_MS ? Math.max(1, Math.ceil((IDLE_LIMIT_MS - quiet) / 1000)) : null);
-}
-setInterval(idleCheck, 1000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) idleCheck(); });   // a computer waking from sleep
+// The timer is React since 2 Nov 2026 (react/src/session/idle.ts — the same 9 / 10 minutes, shared between tabs, checked on waking).
+// These old names forward there (the "Are you still there?" window's buttons use them through the bridge).
+function idleTouch(){ if (typeof PKR !== 'undefined') PKR.idleTouch(); }
+async function idleSignOut(){ return (await pkr()).idleSignOut(); }
 // (the sign-in screen explains why the user was signed out: React since 2 Nov 2026 — react/src/session/session.ts showLogin)
 // (the "still there?" window is React — react/src/windows; its buttons call idleSignOut / idleTouch through the bridge)
 

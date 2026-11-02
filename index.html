@@ -34,6 +34,10 @@ body{background:var(--bg);color:var(--text);font-family:'Inter','Segoe UI',Tahom
 .sidebar{width:210px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);padding:16px 0;position:sticky;top:56px;height:calc(100vh - 56px);overflow-y:auto}
 .sidebar{transition:width .15s ease}
 .nav-toggle{display:flex;align-items:center;gap:10px;margin:0 10px 10px;padding:8px 12px;border-radius:var(--rs);cursor:pointer;color:var(--muted);font-size:13px;font-weight:600;border:1px solid var(--border);background:transparent;width:calc(100% - 20px);font-family:inherit}
+/* date boxes (React DateInput, class dmy): 📅 icon at the right, red when the text is not a real date, faded when switched off (was injected by part44) */
+input.dmy{padding-right:30px!important;min-width:128px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238a93a6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;font-variant-numeric:tabular-nums}
+input.dmy.dmy-bad{border-color:#d33!important;box-shadow:0 0 0 2px rgba(221,51,51,.18)}
+input.dmy:disabled{opacity:.55;cursor:not-allowed}
 #react-top,#react-nav,#react-self-top,#react-self-nav{display:contents}   /* React frame mounts: as if their lines sat directly in the bar / menu */
 .nav-toggle:hover{color:var(--text);background:var(--hover)}
 
@@ -362,6 +366,6 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 
 <div id="react-lists"></div>   <!-- the typing boxes' lists dl-emp / dl-proj / dl-emp-mgr / dl-jobs, drawn by React: react/src/shell -->
 <div id="react-toast"></div>   <!-- the message at the bottom right, drawn by React: react/src/shell -->
-<script src="app.js?v=89eecef6c6fa"></script>
-<script src="react.js?v=bfc531cb1b3f"></script>
+<script src="app.js?v=83d7b6d94ae3"></script>
+<script src="react.js?v=5d0aa7bce574"></script>
 </body></html>

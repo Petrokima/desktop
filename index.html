@@ -231,7 +231,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
   </div>
 </div>
 
-<div id="loader"><div class="spin" style="width:28px;height:28px"></div><div id="loader-msg">Loading data…</div></div>
+<div id="react-loader"></div>   <!-- the "Loading …" cover, drawn by React: react/src/shell -->
 
 <div id="app" style="display:none">
 <div class="topbar"><div id="react-top"></div></div>   <!-- drawn by React: react/src/frame (top bar + the left menu) -->
@@ -360,9 +360,8 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 <div id="react-twostep"></div>
 <div id="react-windows"></div>
 
-<datalist id="dl-emp"></datalist>
-<datalist id="dl-proj"></datalist>
-<div id="toast"></div>
-<script src="app.js?v=2b0139d32e3a"></script>
-<script src="react.js?v=313eb9bda52c"></script>
+<div id="react-lists"></div>   <!-- the typing boxes' lists dl-emp / dl-proj / dl-emp-mgr / dl-jobs, drawn by React: react/src/shell -->
+<div id="react-toast"></div>   <!-- the message at the bottom right, drawn by React: react/src/shell -->
+<script src="app.js?v=89eecef6c6fa"></script>
+<script src="react.js?v=bfc531cb1b3f"></script>
 </body></html>

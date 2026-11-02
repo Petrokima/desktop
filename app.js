@@ -150,16 +150,18 @@ function chip(s){
   return s ? `<span class="chip ${m[s]||'c-grey'}">${esc(s)}</span>` : '';
 }
 const NOPERM = "Your role doesn't allow this change";
+// The message at the bottom right and the "Loading …" cover are React since 2 Nov 2026 (react/src/shell: the wording of database
+// refusals, the colours, the 3.8 seconds). The old code keeps only the latest message / the cover's state, so nothing is lost
+// when it is called before the React bundle has loaded.
+const TOAST = { msg: '', type: 'ok', seq: 0 };
+/** @param {unknown} msg @param {string} [type] 'ok' | 'warn' | 'err' */
 function toast(msg, type='ok'){
-  msg = String(msg);
-  if (/row-level security|permission denied/i.test(msg)) msg = NOPERM;
-  const t=$('toast'), c={ok:['var(--accent2)','#0f1117'],warn:['var(--warn)','#fff'],err:['var(--danger)','#fff']}[type]||['var(--accent2)','#0f1117'];
-  t.style.background=c[0]; t.style.color=c[1]; t.textContent=msg; t.style.transform='translateY(0)'; t.style.opacity='1';
-  clearTimeout(t._h); t._h=setTimeout(()=>{ t.style.transform='translateY(90px)'; t.style.opacity='0'; }, 3800);
+  TOAST.msg = String(msg); TOAST.type = type; TOAST.seq += 1;
+  if (typeof PKR !== 'undefined') PKR.toastShown();
 }
-function loader(on, msg){ $('loader').style.display = on ? 'flex' : 'none'; if(msg) $('loader-msg').textContent = msg; }
-function openM(id){ $(id).classList.add('open'); }
-function closeM(id){ $(id).classList.remove('open'); }
+const LOADING = { on: false, msg: 'Loading data…' };
+/** @param {boolean} on @param {string} [msg] the words (kept when none is given) */
+function loader(on, msg){ LOADING.on = on; if (msg) LOADING.msg = msg; if (typeof PKR !== 'undefined') PKR.loadingChanged(); }
 /** @returns {Employee | undefined} */
 function empById(id){ return S.employees.find(e => String(e.id) === String(id)); }
 /** the employee, or an empty record when the code is unknown (never undefined) @returns {Employee} */
@@ -387,17 +389,9 @@ async function loadAll(){
   }finally{ loader(false); }
 }
 
-function buildLists(){
-  const act = S.employees.filter(e => e.status !== 'Inactive' || onPayroll(e, settings.period));
-  // the label repeats code + name: Firefox shows and searches only the label (Chrome shows both)
-  $('dl-emp').innerHTML = act.map(e => `<option value="${esc(e.id)} — ${esc(empName(e))}" label="${esc(e.id)} — ${esc(empName(e))}${e.name_ar && e.name_ar !== empName(e) ? ' · ' + esc(e.name_ar) : ''}"></option>`).join('');
-  $('dl-emp-mgr') ? null : document.body.insertAdjacentHTML('beforeend','<datalist id="dl-emp-mgr"></datalist>');
-  if (!$('dl-jobs')) document.body.insertAdjacentHTML('beforeend','<datalist id="dl-jobs"></datalist>');
-  $('dl-jobs').innerHTML = [...new Set(S.employees.filter(e=>e.status!=='Inactive').map(e=>String(e.job_name||'').trim()).filter(Boolean))].sort().map(j=>`<option value="${esc(j)}">`).join('');
-  $('dl-emp-mgr').innerHTML = S.employees.filter(e=>e.status!=='Inactive').map(e=>`<option value="${esc(e.id)} — ${esc(empName(e))}" label="${esc(e.id)} — ${esc(empName(e))}${e.job_name ? ' · ' + esc(e.job_name) : ''}"></option>`).join('');
-  $('dl-proj').innerHTML = S.projects.filter(p => p.status !== 'Inactive' && p.status !== 'Completed')
-                            .map(p => `<option value="${esc(p.id)} — ${esc(p.name||'')}"></option>`).join('');
-}
+// the lists the typing boxes suggest from (dl-emp, dl-emp-mgr, dl-jobs, dl-proj) are React since 2 Nov 2026 (react/src/shell
+// SharedLists): they follow S.employees / S.projects / the period by themselves; the old callers only ask for a redraw
+function buildLists(){ if (typeof PKR !== 'undefined') PKR.render(); }
 
 // Pages are prepared when they are opened (the payroll calculation, reports and labour cost are the heavy ones)
 const PAGE_RENDER = { dashboard:()=>renderDashboard(), projects:()=>renderProjects(),
@@ -411,7 +405,7 @@ function renderAll(){
   SHOWN_PERIOD = settings.period;   // the top bar's period badge (react/src/frame)
   DIRTY = new Set(Object.keys(PAGE_RENDER));
   // always kept current: the dashboard, the menu badges, lock and period notices
-  renderPageIfNeeded('dashboard'); renderPageIfNeeded('reporting'); renderLocks(); renderPeriodHint();
+  renderPageIfNeeded('dashboard'); renderPageIfNeeded('reporting'); renderPeriodHint();
   renderPageIfNeeded(currentPage());
 }
 
@@ -886,9 +880,7 @@ document.addEventListener('click', async ev => {
   const nav = t.closest('[data-page]'); if (nav && nav.classList.contains('nav-item')) return showPage(nav.dataset.page);
   const nv = t.closest('[data-nav]'); if (nv) return showPage(nv.dataset.nav);
   const orp = t.closest('[data-open-report]'); if (orp) { showPage('reports'); return openReport(orp.dataset.openReport || ''); }
-  const cl = t.closest('[data-close]'); if (cl) return closeM(cl.dataset.close);
-  // a click beside an old window closed it; the React windows (role="dialog") close only with their own buttons or Esc
-  if (t.classList && t.classList.contains('overlay') && !t.hasAttribute('role')) return t.classList.remove('open');
+  // (the old windows' data-close buttons and "click beside a window" are gone: every window is React — role="dialog", × or Esc)
   const act = t.closest('[data-act]');
   if (act){ const a = act.dataset.act;
     if (a==='new-emp') return openEmp(null);
@@ -1456,12 +1448,7 @@ function exportRunCsv(run, period){
   a.download=`petrokima-payroll-${period}${S.runs.some(x=>x.period===period)?'-approved':'-draft'}.csv`; a.click(); toast('Payroll exported');
 }
 
-// Lock notices on pages whose data belongs to an approved cycle
-function renderLocks(){
-  const run = currentRun();
-  document.querySelectorAll('.lock-note').forEach(el => el.innerHTML = run
-    ? `<div class="alert a-warn">🔒 The <b>${esc(periodLabel(run.period))}</b> payroll is approved and locked. Records in this cycle can no longer be added, changed or deleted — the database refuses it. Switch to an open period in Settings to keep working.</div>` : '');
-}
+// (renderLocks is gone: no page had a .lock-note box left — the React pages draw their own 🔒 notes)
 
 // ═════════════════════════════════════════════════════════
 //  REPORTING LINES — moved to React 30 Oct 2026 (react/src/reporting). The old code keeps the 🧭 menu badge and the step after a change.
@@ -1640,16 +1627,7 @@ async function exportPageExcel(pageEl){
   toast('Excel file downloaded');
 }
 const todayISO = () => new Date().toISOString().slice(0,10);
-(function addExcelButtons(){
-  document.querySelectorAll('.page').forEach(pg => {
-    if (pg.id === 'page-reports' || pg.id === 'page-dashboard') return;
-    if (pg.querySelector('[id^="react-"]')) return;          // React pages draw their own ⬇ Excel (react/src/shared/ExcelButton)
-    const head = pg.querySelector('.page-header'); if (!head || head.querySelector('[data-xl]')) return;
-    const b = document.createElement('button'); b.className = 'btn btn-ghost'; b.dataset.xl = '1'; b.textContent = '⬇ Excel'; b.title = 'Download what this page shows (with the current filters) as an Excel file';
-    const grp = head.querySelector('.btn-group'); if (grp) grp.insertBefore(b, grp.firstChild); else head.appendChild(b);
-  });
-})();
-document.addEventListener('click', e => { const b = /** @type {PageEl} */ (e.target).closest('[data-xl]'); if (b) exportPageExcel(b.closest('.page')); });
+// (every page draws its own ⬇ Excel in React — react/src/shared/ExcelButton calls exportPageExcel through the bridge)
 
 // ═════════════════════════════════════════════════════════
 //  PROJECT COSTS FOR ACCOUNTING — totals per project only (no names), published for approved months

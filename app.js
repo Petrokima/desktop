@@ -178,47 +178,22 @@ function elOrBlank(c){ return elByCode(c) || /** @type {SalaryElement} */ ({}); 
 function parseEmpInput(v){ const id = String(v||'').split(' — ')[0].trim(); return empById(id) ? id : null; }
 function parseProjInput(v){ const id = String(v||'').split(' — ')[0].trim(); return S.projects.find(p=>String(p.id)===id) ? id : null; }
 
-// Fetch every row of a table in batches of 1000 (Supabase's per-request cap)
-// Tables with a unique "id" get it as a second sort key, so batches of 1,000 never overlap or skip rows
-const TIEBREAK = new Set(['attendance','payroll_period_elements','attendance_permissions','employee_leaves','employee_penalties',
-                          'employee_salary_elements','employee_loans','hr_requests','clock_events']);
+// The data loading is React since 2 Nov 2026 (react/src/data/load.ts: fetchAll in batches of 1,000, loadSettings, loadPeriodData with
+// the menu counts and the undone check-outs, loadAll, loadSelf with the missions). These old names forward there, so every caller
+// keeps working; the data is still kept here (S, settings, the …TableMissing flags, holidaySet, SD, SMIS).
+/** the React bundle runs right after app.js; a question asked before it is there waits for it */
+async function pkr(){
+  if (typeof PKR === 'undefined' && document.readyState === 'loading') await new Promise(r => document.addEventListener('DOMContentLoaded', r, { once: true }));
+  if (typeof PKR === 'undefined') throw new Error('The app could not load completely — reload the page (F5).');
+  return PKR;
+}
 /**
  * @template {keyof DB['Tables'] | keyof DB['Views']} T
  * @param {T} table  a table or view of our database (checked)
  * @param {string} [orderCol]  @param {(q: any) => any} [filterFn]  extra filters, e.g. q => q.eq('period', p)
  * @returns {Promise<(T extends keyof DB['Tables'] ? Row<T> : DB['Views'][T & keyof DB['Views']]['Row'])[]>} every row
  */
-async function fetchAll(table, orderCol, filterFn){
-  const size = 1000;
-  const page = (from, withCount) => {
-    const db = /** @type {any} — table chosen by the caller; the result type is given above */ (sb);
-    let q = withCount ? db.from(table).select('*', { count:'exact' }) : db.from(table).select('*');
-    if (filterFn) q = filterFn(q);
-    if (orderCol) q = q.order(orderCol, { ascending:true });
-    if (TIEBREAK.has(table) && orderCol !== 'id') q = q.order('id', { ascending:true });
-    return q.range(from, from + size - 1);
-  };
-  const first = await page(0, true);
-  if (first.error) throw new Error(`${table}: ${first.error.message}`);
-  let out = first.data || [];
-  if (out.length < size) return out;
-  if (typeof first.count === 'number'){
-    // we know how many rows there are: fetch the remaining batches 4 at a time instead of one by one
-    const froms = []; for (let f = size; f < first.count; f += size) froms.push(f);
-    const parts = new Array(froms.length); let next = 0;
-    await Promise.all(Array.from({ length: Math.min(4, froms.length) }, async () => {
-      while (next < froms.length){ const k = next++; const r = await page(froms[k]);
-        if (r.error) throw new Error(`${table}: ${r.error.message}`); parts[k] = r.data || []; }
-    }));
-    return out.concat(...parts);
-  }
-  for (let from = size; ; from += size){                        // row count unknown: one batch at a time
-    const r = await page(from); if (r.error) throw new Error(`${table}: ${r.error.message}`);
-    out = out.concat(r.data || []); if (!r.data || r.data.length < size) break;
-  }
-  return out;
-}
-async function chunked(rows, fn, size=500){ for(let i=0;i<rows.length;i+=size){ const r = await fn(rows.slice(i,i+size)); if (r && r.error) throw r.error; } }
+async function fetchAll(table, orderCol, filterFn){ return /** @type {any} — typed above */ ((await pkr()).fetchAll(table, orderCol, filterFn)); }
 
 // ═════════════════════════════════════════════════════════
 //  CONNECTION
@@ -330,69 +305,9 @@ async function disconnect(){ try { if (sb) await sb.auth.signOut(); } catch(e){}
 // ═════════════════════════════════════════════════════════
 //  LOAD
 // ═════════════════════════════════════════════════════════
-async function loadSettings(){
-  const { data } = await sb.from('settings').select('*').eq('key','payroll');
-  settings = { ...DEFAULTS, .../** @type {Partial<typeof settings>} — the saved settings package */ ((data && data[0] && data[0].value) || {}) };
-  if(!settings.period) settings.period = thisMonth();
-}
-
-async function loadPeriodData(){
-  const p = settings.period, y = p.slice(0,4), ps = periodStart(p), pe = periodEnd(p);
-  loader(true, 'Loading period ' + p + '…');
-  const soft = (promise, onFail) => promise.catch(e => { console.warn(e.message); if (onFail) onFail(); return null; });
-  const [att, mon, perm, lv, pen, hol, runs, clocks, devices, hrreq, par, appr, phal, eproj, miss] = await Promise.all([
-    fetchAll('attendance','date', q => q.gte('date', ps).lte('date', pe)),
-    fetchAll('payroll_period_elements','emp_id', q => q.eq('period', p)),
-    soft(fetchAll('attendance_permissions','date', q => q.gte('date', ps).lte('date', pe))),
-    soft(fetchAll('employee_leaves','date_from', q => q.lte('date_from', pe > `${y}-12-31` ? pe : `${y}-12-31`).gte('date_to', ps < `${y}-01-01` ? ps : `${y}-01-01`))),   // whole year AND the whole cycle (a January cycle starts in December)
-    soft(fetchAll('employee_penalties','incident_date', q => q.gte('apply_period', `${y}-01`).lte('apply_period', `${y}-12`))),
-    soft(fetchAll('public_holidays','date')),
-    soft(fetchAll('payroll_runs','period')),
-    soft(fetchAll('clock_events','at', q => q.gte('local_date', ps).lte('local_date', pe))),
-    soft(fetchAll('employee_devices','emp_id')),
-    soft(fetchAll('hr_requests','created_at')),
-    soft(fetchAll('project_allowance_rules','created_at')),
-    soft(fetchAll('allowance_approvals','emp_id', q => q.eq('period', p))),
-    soft(fetchAll('phone_alerts','last_at')),
-    soft(fetchAll('employee_projects','emp_id')),
-    soft(fetchAll('employee_missions','date_from', q => q.gte('date_to', ps).lte('date_from', pe))) ]);
-  S.attendance = att; S.monthly = mon;
-  S.permissions = perm || []; permTableMissing = perm === null;
-  S.leaves = lv || [];        leaveTableMissing = lv === null;
-  S.penalties = pen || [];    penTableMissing = pen === null;
-  S.holidays = hol || [];     holTableMissing = hol === null;
-  holidaySet = new Set(S.holidays.map(h => h.date));
-  S.runs = runs || [];        runsTableMissing = runs === null;
-  S.runLines = S.runs.some(r => r.period === p) ? (await soft(fetchAll('payroll_run_lines','emp_id', q => q.eq('period', p)))) || [] : [];
-  S.clocks = clocks || []; S.devices = devices || [];
-  S.hrreq = hrreq || [];      hrTableMissing = hrreq === null;
-  S.parRules = par || [];     parTableMissing = par === null;
-  S.allowAppr = appr || [];   apprTableMissing = appr === null;
-  S.phoneAlerts = (phal || []).sort((a,b) => String(b.last_at).localeCompare(String(a.last_at)));
-  S.empProjects = eproj || [];  assignTableMissing = eproj === null;
-  S.missions = miss || [];
-}
-
-async function loadAll(){
-  try{
-    loader(true,'Loading settings…');   await loadSettings();
-    loader(true,'Loading employees, projects, salary structure and the period — all at once…');
-    const t0 = performance.now();
-    const [emps, projs, els, fx, ln] = await Promise.all([
-      fetchAll(isOfficer() ? 'employees_safe' : 'employees','id'),          // HR Officers never receive pay figures
-      fetchAll('projects','id'),
-      fetchAll('salary_elements','sort_order'),
-      fetchAll('employee_salary_elements','emp_id'),
-      fetchAll('employee_loans','created_at'),
-      loadPeriodData() ]);
-    S.employees = /** @type {Employee[]} — HR officers get the safe view: the same rows without pay and bank columns */ (emps); S.projects = projs; S.elements = els; S.fixed = fx; S.loans = ln;
-    LOAD_MS = Math.round(performance.now() - t0);
-    buildLists(); applySettingsUI(); renderAll();
-    toast(`Loaded ${S.employees.length} employees · ${S.projects.length.toLocaleString()} projects · ${S.attendance.length.toLocaleString()} attendance records in ${(LOAD_MS/1000).toFixed(1)} s`);
-  }catch(e){
-    toast('Load error — ' + e.message, 'err'); console.error(e);
-  }finally{ loader(false); }
-}
+async function loadSettings(){ return (await pkr()).loadSettings(); }
+async function loadPeriodData(){ return (await pkr()).loadPeriodData(); }
+async function loadAll(){ return (await pkr()).loadAll(); }
 
 // the lists the typing boxes suggest from (dl-emp, dl-emp-mgr, dl-jobs, dl-proj) are React since 2 Nov 2026 (react/src/shell
 // SharedLists): they follow S.employees / S.projects / the period by themselves; the old callers only ask for a redraw
@@ -403,7 +318,7 @@ const PAGE_RENDER = { dashboard:()=>renderDashboard(), projects:()=>renderProjec
   loans:()=>renderLoans(), permissions:()=>renderPermissions(),
   leaves:()=>renderLeaves(), exempt:()=>renderExempt(), penalties:()=>renderPenalties(), holidays:()=>renderHolidays(), hrreq:()=>renderHrRequests(),
   reporting:()=>renderReporting(), history:()=>renderHistory(), parrules:()=>renderParRules(), approvals:()=>renderApprovals(), assign:()=>renderAssign(), calc:()=>renderCalc(), news:()=>renderNewsPage() };
-let DIRTY = new Set(), LOAD_MS = 0;
+let DIRTY = new Set();   // (LOAD_MS is gone: nothing read it — the load time is only in the "Loaded …" message)
 function currentPage(){ const p = document.querySelector('.page.active'); return p ? p.id.replace('page-','') : 'dashboard'; }
 function renderPageIfNeeded(name){ if (DIRTY.has(name) && PAGE_RENDER[name]) { DIRTY.delete(name); PAGE_RENDER[name](); } }
 function renderAll(){
@@ -1334,27 +1249,9 @@ const fmtHM = v => { const tm = Math.round(num(v) * 60), h = Math.floor(tm / 60)
  *   manager?: FnResult<'my_manager'>[number] | null, team?: AllowanceApproval[], teamLeaves?: Leave[], teamPerms?: Permission[],
  *   myTeam?: FnResult<'my_team'> }}} — the signed-in person's own data (self-service) */
 let SD = { emp:null, leaves:[], perms:[], reqs:[] };
-async function loadSelf(){
-  const id = SELF.me.emp_id;
-  try {
-    await loadSettings();
-    try { S.holidays = await fetchAll('public_holidays','date'); holidaySet = new Set(S.holidays.map(h=>h.date)); } catch(e){}
-    const [emp, lv, pm, rq, sl, mg, tm, tlv, tpm, myt] = await Promise.all([
-      sb.from('employees').select('*').eq('id', id),
-      fetchAll('employee_leaves','date_from', q=>q.eq('emp_id', id)).catch(()=>[]),
-      fetchAll('attendance_permissions','date', q=>q.eq('emp_id', id)).catch(()=>[]),
-      fetchAll('hr_requests','created_at', q=>q.eq('emp_id', id)).catch(()=>[]),
-      fetchAll('payroll_run_lines','period', q=>q.eq('emp_id', id)).catch(()=>[]),
-      sb.rpc('my_manager').then(r=>r.data||[], ()=>[]),
-      fetchAll('allowance_approvals','submitted_at', q=>q.eq('manager_id', id)).catch(()=>[]),
-      fetchAll('employee_leaves','date_from', q=>q.eq('manager_id', id)).catch(()=>[]),
-      fetchAll('attendance_permissions','date', q=>q.eq('manager_id', id)).catch(()=>[]),
-      sb.rpc('my_team').then(r=>r.data||[], ()=>[]) ]);
-    SD = { emp: emp.data && emp.data[0], leaves: lv, perms: pm, reqs: rq, slips: sl, manager: (mg||[])[0] || null, team: tm || [],
-           teamLeaves: (tlv||[]).filter(l => String(l.emp_id)!==String(id)), teamPerms: (tpm||[]).filter(p => String(p.emp_id)!==String(id)), myTeam: myt || [] };
-  } catch(e){ toast(e.message,'err'); }
-  renderSelf();
-}
+// (read by React since 2 Nov 2026 — react/src/data/load.ts loadSelf: his missions, the settings, holidays, his record, requests,
+// payslips, manager and team into SD / SMIS, then renderSelf)
+async function loadSelf(){ return (await pkr()).loadSelf(); }
 function renderSelf(){
   // every self-service screen is React since 31 Oct 2026 (react/src/self, react/src/team): they draw from SD / SMIS
   if (typeof PKR !== 'undefined') PKR.render();
@@ -2135,9 +2032,7 @@ async function missionDecided(approved){
   try { await loadPeriodData(); } catch(e){ toast('Reload error — ' + /** @type {Error} */ (e).message, 'err'); } finally { loader(false); }
   DIRTY.add('payroll'); DIRTY.add('reports');
 }
-const _loadPeriodDataMs = loadPeriodData;
-// @ts-expect-error — loadPeriodData is deliberately extended here (the new version wraps the earlier one)
-loadPeriodData = async function(){ const r = await _loadPeriodDataMs.apply(this, arguments); loadMissionsBadge().catch(() => {}); return r; };
+// (after every period load React asks for this count — react/src/data/load.ts loadPeriodData)
 
 // ═════════════════════════════════════════════════════════
 //  OUTSIDE MISSIONS in desktop SELF-SERVICE (66/68, 22 Oct 2026) — same rules as the phone:
@@ -2145,18 +2040,8 @@ loadPeriodData = async function(){ const r = await _loadPeriodDataMs.apply(this,
 // ═════════════════════════════════════════════════════════
 /** @type {{ mine: Mission[], team: Mission[], missing?: boolean }} — missions in self-service (read here, drawn by React) */
 let SMIS = { mine: [], team: [] };
-async function loadSelfMissions(){
-  const id = SELF.me && SELF.me.emp_id; if (!id) return;
-  const [a, b] = await Promise.all([
-    sb.from('employee_missions').select('*').eq('emp_id', id).order('created_at', { ascending: false }).limit(100),
-    sb.from('employee_missions').select('*').eq('manager_id', id).neq('emp_id', id).order('created_at', { ascending: false }).limit(200)]);
-  SMIS.missing = !!(a.error && /does not exist|schema cache/i.test(a.error.message));
-  SMIS.mine = a.data || []; SMIS.team = b.data || [];
-}
+async function loadSelfMissions(){ return (await pkr()).loadSelfMissions(); }   // React since 2 Nov 2026 (react/src/data/load.ts; loadSelf reads them first)
 // The missions on screen, the mission window and every mission button are React since 31 Oct 2026 (react/src/self, react/src/team).
-const _loadSelfMis = loadSelf;
-// @ts-expect-error — loadSelf is deliberately extended here (the new version wraps the earlier one)
-loadSelf = async function(){ try { await loadSelfMissions(); } catch (e) { console.warn(e); } return _loadSelfMis.apply(this, arguments); };
 
 // ═════════════════════════════════════════════════════════
 //  REPORT "Returns after check-out and undone check-outs" (22 Oct 2026, with 71-undo-checkout.sql)
@@ -2165,14 +2050,7 @@ loadSelf = async function(){ try { await loadSelfMissions(); } catch (e) { conso
 //  report lists those days so HR can ask about them, plus check-outs the employee undid within 5 minutes (table checkout_undos).
 // ═════════════════════════════════════════════════════════
 S.undos = [];
-const _loadPeriodDataUndo = loadPeriodData;
-// @ts-expect-error — loadPeriodData is deliberately extended here (the new version wraps the earlier one)
-loadPeriodData = async function(){
-  const r = await _loadPeriodDataUndo.apply(this, arguments);
-  try { const p = settings.period, q = await sb.from('checkout_undos').select('*').gte('date', periodStart(p)).lte('date', periodEnd(p));
-        S.undos = q.error ? [] : (q.data || []); } catch(e){ S.undos = []; }
-  return r;
-};
+// (the undone check-outs of the period are read after every period load into S.undos — react/src/data/load.ts loadPeriodData)
 const hmMin = s => { const m = /^(\d{1,2}):(\d{2})/.exec(String(s || '')); return m ? +m[1] * 60 + +m[2] : null; };
 function dayGaps(a){
   const segs = (a.projects || []).filter(x => x.in && x.out && !x.forgotten).map(x => ({ x, i: hmMin(x.in), o: hmMin(x.out) }))
@@ -2290,9 +2168,7 @@ async function loadDataRequestsBadge(){
     sb.from('employee_self_changes').select('id', { count: 'exact', head: true }).is('seen_at', null)]);
   if (!a.error) setDataRequestsBadge((a.count || 0) + (c.error ? 0 : (c.count || 0)));
 }
-const _loadPeriodDataDq = loadPeriodData;
-// @ts-expect-error — loadPeriodData is deliberately extended here (the new version wraps the earlier one)
-loadPeriodData = async function(){ const r = await _loadPeriodDataDq.apply(this, arguments); loadDataRequestsBadge().catch(() => {}); return r; };
+// (after every period load React asks for this count — react/src/data/load.ts loadPeriodData)
 // (the employee window's "📝 Ask employee to update data" button is React now — react/src/employee)
 
 // ═════════════════════════════════════════════════════════
@@ -2311,9 +2187,7 @@ async function loadCheckoutBadge(){
 async function checkoutRecorded(){
   try { await loadPeriodData(); } catch(e){} finally { loader(false); }   // fix 25 Oct: hide the "Loading period…" cover
 }
-const _loadPeriodDataCo = loadPeriodData;
-// @ts-expect-error — loadPeriodData is deliberately extended here (the new version wraps the earlier one)
-loadPeriodData = async function(){ const r = await _loadPeriodDataCo.apply(this, arguments); loadCheckoutBadge().catch(() => {}); return r; };
+// (after every period load React asks for this count — react/src/data/load.ts loadPeriodData)
 
 // ═════════════════════════════════════════════════════════
 //  BOOT

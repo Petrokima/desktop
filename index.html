@@ -163,9 +163,9 @@ body:not(.can-hr) :is([data-hr-handle],[data-dev-reset]){display:none!important}
 body:not(.can-hr):not(.can-master) :is([data-act="new-att"],#mi-open,[data-act="new-perm"],[data-act="new-leave"],
   #a-save,#pr-save,#lv-save,#dc-approve,#dc-reject,#a-add-split,[data-decide],[data-del-att],[data-del-perm],[data-del-leave],
   [data-lv-approve],[data-lv-reject]){display:none!important}
-/* payroll run table: column search boxes, expanded view (part32) */
-#pay-table tr.pay-filter th{padding:4px 6px;position:static}
-#pay-table tr.pay-filter input{width:100%;min-width:56px;box-sizing:border-box;padding:4px 6px;font-size:11.5px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-family:inherit;font-weight:400;text-transform:none;letter-spacing:0}
+/* payroll run table and reports: column search boxes, expanded view (part32) */
+#pay-table tr.pay-filter th,#rep-view tr.pay-filter th{padding:4px 6px;position:static}
+#pay-table tr.pay-filter input,#rep-view tr.pay-filter input{width:100%;min-width:56px;box-sizing:border-box;padding:4px 6px;font-size:11.5px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-family:inherit;font-weight:400;text-transform:none;letter-spacing:0}
 #pay-table tfoot td{border-top:2px solid var(--border);font-weight:600;white-space:nowrap}
 #pay-table.pay-expanded th,#pay-table.pay-expanded td{white-space:nowrap}
 #pay-table.pay-expanded th.pay-el{max-width:130px;overflow:hidden;text-overflow:ellipsis}
@@ -217,5 +217,5 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
      the windows, the lists, the message). The old code says which screen / page / part to show (setScreens, showPage, showSelfPart). -->
 <div id="react-root"></div>
 <script src="app.js?v=06c6b7c9db90"></script>
-<script src="react.js?v=534d46237fa4"></script>
+<script src="react.js?v=8ccedfd12e9f"></script>
 </body></html>

@@ -288,18 +288,14 @@ const EMP_FIELDS = [
 // used by self-service, Bulk upload and reports) and what the React window tells the old code after a change.
 /** opens the employee window (rows, dashboard, reports, "+ Add Employee"); no id = a new employee @param {string | null} id */
 function openEmp(id){ if (typeof PKR !== 'undefined') PKR.openEmployee(id == null || id === '' ? null : String(id)); }
-/** a save in the React window: the loaded record, pick-lists, Employees, Payroll, Dashboard; leave balances read again and the
- *  HR alerts follow (the database may have filled in dates: probation, contract end) @param {Employee} row */
-function employeeSaved(row){
-  const i = S.employees.findIndex(e => String(e.id) === String(row.id));
-  if (i >= 0) S.employees[i] = row; else S.employees.push(row);
-  LB.clear(); buildLists(); renderEmployees(); renderPayroll(); renderDashboard();
-  if (canHRA()) loadHRAlerts().then(hraBadge, () => {});
-}
-/** a fixed salary element added / closed in the window: payroll and dashboard follow @param {Row<'employee_salary_elements'>} row */
-function fixedAdded(row){ S.fixed.push(row); renderPayroll(); renderDashboard(); }
+// employeeSaved (a save in the React window: the record, pick-lists, redraws, leave balances, HR alerts), fixedAdded / fixedClosed —
+// moved to React on 3 Nov 2026 (react/src/changes/changes.ts — proven to do the same by changes.golden.json); the old names forward to it
+/** @param {Employee} row */
+function employeeSaved(row){ return payEngine().employeeSaved(row); }
+/** @param {Row<'employee_salary_elements'>} row */
+function fixedAdded(row){ return payEngine().fixedAdded(row); }
 /** @param {string} id */
-function fixedClosed(id){ S.fixed = S.fixed.filter(r => r.id !== id); renderPayroll(); renderDashboard(); }
+function fixedClosed(id){ return payEngine().fixedClosed(id); }
 
 // ═════════════════════════════════════════════════════════
 //  ATTENDANCE
@@ -307,14 +303,11 @@ function fixedClosed(id){ S.fixed = S.fixed.filter(r => r.id !== id); renderPayr
 // The records list, the past date range and the entry window moved to React 31 Oct 2026 (react/src/attendance). The Calendar tab
 // (part25) is still here; the fingerprint-machine import is React too (react/src/machine — part16 removed). The old code keeps the cycle's records (S.attendance).
 function renderAttendance(){ if (typeof PKR !== 'undefined') PKR.render(); }
-/** a record saved in the React window: kept when it is in the loaded payroll cycle; payroll, dashboard and reports follow @param {AttendanceRow} saved */
-function attendanceSaved(saved){
-  const inPeriod = saved.date >= periodStart(settings.period) && saved.date <= periodEnd(settings.period);
-  S.attendance = S.attendance.filter(a => a.id !== saved.id); if (inPeriod) S.attendance.push(saved);
-  renderAttendance(); renderDashboard(); renderPayroll(); renderReports();
-}
-/** a day closed (with a reason) on the React page @param {string} id */
-function attendanceClosed(id){ S.attendance = S.attendance.filter(r => r.id !== id); renderAttendance(); renderDashboard(); renderPayroll(); renderReports(); }
+// attendanceSaved / attendanceClosed moved to React on 3 Nov 2026 (react/src/changes/changes.ts — proven to do the same by changes.golden.json); the old names forward to it
+/** @param {AttendanceRow} saved */
+function attendanceSaved(saved){ return payEngine().attendanceSaved(saved); }
+/** @param {string} id */
+function attendanceClosed(id){ return payEngine().attendanceClosed(id); }
 
 // Time 'HH:MM' → minutes after midnight; a missing time → null.
 /** @overload @param {string} t  a filled-in time @returns {number} */
@@ -327,25 +320,24 @@ function toMin(t){ if(!t) return null; const [h,m]=String(t).split(':').map(Numb
 // ═════════════════════════════════════════════════════════
 // The page is React now (react/src/projects, 30 Oct 2026). The old code keeps the loaded data; React hands changes here.
 function renderProjects(){ if (typeof PKR !== 'undefined') PKR.render(); }
-/** @param {Project} row  a project created by the React page */
-function projectAdded(row){ S.projects.push(row); buildLists(); renderProjects(); }
-/** @param {string} id  a project deleted by the React page */
-function projectDeleted(id){ S.projects = S.projects.filter(p=>String(p.id)!==id); buildLists(); renderProjects(); }
+// projectAdded / projectDeleted moved to React on 3 Nov 2026 (react/src/changes/changes.ts — proven to do the same by changes.golden.json); the old names forward to it
+/** @param {Project} row */
+function projectAdded(row){ return payEngine().projectAdded(row); }
+/** @param {string} id */
+function projectDeleted(id){ return payEngine().projectDeleted(id); }
 
 // ═════════════════════════════════════════════════════════
 //  MONTHLY ENTRIES  (one or more project lines per employee)
 // ═════════════════════════════════════════════════════════
-function projLabel(code){ if(!code) return ''; const p=S.projects.find(x=>String(x.id)===String(code)); return p ? `${p.id} — ${p.name||''}` : String(code); }
+// projLabel ("P1 — Tower") moved to React on 3 Nov 2026 (react/src/changes/changes.ts — proven to do the same by changes.golden.json); the old names forward to it
+function projLabel(code){ return payEngine().projLabel(code); }
 // The page, the upload window and "New variable element" moved to React 30 Oct 2026 (react/src/monthly). The old code keeps
 // the loaded amounts (S.monthly — payroll, reports) and the step after a change.
 function renderMonthly(){ if (typeof PKR !== 'undefined') PKR.render(); }
-/** after the React page saved or uploaded amounts: read the period's amounts again; payroll, dashboard and reports follow */
-async function monthlyChanged(){
-  S.monthly = await fetchAll('payroll_period_elements','emp_id', q=>q.eq('period',settings.period));
-  renderPayroll(); renderDashboard(); renderReports(); renderMonthly();
-}
-/** a new variable element created by the React page @param {SalaryElement} row */
-function elementAdded(row){ S.elements.push(row); buildLists(); renderMonthly(); }
+// monthlyChanged (the amounts read again) / elementAdded moved to React on 3 Nov 2026 (react/src/changes/changes.ts — proven to do the same by changes.golden.json); the old names forward to it
+function monthlyChanged(){ return payEngine().monthlyChanged(); }
+/** @param {SalaryElement} row */
+function elementAdded(row){ return payEngine().elementAdded(row); }
 
 // ═════════════════════════════════════════════════════════
 //  LOANS
@@ -363,11 +355,12 @@ function loanPostponeOptions(l){
   }
   return opts;
 }
-/** a loan added or read again after a postponement @param {Loan} row */
-function loanSaved(row){ S.loans = S.loans.some(x => String(x.id) === String(row.id)) ? S.loans.map(x => String(x.id) === String(row.id) ? row : x) : S.loans.concat([row]); afterLoanChange(); }
+// loanSaved / loanDeleted / afterLoanChange moved to React on 3 Nov 2026 (react/src/changes/changes.ts — proven to do the same by changes.golden.json); the old names forward to it
+/** @param {Loan} row */
+function loanSaved(row){ return payEngine().loanSaved(row); }
 /** @param {string} id */
-function loanDeleted(id){ S.loans = S.loans.filter(l => l.id !== id); afterLoanChange(); }
-function afterLoanChange(){ renderLoans(); renderPayroll(); renderDashboard(); }
+function loanDeleted(id){ return payEngine().loanDeleted(id); }
+function afterLoanChange(){ return payEngine().afterLoanChange(); }
 
 // ═════════════════════════════════════════════════════════
 //  PAYROLL RUN
@@ -389,14 +382,11 @@ function applySettingsUI(){ if (typeof PKR !== 'undefined') PKR.settingsLoaded()
 // ── Records are never deleted (database file 100, Mohammed 30 Oct 2026): they are CANCELLED (vacations, permissions, penalties,
 //    loans, HR requests, allowance approvals — the row stays, marked Cancelled) or CLOSED (everything else — the row is kept in the
 //    register of closed records, then leaves the list). Always with a reason.
+// closeRecords / closeError moved to React on 3 Nov 2026 (react/src/changes/changes.ts — proven to do the same by changes.golden.json); the old names forward to it
 /** @param {keyof DB['Tables']} table @param {Record<string, string | number>[]} keys @param {string} reason @param {boolean} [replacing] */
-async function closeRecords(table, keys, reason, replacing){
-  const { data, error } = await sb.rpc('close_records', { p_tbl: table, p_keys: keys, p_reason: reason, p_replacing: !!replacing });
-  if (error) throw new Error(closeError(error.message));
-  return data;
-}
-/** the database's own explanation without its code word, e.g. "NOT_CLOSED: Nothing was…" → "Nothing was…" @param {string} m */
-const closeError = m => String(m).replace(/^.*?\b(NO_DELETE|CLOSE_REASON|NOT_CLOSED|CANCEL_REASON|CANCELLED|CLOSE_KEYS|CLOSE_TABLE): ?/, '');
+function closeRecords(table, keys, reason, replacing){ return payEngine().closeRecords(table, keys, reason, replacing); }
+/** @param {string} m */
+const closeError = m => payEngine().closeError(m);
 // (the old "write the reason" window m-close is gone: React pages use react/src/shared/ReasonDialog / CloseDialog)
 
 // ═════════════════════════════════════════════════════════
@@ -441,8 +431,10 @@ document.addEventListener('click', async ev => {
 // The Reports PAGE is React since 31 Oct 2026, the report CALCULATIONS since 2 Nov 2026 (react/src/reports/calc.ts — every report of
 // this part and those parts 26, 37, 38 and 39 added; proven equal by reportcalc.golden.json). Kept here: three small helpers other
 // parts use, and the old names, which forward to React SYNCHRONOUSLY (the bridge and the payroll page's project costs call them).
-const activeEmps = () => S.employees.filter(e => e.status!=='Inactive');
-const inPeriod = d => d && d >= periodStart(settings.period) && d <= periodEnd(settings.period);
+// activeEmps / inPeriod moved to React on 3 Nov 2026 (react/src/changes/changes.ts — proven to do the same by changes.golden.json); the old names forward to it
+const activeEmps = () => payEngine().activeEmps();
+/** @param {string | null | undefined} d */
+const inPeriod = d => payEngine().inPeriod(d);
 function projName(c){ if(!c) return '(unallocated)'; const p=S.projects.find(x=>String(x.id)===String(c)); return p ? (p.name||'') : ''; }
 /** the reports as the page lists them */
 function reportDefs(){ return payEngine().reportDefs(); }
@@ -465,20 +457,13 @@ function monthOf(d){ return payEngine().monthOf(d); }   // quota follows the pay
 function permUsed(empId, month, exceptId){ return payEngine().permUsed(empId, month, exceptId); }
 // The page and its windows are React now (react/src/permissions, 30 Oct 2026). Kept here: the menu badge, the quota helpers above
 // (also used elsewhere) and what a saved / decided / deleted permission changes in the rest of the app.
-function renderPermissions(){
-  const pend = S.permissions.filter(readyForHR).length;
-  navBadge('perm', pend);
-  if (typeof PKR !== 'undefined') PKR.render();
-}
-/** a permission saved (new) or decided in the React page @param {Permission} row */
-function permSaved(row){
-  const i = S.permissions.findIndex(x => x.id === row.id);
-  if (i >= 0) S.permissions[i] = row; else if (inPeriod(row.date)) S.permissions.push(row);
-  afterPermChange();
-}
+// renderPermissions (🕐 badge + redraw), permSaved / permDeleted / afterPermChange moved to React on 3 Nov 2026 (react/src/changes/changes.ts — proven to do the same by changes.golden.json); the old names forward to it
+function renderPermissions(){ return payEngine().renderPermissions(); }
+/** @param {Permission} row */
+function permSaved(row){ return payEngine().permSaved(row); }
 /** @param {string} id */
-function permDeleted(id){ S.permissions = S.permissions.filter(p => p.id !== id); afterPermChange(); }
-function afterPermChange(){ renderPermissions(); renderAttendance(); renderPayroll(); renderDashboard(); renderReports(); }
+function permDeleted(id){ return payEngine().permDeleted(id); }
+function afterPermChange(){ return payEngine().afterPermChange(); }
 
 // ═════════════════════════════════════════════════════════
 //  LEAVE HELPERS
@@ -502,26 +487,20 @@ function annualTaken(empId, exceptId){ return payEngine().annualTaken(empId, exc
 // The page and its window are React now (react/src/vacations, 30 Oct 2026). Kept here: the leave helpers above (payroll,
 // attendance, reports and self-service use them) and what a saved / decided / deleted vacation changes in the rest of the app.
 function renderLeaves(){ if (typeof PKR !== 'undefined') PKR.render(); }
-/** a vacation saved, edited or decided in the React page (kept only when it touches the loaded year) @param {Leave} row */
-function leaveSaved(row){
-  S.leaves = S.leaves.filter(x => x.id !== row.id);
-  const y = settings.period.slice(0,4); if (row.date_from <= `${y}-12-31` && row.date_to >= `${y}-01-01`) S.leaves.push(row);
-  afterLeaveChange();
-}
+// leaveSaved / leaveDeleted / afterLeaveChange moved to React on 3 Nov 2026 (react/src/changes/changes.ts — proven to do the same by changes.golden.json); the old names forward to it
+/** @param {Leave} row */
+function leaveSaved(row){ return payEngine().leaveSaved(row); }
 /** @param {string} id */
-function leaveDeleted(id){ S.leaves = S.leaves.filter(l => l.id !== id); afterLeaveChange(); }
-function afterLeaveChange(){ renderLeaves(); renderAttendance(); renderPayroll(); renderDashboard(); renderReports(); }
+function leaveDeleted(id){ return payEngine().leaveDeleted(id); }
+function afterLeaveChange(){ return payEngine().afterLeaveChange(); }
 
 // ═════════════════════════════════════════════════════════
 //  EXCEPTION RULE PAGE — moved to React 30 Oct 2026 (react/src/exempt). The old code keeps only the step after a change.
 // ═════════════════════════════════════════════════════════
 function renderExempt(){ if (typeof PKR !== 'undefined') PKR.render(); }
-/** the React page switched a yes/no column for these employees → keep the loaded data and redraw the pages that use it
- * @param {string[]} ids @param {'attendance_exempt' | 'project_staff'} field @param {boolean} value */
-function employeesFlagged(ids, field, value){
-  S.employees.forEach(e => { if (ids.includes(String(e.id))) e[field] = value; });
-  renderExempt(); renderEmployees(); renderAttendance(); renderPayroll(); renderDashboard(); renderReports();
-}
+// employeesFlagged moved to React on 3 Nov 2026 (react/src/changes/changes.ts — proven to do the same by changes.golden.json); the old names forward to it
+/** @param {string[]} ids @param {'attendance_exempt' | 'project_staff'} field @param {boolean} value */
+function employeesFlagged(ids, field, value){ return payEngine().employeesFlagged(ids, field, value); }
 
 // ═════════════════════════════════════════════════════════
 //  PENALTIES
@@ -532,15 +511,12 @@ function penLabel(x){ return payEngine().penLabel(x); }
 // The page and its window moved to React 30 Oct 2026 (react/src/penalties). The old code keeps penaltyValue / penLabel (payroll,
 // reports) and the step after a change.
 function renderPenalties(){ if (typeof PKR !== 'undefined') PKR.render(); }
-/** a penalty saved in the React window — kept only when it belongs to the loaded year (as before) @param {Penalty} saved */
-function penaltySaved(saved){
-  S.penalties = S.penalties.filter(x => x.id !== saved.id);
-  if (saved.apply_period.slice(0,4) === settings.period.slice(0,4)) S.penalties.push(saved);
-  afterPenChange();
-}
+// penaltySaved / penaltyDeleted / afterPenChange moved to React on 3 Nov 2026 (react/src/changes/changes.ts — proven to do the same by changes.golden.json); the old names forward to it
+/** @param {Penalty} saved */
+function penaltySaved(saved){ return payEngine().penaltySaved(saved); }
 /** @param {string} id */
-function penaltyDeleted(id){ S.penalties = S.penalties.filter(p => p.id !== id); afterPenChange(); }
-function afterPenChange(){ renderPenalties(); renderPayroll(); renderDashboard(); renderReports(); }
+function penaltyDeleted(id){ return payEngine().penaltyDeleted(id); }
+function afterPenChange(){ return payEngine().afterPenChange(); }
 
 // ═════════════════════════════════════════════════════════
 //  PUBLIC HOLIDAYS — the page is React now (react/src/holidays, 30 Oct 2026). The old code keeps the loaded
@@ -548,11 +524,12 @@ function afterPenChange(){ renderPenalties(); renderPayroll(); renderDashboard()
 //  by leaves, attendance and payroll, and redraw the screens that depend on holidays.
 // ═════════════════════════════════════════════════════════
 function renderHolidays(){ if (typeof PKR !== 'undefined') PKR.render(); }   // React draws the page from the current data
-/** @param {Holiday[]} rows  new holiday days saved by the React page */
-function holidaysAdded(rows){ S.holidays.push(...rows); holidaySet = new Set(S.holidays.map(h=>h.date)); afterHolChange(); }
-/** @param {string} id  a holiday deleted by the React page */
-function holidayDeleted(id){ S.holidays = S.holidays.filter(h=>h.id!==id); holidaySet = new Set(S.holidays.map(h=>h.date)); afterHolChange(); }
-function afterHolChange(){ renderHolidays(); renderLeaves(); renderAttendance(); renderPayroll(); renderDashboard(); renderReports(); }
+// holidaysAdded / holidayDeleted (the holiday list used by leaves, attendance and payroll follows) / afterHolChange moved to React on 3 Nov 2026 (react/src/changes/changes.ts — proven to do the same by changes.golden.json); the old names forward to it
+/** @param {Holiday[]} rows */
+function holidaysAdded(rows){ return payEngine().holidaysAdded(rows); }
+/** @param {string} id */
+function holidayDeleted(id){ return payEngine().holidayDeleted(id); }
+function afterHolChange(){ return payEngine().afterHolChange(); }
 
 // employee screens: hours as hours and minutes (1.5 → "1 h 30 m"); payroll and reports keep decimal hours
 const fmtHM = v => { const tm = Math.round(num(v) * 60), h = Math.floor(tm / 60), m = tm % 60; return h && m ? `${h} h ${m} m` : h ? `${h} h` : `${m} m`; };
@@ -586,8 +563,9 @@ function backToHrApp(){ setScreens({ self: 'none', app: 'block' }); }
 // ═════════════════════════════════════════════════════════
 // HR requests page: React now (react/src/hrreq, 30 Oct 2026). It draws from S.hrreq; the Handle window saves and calls this.
 function renderHrRequests(){ if (typeof PKR !== 'undefined') PKR.render(); }
-/** a request HR just handled (React Handle window) → the list, the dashboard and the menu badge @param {HrRequest} row */
-function hrRequestSaved(row){ S.hrreq = S.hrreq.map(x => x.id === row.id ? row : x); renderHrRequests(); renderDashboard(); }
+// hrRequestSaved (a request HR just handled) moved to React on 3 Nov 2026 (react/src/changes/changes.ts — proven to do the same by changes.golden.json); the old names forward to it
+/** @param {HrRequest} row */
+function hrRequestSaved(row){ return payEngine().hrRequestSaved(row); }
 // updateBadges (🌴 vacations, 📨 HR requests, 💰 allowance approvals) moved to React on 3 Nov 2026 (react/src/badges/badges.ts — proven to do the same by badges.golden.json); the old names forward to it
 function updateBadges(){ return payEngine().updateBadges(); }
 
@@ -621,17 +599,10 @@ function exportRunCsv(run, period){ return payEngine().exportRunCsv(run, period)
 // ═════════════════════════════════════════════════════════
 //  REPORTING LINES — moved to React 30 Oct 2026 (react/src/reporting). The old code keeps the 🧭 menu badge and the step after a change.
 // ═════════════════════════════════════════════════════════
-function renderReporting(){
-  const n = activeEmps().filter(e => !e.manager_id && !e.top_of_org).length;
-  navBadge('rl', n);
-  if (typeof PKR !== 'undefined') PKR.render();
-}
-/** the React page gave these employees a manager → keep the loaded data and redraw what uses it
- * @param {string[]} ids @param {string} mid */
-function managerAssigned(ids, mid){
-  S.employees.forEach(e => { if (ids.includes(String(e.id))) { e.manager_id = mid; e.top_of_org = false; } });
-  renderReporting(); renderEmployees(); renderReports();
-}
+// renderReporting (🧭 badge + redraw) / managerAssigned moved to React on 3 Nov 2026 (react/src/changes/changes.ts — proven to do the same by changes.golden.json); the old names forward to it
+function renderReporting(){ return payEngine().renderReporting(); }
+/** @param {string[]} ids @param {string} mid */
+function managerAssigned(ids, mid){ return payEngine().managerAssigned(ids, mid); }
 
 // ═════════════════════════════════════════════════════════
 //  WARN WHEN TODAY IS OUTSIDE THE PERIOD ON SCREEN
@@ -675,11 +646,12 @@ function parRuleUse(){ return payEngine().parRuleUse(); }   // per rule: employe
 // The page moved to React 30 Oct 2026 (react/src/parrules). The old code keeps parRuleUse (above, used through the bridge) and the
 // step after a change.
 function renderParRules(){ if (typeof PKR !== 'undefined') PKR.render(); }
+// allowanceRuleSaved / allowanceRuleDeleted / afterAllowanceRuleChange moved to React on 3 Nov 2026 (react/src/changes/changes.ts — proven to do the same by changes.golden.json); the old names forward to it
 /** @param {AllowanceRule} row */
-function allowanceRuleSaved(row){ S.parRules = S.parRules.filter(x => x.id !== row.id).concat([row]); afterAllowanceRuleChange(); }
+function allowanceRuleSaved(row){ return payEngine().allowanceRuleSaved(row); }
 /** @param {string} id */
-function allowanceRuleDeleted(id){ S.parRules = S.parRules.filter(x => x.id !== id); afterAllowanceRuleChange(); }
-function afterAllowanceRuleChange(){ renderParRules(); DIRTY.add('payroll'); DIRTY.add('reports'); renderDashboard(); }
+function allowanceRuleDeleted(id){ return payEngine().allowanceRuleDeleted(id); }
+function afterAllowanceRuleChange(){ return payEngine().afterAllowanceRuleChange(); }
 
 // ═════════════════════════════════════════════════════════
 //  ALLOWANCE APPROVALS — direct manager first, then HR; paid only when both approved
@@ -691,13 +663,11 @@ function aaRows(){ return payEngine().aaRows(); }
 // The page moved to React 30 Oct 2026 (react/src/approvals). The old code keeps aaRows (above — also used by the payroll
 // approval window) and the step after a change.
 function renderApprovals(){ if (typeof PKR !== 'undefined') PKR.render(); }
+// allowanceApprovalsReplaced / allowanceApprovalsUpdated moved to React on 3 Nov 2026 (react/src/changes/changes.ts — proven to do the same by changes.golden.json); the old names forward to it
 /** the period's approval rows read again after sending @param {AllowanceApproval[]} rows */
-function allowanceApprovalsReplaced(rows){ S.allowAppr = rows; renderApprovals(); renderDashboard(); }
-/** rows changed by an HR decision or a re-send @param {AllowanceApproval[]} rows */
-function allowanceApprovalsUpdated(rows){
-  rows.forEach(d => { S.allowAppr = S.allowAppr.map(a => a.id === d.id ? d : a); });
-  renderApprovals(); renderDashboard(); DIRTY.add('payroll'); DIRTY.add('reports');
-}
+function allowanceApprovalsReplaced(rows){ return payEngine().allowanceApprovalsReplaced(rows); }
+/** @param {AllowanceApproval[]} rows */
+function allowanceApprovalsUpdated(rows){ return payEngine().allowanceApprovalsUpdated(rows); }
 
 // (the department + unit filters of every page are React now — react/src/shared/OrgFilter; the Reports page was the last old one)
 
@@ -708,10 +678,11 @@ function allowanceApprovalsUpdated(rows){
 //  window, reports, bulk import) and updates it after the React page changed something.
 // ═════════════════════════════════════════════════════════
 function renderAssign(){ if (typeof PKR !== 'undefined') PKR.render(); }
+// assignmentsAdded / assignmentRemoved moved to React on 3 Nov 2026 (react/src/changes/changes.ts — proven to do the same by changes.golden.json); the old names forward to it
 /** @param {EmployeeProject[]} rows */
-function assignmentsAdded(rows){ S.empProjects = S.empProjects.concat(rows); renderAssign(); }
+function assignmentsAdded(rows){ return payEngine().assignmentsAdded(rows); }
 /** @param {string} empId @param {string} code */
-function assignmentRemoved(empId, code){ S.empProjects = S.empProjects.filter(x => !(String(x.emp_id)===String(empId) && x.project_code===code)); renderAssign(); }
+function assignmentRemoved(empId, code){ return payEngine().assignmentRemoved(empId, code); }
 
 // (a manager's "Your team's projects" window is React since 31 Oct 2026 — react/src/team)
 
@@ -804,8 +775,8 @@ let calcRates = () => ({ ...CALC_DEFAULTS, ...((settings && settings.calcRates) 
 const _calcRatesRaw = calcRates;
 calcRates = function(){ const R = _calcRatesRaw(); return { ...R, brackets: R.brackets.map(([u, r]) => [u === null ? Infinity : u, r]) }; };
 function renderCalc(){ if (typeof PKR !== 'undefined') PKR.render(); }
-/** the React page saved new rates (already stored in the database) — keep them; payroll and reports recalculated when opened */
-function calcRatesSaved(stored){ settings.calcRates = stored; renderCalc(); DIRTY.add('payroll'); DIRTY.add('reports'); }
+// calcRatesSaved moved to React on 3 Nov 2026 (react/src/changes/changes.ts — proven to do the same by changes.golden.json); the old names forward to it
+function calcRatesSaved(stored){ return payEngine().calcRatesSaved(stored); }
 
 // ═════════════════════════════════════════════════════════
 //  ANNOUNCEMENTS · EMPLOYEE VOICE · BIRTHDAYS (desktop)

@@ -661,49 +661,20 @@ function openTheme(){ if (typeof PKR !== 'undefined') PKR.openTheme(); }
 //  READING AN EXCEL / CSV FILE — shared by Bulk upload, the Monthly entries upload (both React now) and the manager team upload
 // ═════════════════════════════════════════════════════════
 // The Monthly entries upload window itself moved to React 30 Oct 2026 (react/src/monthly/UploadDialog.tsx).
-function parseCsv(text){
-  text = text.replace(/^\uFEFF/, '');
-  const first = text.split(/\r?\n/)[0] || '', delim = (first.split(';').length > first.split(',').length) ? ';' : ',';
-  const out=[]; let row=[], cell='', inQ=false;
-  for (let i=0;i<text.length;i++){
-    const c=text[i];
-    if (inQ){ if (c==='"'){ if (text[i+1]==='"'){ cell+='"'; i++; } else inQ=false; } else cell+=c; }
-    else if (c==='"') inQ=true;
-    else if (c===delim){ row.push(cell); cell=''; }
-    else if (c==='\n' || c==='\r'){ if (c==='\r' && text[i+1]==='\n') i++; row.push(cell); out.push(row); row=[]; cell=''; }
-    else cell+=c;
-  }
-  if (cell!=='' || row.length){ row.push(cell); out.push(row); }
-  return out;
-}
-function loadSheetJs(){
-  if (window.XLSX) return Promise.resolve(window.XLSX);
-  return new Promise((res, rej) => { const s=document.createElement('script'); s.src='vendor/xlsx.js?v=0.18.5';   // served from our own site
-    s.onload=()=>res(window.XLSX); s.onerror=()=>rej(new Error('Could not load the Excel reader — reload the page, or save the sheet as CSV UTF-8')); document.head.appendChild(s); });
-}
-// FileReader works in every browser, including older office PCs
-const readAs = (file, how) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('The file could not be read')); how==='text' ? r.readAsText(file, 'UTF-8') : r.readAsArrayBuffer(file); });
-async function readFile(file){
-  if (/\.(xlsx|xls)$/i.test(file.name)){
-    const XL = await loadSheetJs(), wb = XL.read(new Uint8Array(await readAs(file, 'buffer')), { type:'array' });
-    return XL.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, raw:true, defval:'' });
-  }
-  return parseCsv(await readAs(file, 'text'));
-}
+// Moved to React on 3 Nov 2026 (react/src/data/helpers.ts — proven equal by datahelpers.golden.json); the old names forward to it.
+function parseCsv(text){ return payEngine().parseCsv(text); }
+function loadSheetJs(){ return payEngine().loadSheetJs(); }
+const readAs = (file, how) => payEngine().readAs(file, how);
+function readFile(file){ return payEngine().readFile(file); }
 // heading of a column, compared loosely (case, spaces, _ - . ignored) — the manager team upload (part20) uses it
-const H = s => String(s||'').toLowerCase().replace(/[\s_\-.]/g,'');
+const H = s => payEngine().H(s);
 
 // (Past attendance — any date range — moved to the React Attendance page, 31 Oct 2026.)
 
 // ═════════════════════════════════════════════════════════
 //  PROJECT ALLOWANCE RULES
 // ═════════════════════════════════════════════════════════
-function parRuleUse(){         // per rule: employees and amount in this payroll cycle
-  const use = {};
-  S.employees.filter(e => onPayroll(e, settings.period)).forEach(e => autoAllowance(e).forEach(x => {
-    const u = use[x.rule] = use[x.rule] || { emps:new Set(), days:0, amount:0 }; u.emps.add(e.id); u.days += x.days; u.amount += x.amount; }));
-  return use;
-}
+function parRuleUse(){ return payEngine().parRuleUse(); }   // per rule: employees and amount in this payroll cycle — React since 3 Nov 2026 (react/src/data/helpers.ts)
 // The page moved to React 30 Oct 2026 (react/src/parrules). The old code keeps parRuleUse (above, used through the bridge) and the
 // step after a change.
 function renderParRules(){ if (typeof PKR !== 'undefined') PKR.render(); }
@@ -716,22 +687,10 @@ function afterAllowanceRuleChange(){ renderParRules(); DIRTY.add('payroll'); DIR
 // ═════════════════════════════════════════════════════════
 //  ALLOWANCE APPROVALS — direct manager first, then HR; paid only when both approved
 // ═════════════════════════════════════════════════════════
-function aaCalculated(){                       // every employee with an automatic amount this cycle
-  return S.employees.filter(e => onPayroll(e, settings.period)).map(e => {
-    const parts = autoAllowance(e); const amount = Math.round(parts.reduce((s,x) => s + x.amount, 0) * 100) / 100;
-    const details = parts.map(x => ({ project:x.project, project_name: projName(x.project), days:x.days, rate:x.rate, amount:x.amount }));
-    return { emp:e, amount, details };
-  }).filter(x => x.amount > 0);
-}
-const aaSame = (a, b) => Math.abs(num(a) - num(b)) < 0.005;
-function aaRows(){
-  const calc = new Map(aaCalculated().map(x => [String(x.emp.id), x]));
-  const rows = [];
-  calc.forEach((c, id) => rows.push({ emp:c.emp, calc:c, rec: S.allowAppr.find(a => String(a.emp_id)===id) }));
-  S.allowAppr.forEach(a => { if (!calc.has(String(a.emp_id))) rows.push({ emp: empById(a.emp_id) || /** @type {Employee} */ ({ id:a.emp_id, name_en:a.emp_name }), calc:{ amount:0, details:[] }, rec:a }); });
-  rows.forEach(r => { r.state = r.rec ? r.rec.status : 'Not sent'; r.changed = !!r.rec && !aaSame(r.rec.amount, r.calc.amount); });
-  return rows;
-}
+// aaCalculated / aaSame / aaRows moved to React on 3 Nov 2026 (react/src/data/helpers.ts); the old names forward to it
+function aaCalculated(){ return payEngine().aaCalculated(); }   // every employee with an automatic amount this cycle
+const aaSame = (a, b) => payEngine().aaSame(a, b);
+function aaRows(){ return payEngine().aaRows(); }
 // The page moved to React 30 Oct 2026 (react/src/approvals). The old code keeps aaRows (above — also used by the payroll
 // approval window) and the step after a change.
 function renderApprovals(){ if (typeof PKR !== 'undefined') PKR.render(); }
@@ -1043,39 +1002,10 @@ async function loadLeaveBalances(y){
 //  officer_save_employees(), which drops the pay fields. Every screen that saves an employee keeps working
 //  unchanged: for an HR officer, sb.from('employees') is routed here.
 // ═════════════════════════════════════════════════════════
-function officerEmpWrite(kind, rec){
-  const b = { ids: /** @type {string[] | null} */ (null),
-    eq(c, v){ if (c === 'id') b.ids = [String(v)]; return b; },
-    in(c, v){ if (c === 'id') b.ids = (v || []).map(String); return b; },
-    select(){ return b; },
-    then(res, rej){ return run().then(res, rej); } };
-  async function run(){
-    const recs = [].concat(rec || []);
-    if (kind === 'insert'){
-      const out = [];
-      for (const r of recs){ const { data, error } = await sb.rpc('officer_save_employees', { p_ids:null, p_rec:r, p_insert:true });
-        if (error) return { data:null, error }; out.push(...(data || [])); }
-      return { data:out, error:null };
-    }
-    if (!b.ids || !b.ids.length) return { data:null, error:{ message:'Choose the employee to change' } };
-    const { data, error } = await sb.rpc('officer_save_employees', { p_ids:b.ids, p_rec:recs[0] || {}, p_insert:false });
-    return { data: error ? null : (data || []), error };
-  }
-  return b;
-}
-function officerPatch(client){
-  if (!client || client.__officerPatch) return;
-  const orig = client.from.bind(client);
-  client.from = t => {
-    if (t !== 'employees' || !isOfficer()) return orig(t);
-    return { select: (...a) => orig('employees_safe').select(...a),          // reading: the version without pay fields
-             update: rec => officerEmpWrite('update', rec),
-             insert: rec => officerEmpWrite('insert', rec),
-             upsert: rec => officerEmpWrite('insert', rec),
-             delete: () => orig('employees').delete() };                      // still refused by the database
-  };
-  client.__officerPatch = true;
-}
+// officerEmpWrite / officerPatch moved to React on 3 Nov 2026 (react/src/data/helpers.ts — proven to route every call the same way by
+// datahelpers.golden.json); the old names forward to it.
+function officerEmpWrite(kind, rec){ return payEngine().officerEmpWrite(kind, rec); }
+function officerPatch(client){ return payEngine().officerPatch(client); }
 // (officerPatch runs after connecting and before every sign-in check, and can-master is set after it — React since 2 Nov 2026:
 //  react/src/session/session.ts startApp / afterLogin)
 

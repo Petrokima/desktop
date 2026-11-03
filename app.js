@@ -673,45 +673,15 @@ function updateBadges(){
 // ═════════════════════════════════════════════════════════
 //  PAYROLL APPROVAL (permanent snapshot)
 // ═════════════════════════════════════════════════════════
-function nextPeriod(p){ const [y,m]=p.split('-').map(Number); return m===12 ? `${y+1}-01` : `${y}-${pad(m+1)}`; }
-// The payroll engine's payslip format (what Approve sends for the database to cross-check) and the comparison with the database's
-// own calculation — used by the React approval window (bridge) and by the engine test (tests/payroll/cmp.js).
-function payrollLines(run){
-  const keys = ['basic','otherAdd','ot','otH','si','loans','otherDed','days','factor','partial','joiner','leaver','hasPackage','delay','absence','absentDays','autoAbsentDays','unpaidDays','loanOwed','penalty','holiday','holDays','lateH','earlyH','waivedH'];
-  return run.map(r => ({ emp_id:String(r.emp.id), name_en:r.emp.name_en||null, name_ar:r.emp.name_ar||null, department:r.emp.department||null, unit:r.emp.unit||null,
-    entity:r.emp.entity||null, payment_method:r.emp.payment_method||null, bank_branch:(r.emp.bank_branch||'').trim()||null, bank_account:r.emp.bank_account||null,
-    gross:Math.round(r.gross*100)/100, deductions:Math.round(r.ded*100)/100, net:Math.round(r.net*100)/100,
-    summary:Object.fromEntries(keys.map(k=>[k, r[k] ?? null])), lines:r.lines }));
-}
-// Compare the desktop's payroll with the database's own calculation (payroll_calc) — shown in the approval window
-function payrollDiffs(mine, srv){
-  const key = l => `${l.code}|${l.type}`, sum = ls => { const m = {}; (ls||[]).forEach(l => { m[key(l)] = (m[key(l)]||0) + num(l.amount); }); return m; };
-  const S2 = new Map((srv||[]).map(x => [String(x.emp_id), x])), out = [];
-  mine.forEach(c => { const s = S2.get(c.emp_id);
-    if (!s) { out.push({ emp:c.emp_id, what:'not in the database calculation' }); return; }
-    S2.delete(c.emp_id);
-    const a = sum(c.lines), b = sum(s.lines);
-    new Set([...Object.keys(a), ...Object.keys(b)]).forEach(k => { if (Math.abs((a[k]||0) - (b[k]||0)) > 0.005) {
-      const [code, type] = k.split('|'), el = elByCode(code);
-      out.push({ emp:c.emp_id, what:`${(el && el.name_en) || 'element ' + code} (${type}): desktop ${fmt(a[k]||0)} · database ${fmt(b[k]||0)}` }); } });
-    if (Math.abs(num(c.net) - num(s.net)) > 0.005) out.push({ emp:c.emp_id, what:`net: desktop ${fmt(c.net)} · database ${fmt(s.net)}` });
-  });
-  S2.forEach((s, id) => out.push({ emp:id, what:'only in the database calculation' }));
-  return out;
-}
-// The approval window moved to React 30 Oct 2026 (react/src/payroll/ApproveDialog.tsx). After the DATABASE approved the month:
-/** publish the project costs taken before approving, move to the next period if asked, read everything again
- *  @param {string} p @param {any} costDetail @param {boolean} moveNext */
-async function payrollApproved(p, costDetail, moveNext){
-  await publishProjectCosts(p, costDetail, true);
-  if (moveNext){
-    settings.period = nextPeriod(p);
-    const r = await sb.from('settings').upsert({ key:'payroll', value:settings }).select();
-    if (r.error || !(r.data && r.data.length)) toast('Approved — but the period could not be moved; change it in Settings','warn');
-    applySettingsUI();
-  }
-  await loadPeriodData(); loader(false); renderAll();
-}
+// The payroll helpers moved to React on 3 Nov 2026 (react/src/payroll/helpers.ts — proven equal to this part's old code by
+// payhelpers.golden.json): the payslip format Approve sends (payrollLines, also used by the engine test tests/payroll/cmp.js), the
+// comparison with the database's own calculation (payrollDiffs), the step after the database approved a month (payrollApproved),
+// the CSV export and "Switch to …" (below). The old names forward to it (payEngine() of part4 says "reload the page" without react.js).
+function nextPeriod(p){ return payEngine().nextPeriod(p); }
+function payrollLines(run){ return payEngine().payrollLines(run); }
+function payrollDiffs(mine, srv){ return payEngine().payrollDiffs(mine, srv); }
+/** @param {string} p @param {any} costDetail @param {boolean} moveNext */
+function payrollApproved(p, costDetail, moveNext){ return payEngine().payrollApproved(p, costDetail, moveNext); }
 
 // ═════════════════════════════════════════════════════════
 //  PAYROLL HISTORY
@@ -720,20 +690,7 @@ async function payrollApproved(p, costDetail, moveNext){
 // the React page calls it through the bridge).
 function renderHistory(){ if (typeof PKR !== 'undefined') PKR.render(); }
 // (the approved payslip window is React since 31 Oct 2026 — react/src/windows; the bridge's showApprovedPayslip opens it)
-function exportRunCsv(run, period){
-  const codes = [...new Set(run.flatMap(r=>r.lines.map(l=>String(l.code))))];
-  const pick = c => run.flatMap(r=>r.lines).find(x=>String(x.code)===c) || {};
-  codes.sort((a,b)=> (pick(a).type===pick(b).type?0:pick(a).type==='Addition'?-1:1) || (num(a)-num(b)));
-  const hdr = ['Code','Arabic Name','English Name','Department','Unit','Entity','Payment','Bank','Account', ...codes.map(c=>`${c} ${pick(c).name||''} (${pick(c).type==='Deduction'?'-':'+'})`), 'Gross','Total Deductions','Net'];
-  const q = v => { let s=String(v??''); if (/^[=+@\t\r]/.test(s) || /^-[^\d.]/.test(s)) s="'"+s;   // never an Excel formula
-    return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
-  const rows = run.map(r => [r.emp.id, r.emp.name_ar, r.emp.name_en, r.emp.department, r.emp.unit, r.emp.entity, r.emp.payment_method, (r.emp.bank_branch||'').trim(),
-    r.emp.bank_account ? `="${String(r.emp.bank_account).replace(/"/g,'')}"` : '',
-    ...codes.map(c => r.lines.filter(l=>String(l.code)===c).reduce((s,l)=>s+l.amount,0).toFixed(2)), r.gross.toFixed(2), r.ded.toFixed(2), r.net.toFixed(2)]);
-  const csv = '\uFEFF' + [hdr, ...rows].map(r=>r.map(v=>String(v).startsWith('="')?v:q(v)).join(',')).join('\n');
-  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
-  a.download=`petrokima-payroll-${period}${S.runs.some(x=>x.period===period)?'-approved':'-draft'}.csv`; a.click(); toast('Payroll exported');
-}
+function exportRunCsv(run, period){ return payEngine().exportRunCsv(run, period); }
 
 // (renderLocks is gone: no page had a .lock-note box left — the React pages draw their own 🔒 notes)
 
@@ -757,14 +714,7 @@ function managerAssigned(ids, mid){
 // ═════════════════════════════════════════════════════════
 // the notice is drawn by the React dashboard (react/src/dashboard) and the Attendance page
 function renderPeriodHint(){ if (typeof PKR !== 'undefined') PKR.render(); }
-async function gotoCurrentPeriod(){
-  const cur = cycleOf(todayStr()), old = settings.period;
-  settings.period = cur;
-  const r = await sb.from('settings').upsert({ key:'payroll', value:settings }).select();
-  if (r.error || !(r.data && r.data.length)) { settings.period = old; return toast(r.error ? r.error.message : NOPERM, 'err'); }
-  applySettingsUI(); await loadPeriodData(); loader(false); renderAll();
-  toast(`Now showing ${periodLabel(cur)}`);
-}
+function gotoCurrentPeriod(){ return payEngine().gotoCurrentPeriod(); }
 
 // ═════════════════════════════════════════════════════════
 //  PHONE LOCATIONS & REGISTERED PHONES
@@ -919,25 +869,9 @@ const todayISO = () => new Date().toISOString().slice(0,10);
 // ═════════════════════════════════════════════════════════
 //  PROJECT COSTS FOR ACCOUNTING — totals per project only (no names), published for approved months
 // ═════════════════════════════════════════════════════════
-function projectCostTotals(detail){
-  const g = {};
-  detail.forEach(d => { const code = d.code || '(unallocated)';
-    const x = g[code] = g[code] || { project_code:code, project_name: d.code ? (projName(d.code) || d.code) : 'No attendance recorded', emps:new Set(), hours:0, allocated:0, direct:0, total:0 };
-    if (Math.abs(d.total) > 0.004 || d.hours > 0) x.emps.add(String(d.emp.id));
-    x.hours += num(d.hours); x.allocated += num(d.alloc); x.direct += num(d.direct); x.total += num(d.total); });
-  const r2 = v => Math.round(v * 100) / 100;
-  return Object.values(g).filter(x => x.emps.size).map(x => ({ project_code:x.project_code, project_name:x.project_name, employees:x.emps.size,
-    hours:r2(x.hours), allocated:r2(x.allocated), direct:r2(x.direct), total:r2(x.total) }));
-}
-async function publishProjectCosts(period, detail, quiet){
-  const rows = projectCostTotals(detail).map(x => ({ ...x, period, published_by:(ME && (ME.full_name || ME.email)) || 'unknown' }));
-  try { await closeRecords('project_costs', [{ period }], 'Replaced by publishing the project costs again', true); }
-  catch (e) { return toast('Project costs not published: ' + e.message, 'err'); }
-  if (!rows.length) return quiet ? null : toast('No project costs to publish for ' + periodLabel(period), 'warn');
-  const { data, error } = await sb.from('project_costs').insert(rows).select('project_code');
-  if (error) return toast('Project costs not published: ' + error.message, 'err');
-  toast(`${periodLabel(period)}: project costs published for Accounting — ${data.length} project line${data.length>1?'s':''}, total ${fmt(rows.reduce((s,r)=>s+r.total,0))} EGP`);
-}
+// moved to React on 3 Nov 2026 (react/src/payroll/helpers.ts); the old names forward to it
+function projectCostTotals(detail){ return payEngine().projectCostTotals(detail); }
+function publishProjectCosts(period, detail, quiet){ return payEngine().publishProjectCosts(period, detail, quiet); }
 // (the accountant's view — self-service → Project costs — is React since 31 Oct 2026: react/src/selfmore)
 
 // (the menus — ☰ Collapse menu, folding a section heading, its red dot — are React since 2 Nov 2026: react/src/frame)

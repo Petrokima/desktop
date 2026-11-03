@@ -244,9 +244,9 @@ function computeAll(){ return payEngine().computeAll(); }
 // ═════════════════════════════════════════════════════════
 //  RENDER — DASHBOARD
 // ═════════════════════════════════════════════════════════
-// The dashboard is React since 31 Oct 2026 (react/src/dashboard). Kept here: the menu badges, which follow every change; parts 22 / 24 /
-// 26 / 33 extend this with their badges and the loading of voice, HR alerts and the board member's requests.
-function renderDashboard(){ updateBadges(); if (typeof PKR !== 'undefined') PKR.render(); }
+// The dashboard is React since 31 Oct 2026 (react/src/dashboard). renderDashboard — the menu badges, the redraw, and what parts 22 / 24 / 26 / 33
+// used to add (voice read once, 📍 badge, HR alerts read once + badge, the board member's lists) — moved to React on 3 Nov 2026 (react/src/badges/badges.ts — proven to do the same by badges.golden.json); the old names forward to it
+function renderDashboard(){ return payEngine().renderDashboard(); }
 
 // ═════════════════════════════════════════════════════════
 //  RENDER — EMPLOYEES
@@ -588,11 +588,8 @@ function backToHrApp(){ setScreens({ self: 'none', app: 'block' }); }
 function renderHrRequests(){ if (typeof PKR !== 'undefined') PKR.render(); }
 /** a request HR just handled (React Handle window) → the list, the dashboard and the menu badge @param {HrRequest} row */
 function hrRequestSaved(row){ S.hrreq = S.hrreq.map(x => x.id === row.id ? row : x); renderHrRequests(); renderDashboard(); }
-function updateBadges(){
-  navBadge('lv', S.leaves.filter(readyForHR).length);
-  navBadge('hr', S.hrreq.filter(r=>r.status==='Pending'||r.status==='In progress').length);
-  navBadge('aa', S.allowAppr.filter(a=>a.status==='Pending HR').length);
-}
+// updateBadges (🌴 vacations, 📨 HR requests, 💰 allowance approvals) moved to React on 3 Nov 2026 (react/src/badges/badges.ts — proven to do the same by badges.golden.json); the old names forward to it
+function updateBadges(){ return payEngine().updateBadges(); }
 
 // (a manager's decisions on his team's requests, allowances and missions are React since 31 Oct 2026 — react/src/team)
 // (My payslips — the password lock and the list — is React since 31 Oct 2026: react/src/selfmore)
@@ -813,30 +810,18 @@ function calcRatesSaved(stored){ settings.calcRates = stored; renderCalc(); DIRT
 // ═════════════════════════════════════════════════════════
 //  ANNOUNCEMENTS · EMPLOYEE VOICE · BIRTHDAYS (desktop)
 // ═════════════════════════════════════════════════════════
-const V = { loaded: false };   // the dashboard loads the Employee voice badge once
+const V = { loaded: false };   // the dashboard loads the Employee voice badge once (read by React — react/src/badges)
 // (the dashboard's 🎂 birthdays line is React now — react/src/dashboard)
-const _renderDashboardB = renderDashboard;
-// @ts-expect-error — renderDashboard is deliberately extended here (the new version wraps the earlier one)
-renderDashboard = function(){ const r = _renderDashboardB.apply(this, arguments); if (ME && ['admin','hr'].includes(ME.role) && !V.loaded){ V.loaded = true; loadVoice().catch(() => {}); } return r; };
 // (self-service's 🎂 birthday card is React now — react/src/self SelfHead)
 
 // ── announcements — the page is React now (react/src/news, 30 Oct 2026); it loads when opened ──
 function renderNewsPage(){ if (typeof PKR !== 'undefined') PKR.render(); }
 
-// ── employee voice — the page and its window are React now (react/src/voice, 30 Oct 2026); kept here: the menu badge ──
-// (loaded once with the dashboard for admin / HR, and again after every answer through the bridge voiceChanged)
-async function loadVoice(){
-  const [f, h, t, m] = await Promise.all([sb.rpc('feedback_inbox'), sb.from('hiring_requests').select('status'),
-    sb.from('training_requests').select('status'), sb.from('manager_actions').select('status')]);
-  const open = (f.data || []).filter(x => x.status !== 'Closed').length + (h.data || []).filter(x => x.status === 'New').length
-    + (t.data || []).filter(x => x.status === 'New').length + (m.data || []).filter(x => x.status === 'Waiting for HR').length;
-  navBadge('voice', open);
-}
-/** after an answer in the React window: the badge, and the board member's dashboard card when it is shown */
-async function voiceChanged(){
-  await loadVoice().catch(() => {});
-  if (typeof isBoardViewer === 'function' && isBoardViewer() && await loadBoardRequests(true) && typeof PKR !== 'undefined') PKR.render();
-}
+// ── employee voice — the page and its window are React now (react/src/voice, 30 Oct 2026) ──
+// loadVoice (the menu badge — read once with the dashboard for admin / HR) and voiceChanged (after every answer: the badge, and the board
+// member's card) moved to React on 3 Nov 2026 (react/src/badges/badges.ts — proven to do the same by badges.golden.json); the old names forward to it
+function loadVoice(){ return payEngine().loadVoice(); }
+function voiceChanged(){ return payEngine().voiceChanged(); }
 
 // ── Basic salary changes (only after the board member approves), resignation ↔ Inactive, re-employment, employment history
 //    and the blacklist: all in the employee window, React since 31 Oct 2026 (react/src/employee).
@@ -892,109 +877,52 @@ const LOC_FLAG = {
   away_allowed:     ['Away — allowed', 'c-blue'],
   clock_changed:    ['Phone clock was changed', 'c-red'],
   phone_restarted:  ['Phone restarted offline — time not verified', 'c-orange'] };
-const locFlagged = () => S.clocks.filter(c => (Array.isArray(c.location_flags) && c.location_flags.length) || (c.applied === false && c.mock_location));
 // The Location checks PAGE is React since 30 Oct 2026 (react/src/locations — also the old part46 🧭 and part47 📍 cards).
-// Kept here: LOC_FLAG (reports use the names), the dashboard banner + menu badge, and this bridge helper:
-/** site points changed on the React page (or the latest points read again): the loaded projects follow
- * @param {(Partial<Project> & { id: string })[]} rows */
-function projectsPatched(rows){
-  rows.forEach(x => { const p = S.projects.find(y => String(y.id) === String(x.id)); if (p) Object.assign(p, x); });
-  if (typeof PKR !== 'undefined') PKR.render();
-}
-
-// ── menu badge (the dashboard banner is React now — react/src/dashboard) ──
-const _renderDashboardBase = renderDashboard;
-// @ts-expect-error — renderDashboard is deliberately extended here (the new version wraps the earlier one)
-renderDashboard = function(){
-  _renderDashboardBase();
-  navBadge('loc', locFlagged().length);
-};
+// Kept here: LOC_FLAG (reports and the page use the names). locFlagged (the 📍 menu badge, now drawn by renderDashboard) and projectsPatched
+// (site points changed on the React page: the loaded projects follow) moved to React on 3 Nov 2026 (react/src/badges/badges.ts — proven to do the same by badges.golden.json); the old names forward to it
+const locFlagged = () => payEngine().locFlagged();
+/** @param {(Partial<Project> & { id: string })[]} rows */
+function projectsPatched(rows){ return payEngine().projectsPatched(rows); }
 
 // ═════════════════════════════════════════════════════════
 //  HR ALERTS · ANNUAL LEAVE BALANCE · CERTIFICATES   (database: 47-leave-entitlement-hr-alerts.sql)
 //  Alerts: hr_alerts() / hr_alert_respond() · Balance: leave_balance(emp, year) / leave_balances(year) · Rules: save_hr_rules()
 // ═════════════════════════════════════════════════════════
-const HRA_KIND = { contract:['📄 Contract renewal','c-orange'], probation:['⏳ End of probation','c-blue'], id:['🪪 National ID expiry','c-red'],
-                   cert:['🎓 Certificate expiry','c-orange'], disability:['♿ Disability card expiry','c-orange'] };
-const HRA_DEC = { seen:'Handled', renew:'Renew', not_renew:'Do not renew', confirm:'Confirm', not_confirm:'Do not confirm' };
 const HR_RULES_DEF = { leave_rules:{ start_year:2026, first_year_days:15, normal_days:21, senior_days:30, senior_insured_years:10, senior_age:50, emergency_days:7, wait_months:6, carry_cap:7 },
                        hr_alerts:{ contract_days:75, probation_days:30, id_days:30, cert_days:30, disability_days:30 } };
 /** @type {{ list: any[], loaded: boolean, loading: boolean, missing: boolean }} — HR alerts (hr_alerts() package — not described yet) */
 let HRA = { list:[], loaded:false, loading:false, missing:false };
 let HR_RULES = JSON.parse(JSON.stringify(HR_RULES_DEF));
-const canHRA = () => !!(ME && ['admin','hr','hr_officer'].includes(ME.role));
-const canHRW = () => !!(ME && ['admin','hr'].includes(ME.role));                      // leave / alert rules
-
-async function loadHRAlerts(){
-  if (!canHRA()) return;
-  HRA.loading = true;
-  const [a, r] = await Promise.all([ sb.rpc('hr_alerts'), sb.from('settings').select('*').in('key', ['leave_rules','hr_alerts']) ]);
-  HRA.loading = false; HRA.loaded = true;
-  HRA.missing = !!a.error; HRA.list = Array.isArray(a.data) ? a.data : [];
-  (r.data || []).forEach(x => { if (HR_RULES_DEF[x.key]) HR_RULES[x.key] = { ...HR_RULES_DEF[x.key], .../** @type {object} — the saved alert rule */ (x.value || {}) }; });
-  hraBadge();
-  if (typeof PKR !== 'undefined') PKR.render();
-}
-const hraOpen = () => HRA.list.filter(a => !a.done);
-function hraBadge(){ navBadge('hra', hraOpen().length); }
-// The HR alerts PAGE is React since 30 Oct 2026 (react/src/hralerts, incl. the national-ID requests of the old part31).
-// Kept here: the list (HRA) for the dashboard banner + menu badge, the rules (HR_RULES) used by leave balances.
-// Bridge for React: after a decision / document review the list is read again and the dashboard redrawn.
-async function hrAlertsChanged(){ await loadHRAlerts(); renderDashboard(); }
+// (the HRA list and HR_RULES stay here: React reads them — react/src/legacy.ts. The HR alerts PAGE is React since 30 Oct 2026, react/src/hralerts.)
+// canHRA / canHRW, loadHRAlerts, hraOpen / hraBadge, hrAlertsChanged, hrRulesSaved, employeePatched — and getLB / loadLeaveBalances below —
+// moved to React on 3 Nov 2026 (react/src/badges/badges.ts — proven to do the same by badges.golden.json); the old names forward to it
+const canHRA = () => payEngine().canHRA();
+const canHRW = () => payEngine().canHRW();                      // leave / alert rules
+function loadHRAlerts(){ return payEngine().loadHRAlerts(); }
+const hraOpen = () => payEngine().hraOpen();
+function hraBadge(){ return payEngine().hraBadge(); }
+function hrAlertsChanged(){ return payEngine().hrAlertsChanged(); }
 /** @param {typeof HR_RULES} rules */
-function hrRulesSaved(rules){ HR_RULES = rules; LB.clear(); LB_ALL.year = null; }
-/** an employee's record changed outside the employee window (contract renewed, new ID expiry accepted) @param {string} id @param {Partial<Employee>} patch */
-function employeePatched(id, patch){
-  const i = S.employees.findIndex(x => String(x.id) === String(id));
-  if (i >= 0) S.employees[i] = { ...S.employees[i], ...patch };
-}
-// menu badge, and the alerts loaded once after sign-in (the dashboard banner is React now — react/src/dashboard)
-const _renderDashboard26 = renderDashboard;
-// @ts-expect-error — renderDashboard is deliberately extended here (the new version wraps the earlier one)
-renderDashboard = function(){
-  const r = _renderDashboard26.apply(this, arguments);
-  if (canHRA() && !HRA.loaded && !HRA.loading) loadHRAlerts().then(() => renderDashboard(), () => {});
-  hraBadge();
-  return r;
-};
+function hrRulesSaved(rules){ return payEngine().hrRulesSaved(rules); }
+/** @param {string} id @param {Partial<Employee>} patch */
+function employeePatched(id, patch){ return payEngine().employeePatched(id, patch); }
 
 // ═════════════ ANNUAL LEAVE BALANCE (from the database) ═════════════
 const LB = new Map();                       // "emp|year" → balance
 /** @type {{ year: number | null, rows: any[] }} — leave balances of all staff (leave_balances() packages) */
 let LB_ALL = { year:null, rows:[] };
-async function getLB(emp, year, force){
-  const k = `${emp}|${year}`; if (!force && LB.has(k)) return LB.get(k);
-  const { data, error } = await sb.rpc('leave_balance', { p_emp:String(emp), p_year:Number(year) });
-  if (error) { LB.set(k, null); return null; }
-  LB.set(k, data); return data;
-}
-const lbTypes = () => settings.casualCountsAnnual === 'no' ? ['Annual'] : ['Annual','Casual'];
-// one line explaining the balance, with the days of a request taken off
-function lbText(b, reqDays, type, alreadyIn){
-  const y = b.year, add = alreadyIn || 0, left = num(b.remaining) + add - reqDays;
-  const out = [`Annual balance ${y}: <b>${fmt(b.entitlement)}</b> earned this year (now ${fmt(b.rate_today)} days a year)${num(b.carry_in) ? ` ${num(b.carry_in) < 0 ? '−' : '+'} ${fmt(Math.abs(num(b.carry_in)))} from last year` : ''} − ${fmt(num(b.taken) - add)} taken${num(b.pending) ? ` (${fmt(b.pending)} pending)` : ''}${reqDays ? ` − ${fmt(reqDays)} this request` : ''} → <b class="${left < 0 ? 'neg' : 'pos'}">${fmt(left)} remaining</b>${left < 0 ? ' — exceeds the balance' : ''}`];
-  if (num(b.carry_in) > 0 && b.this_year_left != null){
-    // the request uses this year's days first; carried days only after those are used up
-    const yl = num(b.this_year_left) + add, useYear = Math.min(Math.max(yl, 0), reqDays), useCarry = reqDays - useYear;
-    out.push(`<span style="color:var(--muted)">Of the remaining: this year's days ${fmt(yl - useYear)} · carried days ${fmt(num(b.carry_left) - useCarry)} (carried days are used only after this year's days)</span>`); }
-  if (type === 'Casual'){ const el = num(b.emergency_cap) - num(b.emergency_taken) - num(b.emergency_pending) + (alreadyIn || 0) - reqDays;
-    out.push(`Emergency leave ${y}: ${fmt(b.emergency_cap)} days allowed · <b class="${el < 0 ? 'neg' : 'pos'}">${fmt(el)} left</b> after this request${el < 0 ? ' — over the emergency limit' : ''}`); }
-  return out;
-}
+/** @param {string} emp @param {string | number} year @param {boolean} [force] */
+function getLB(emp, year, force){ return payEngine().getLB(emp, year, force); }
+// (lbTypes / lbText were removed 3 Nov 2026: nothing used them any more — the balance lines are React: react/src/vacations balanceView)
 // (the vacation windows' balance hints are React now — react/src/vacations/LeaveDialog and react/src/self/SelfDialogs; so is
 //  self-service's annual balance card — react/src/self)
 
 // (the report "Annual leave balance" moved to React 2 Nov 2026 — react/src/reports/calc.ts; it reads LB_ALL through the bridge)
 /** the leave balances of all staff for the report "Annual leave balance" (the React Reports page asks when it opens it) @param {number} y */
-async function loadLeaveBalances(y){
-  const { data, error } = await sb.rpc('leave_balances', { p_year:y });
-  if (error) return toast(error.message, 'err');
-  LB_ALL = { year:y, rows:data || [] }; renderReports();
-}
+function loadLeaveBalances(y){ return payEngine().loadLeaveBalances(y); }
 
 // (the employee window's leave balance and certificates are React now — react/src/employee; after a save there the bridge
 //  employeeSaved clears LB and reloads the HR alerts)
-// the original hint functions were attached directly — attach the new ones too (they run last and replace the text)
 
 // ═════════════════════════════════════════════════════════
 //  HR OFFICERS SAVE EMPLOYEE MASTER DATA (database: 49-officer-edit-master-data.sql)
@@ -1077,29 +1005,11 @@ async function idleSignOut(){ return (await pkr()).idleSignOut(); }
 //   3. Other requests from the other managers          board member or HR) and training requests (New / In progress)
 // ═════════════════════════════════════════════════════════
 let BRD = { at: 0, busy: false };
-const isBoardViewer = () => !!(ME && (ME.super_admin || ME.board_approver));
-
-async function loadBoardRequests(force){
-  if (BRD.busy || (!force && Date.now() - BRD.at < 60000)) return false;
-  BRD.busy = true;
-  try {
-    const [h, t, m] = await Promise.all([
-      sb.from('hiring_requests').select('*').in('status', ['New', 'In progress']).order('created_at', { ascending: false }),
-      sb.from('training_requests').select('*').in('status', ['New', 'In progress']).order('created_at', { ascending: false }),
-      sb.from('manager_actions').select('*').in('status', ['Waiting for board', 'Waiting for HR']).order('created_at', { ascending: false })]);
-    BRD.hire = h.data || []; BRD.train = t.data || []; BRD.act = m.data || []; BRD.at = Date.now();
-    return true;
-  } finally { BRD.busy = false; }
-}
-// The card itself is React since 31 Oct 2026 (react/src/dashboard — the three groups, DIRECTORS, rows that open the Employee voice
-// window). Kept here: loading its lists (bridge boardRequests), at most once a minute when the dashboard is drawn.
-const _renderDashboardBoard = renderDashboard;
-// @ts-expect-error — renderDashboard is deliberately extended here (the new version wraps the earlier one)
-renderDashboard = function(){
-  const r = _renderDashboardBoard.apply(this, arguments);
-  if (isBoardViewer()) loadBoardRequests(false).then(ch => { if (ch && typeof PKR !== 'undefined') PKR.render(); }).catch(() => {});
-  return r;
-};
+// isBoardViewer and loadBoardRequests (the card's lists, at most once a minute when the dashboard is drawn — renderDashboard) moved to React on 3 Nov 2026 (react/src/badges/badges.ts — proven to do the same by badges.golden.json); the old names forward to it
+// (the card itself is React since 31 Oct 2026 — react/src/dashboard)
+const isBoardViewer = () => payEngine().isBoardViewer();
+/** @param {boolean} [force] */
+function loadBoardRequests(force){ return payEngine().loadBoardRequests(force); }
 
 // ═════════════════════════════════════════════════════════
 //  OUTSIDE MISSIONS — HR final approval page (66, 22 Oct 2026)
@@ -1107,19 +1017,12 @@ renderDashboard = function(){
 //  Kept here: the menu badge (missions waiting for HR, refreshed after the period data loads) and what an HR decision
 //  changes elsewhere: an approved mission day has no late / early deduction → the payroll month is reloaded.
 // ═════════════════════════════════════════════════════════
+// moved to React on 3 Nov 2026 (react/src/badges/badges.ts — proven to do the same by badges.golden.json); the old names forward to it
 /** @param {number} n */
-function setMissionsBadge(n){ navBadge('ms', n); }
-async function loadMissionsBadge(){
-  const { count, error } = await sb.from('employee_missions').select('id', { count: 'exact', head: true }).eq('status', 'Waiting for HR');
-  if (!error) setMissionsBadge(count || 0);
-}
-/** called by the React page after HR approved or rejected a mission @param {boolean} approved */
-async function missionDecided(approved){
-  if (!approved) return;
-  // fix 25 Oct: loadPeriodData() shows the "Loading period…" cover — always hide it again (it stayed on screen for ever)
-  try { await loadPeriodData(); } catch(e){ toast('Reload error — ' + /** @type {Error} */ (e).message, 'err'); } finally { loader(false); }
-  DIRTY.add('payroll'); DIRTY.add('reports');
-}
+function setMissionsBadge(n){ return payEngine().setMissionsBadge(n); }
+function loadMissionsBadge(){ return payEngine().loadMissionsBadge(); }
+/** @param {boolean} approved */
+function missionDecided(approved){ return payEngine().missionDecided(approved); }
 // (after every period load React asks for this count — react/src/data/load.ts loadPeriodData)
 
 // ═════════════════════════════════════════════════════════
@@ -1204,14 +1107,10 @@ function employeeMissing(r, withPay){
 //  Kept here: the menu badge (answers waiting for review + changes employees made that nobody has seen yet, refreshed after
 //  the period data loads).
 // ═════════════════════════════════════════════════════════
+// moved to React on 3 Nov 2026 (react/src/badges/badges.ts — proven to do the same by badges.golden.json); the old names forward to it
 /** @param {number} n */
-function setDataRequestsBadge(n){ navBadge('dq', n); }
-async function loadDataRequestsBadge(){
-  const [a, c] = await Promise.all([
-    sb.from('data_requests').select('id', { count: 'exact', head: true }).eq('status', 'Answered'),
-    sb.from('employee_self_changes').select('id', { count: 'exact', head: true }).is('seen_at', null)]);
-  if (!a.error) setDataRequestsBadge((a.count || 0) + (c.error ? 0 : (c.count || 0)));
-}
+function setDataRequestsBadge(n){ return payEngine().setDataRequestsBadge(n); }
+function loadDataRequestsBadge(){ return payEngine().loadDataRequestsBadge(); }
 // (after every period load React asks for this count — react/src/data/load.ts loadPeriodData)
 // (the employee window's "📝 Ask employee to update data" button is React now — react/src/employee)
 
@@ -1221,16 +1120,11 @@ async function loadDataRequestsBadge(){
 //  Kept here: the menu badge (requests waiting for HR, refreshed after the period data loads) and the reload of the payroll
 //  month after HR recorded a check-out (the attendance record changed).
 // ═════════════════════════════════════════════════════════
+// moved to React on 3 Nov 2026 (react/src/badges/badges.ts — proven to do the same by badges.golden.json); the old names forward to it
 /** @param {number} n */
-function setCheckoutBadge(n){ navBadge('co', n); }
-async function loadCheckoutBadge(){
-  const { count, error } = await sb.from('checkout_requests').select('id', { count: 'exact', head: true }).eq('status', 'Waiting');
-  if (!error) setCheckoutBadge(count || 0);
-}
-/** called by the React page after HR recorded a check-out */
-async function checkoutRecorded(){
-  try { await loadPeriodData(); } catch(e){} finally { loader(false); }   // fix 25 Oct: hide the "Loading period…" cover
-}
+function setCheckoutBadge(n){ return payEngine().setCheckoutBadge(n); }
+function loadCheckoutBadge(){ return payEngine().loadCheckoutBadge(); }
+function checkoutRecorded(){ return payEngine().checkoutRecorded(); }
 // (after every period load React asks for this count — react/src/data/load.ts loadPeriodData)
 
 // ═════════════════════════════════════════════════════════

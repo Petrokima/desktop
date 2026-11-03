@@ -72,83 +72,37 @@ const DEFAULTS = {
 };
 /** @type {typeof DEFAULTS & { calcRates?: any }} — company settings; calcRates = the payroll calculator's own rates (part21) */
 let settings = { ...DEFAULTS };
-// manager step on vacation / permission requests
-const waitingManager = r => r.status==='Pending' && r.manager_status==='Pending';
-const readyForHR     = r => r.status==='Pending' && r.manager_status!=='Pending';
-const fmtSent = ts => ts ? new Date(ts).toLocaleString('en-GB', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
-// readable message for the request deadlines enforced by the database
-function deadlineMsg(m){ m = String(m||'');
-  if (/LATE_REQUEST/.test(m)) return 'Too late: ' + m.replace(/^.*LATE_REQUEST:\s*/, '');
-  if (/ADVANCE_NOTICE/.test(m)) return m.replace(/^.*ADVANCE_NOTICE:\s*/, '') + ' — for today, choose Casual (emergency) leave.';
-  if (/PAST_DATE/.test(m)) return m.replace(/^.*PAST_DATE:\s*/, '');
-  return m; }
-function mgrStep(r){
-  const sent = (r.source==='Self-service' || r.source==='Mobile') ? `<div style="font-size:11px;color:var(--muted)">🕒 sent ${esc(fmtSent(r.created_at || r.requested_at))}</div>` : '';
-  return sent + mgrStage(r); }
-function mgrStage(r){
-  if (!r.manager_status) return r.status==='Pending' && (r.source==='Self-service' || r.source==='Mobile') ? '<div style="font-size:11px;color:var(--warn)">no direct manager — HR decides</div>' : '';
-  const m = empName(empById(r.manager_id)) || r.manager_by || r.manager_id;
-  if (r.manager_status==='Pending') return `<div style="font-size:11px;color:var(--warn)">⏳ waiting for manager: ${esc(m)}</div>`;
-  if (r.manager_status==='Approved') return `<div style="font-size:11px;color:var(--accent2)">✓ manager ${esc(r.manager_by||m)} approved${r.manager_note?` — “${esc(r.manager_note)}”`:''}</div>`;
-  return `<div style="font-size:11px;color:var(--danger)">✕ manager ${esc(r.manager_by||m)} rejected${r.manager_note?` — “${esc(r.manager_note)}”`:''}</div>`;
-}
+// ready for HR's decision (the manager step done, or none); fmtSent = the "sent" time — React since 3 Nov 2026 (react/src/core/helpers.ts)
+const readyForHR = r => payEngine().readyForHR(r);
+const fmtSent = ts => payEngine().fmtSent(ts);
+// (waitingManager, deadlineMsg, mgrStep / mgrStage — the old request lists' manager line — are gone: every page draws its own, in React)
 
 // ═════════════════════════════════════════════════════════
 //  HELPERS
 // ═════════════════════════════════════════════════════════
 /** @type {(id: string) => any} element by id (typed loosely on purpose: forms, buttons, inputs …) */
 const $ = id => document.getElementById(id);
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const num = v => { const n = Number(v); return isFinite(n) ? n : 0; };
-const fmt = v => num(v).toLocaleString('en-US', { minimumFractionDigits:0, maximumFractionDigits:2 });
-const pad = n => String(n).padStart(2,'0');
-// Today in CAIRO (YYYY-MM-DD), whatever time zone the computer is set to — the database's payroll uses Cairo time too, so both
-// agree on which days are past (absences). Before 31 Oct 2026 this used the computer's zone: from midnight to 2 a.m. Cairo a PC
-// set to UTC was still on "yesterday" and the payroll check against the database differed.
-const CAIRO_DAY = new Intl.DateTimeFormat('en-CA', { timeZone:'Africa/Cairo', year:'numeric', month:'2-digit', day:'2-digit' });
-function todayStr(){ return CAIRO_DAY.format(new Date()); }
-function thisMonth(){ return todayStr().slice(0,7); }
-// Payroll cycle: period 'YYYY-MM' runs from day <cycleStartDay> of the previous month to the day before it in this month.
-// cycleStartDay 21 → September = 21 Aug … 20 Sep.  cycleStartDay 1 → calendar month.
-function cycleDay(){ const d = Math.round(num(settings.cycleStartDay)); return (d>=2 && d<=28) ? d : 1; }
-function periodStart(p){ const sd=cycleDay(), [y,m]=p.split('-').map(Number);
-  if (sd===1) return `${p}-01`; const d=new Date(y, m-2, sd); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(sd)}`; }
-function periodEnd(p){ const sd=cycleDay(), [y,m]=p.split('-').map(Number);
-  return sd===1 ? `${p}-${pad(new Date(y,m,0).getDate())}` : `${p}-${pad(sd-1)}`; }
-function cycleOf(date){ if(!date) return ''; const sd=cycleDay(), [y,m,d]=String(date).split('-').map(Number);
-  if (sd===1 || d < sd) return `${y}-${pad(m)}`; const n=new Date(y, m, 1); return `${n.getFullYear()}-${pad(n.getMonth()+1)}`; }
-function periodLabel(p){ const f=s=>{ const [y,m,d]=s.split('-').map(Number); return `${d} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1]}`; };
-  return `${p} (${f(periodStart(p))} → ${f(periodEnd(p))})`; }
-function daysBetweenIncl(a,b){ const [y1,m1,d1]=a.split('-').map(Number), [y2,m2,d2]=b.split('-').map(Number);
-  return Math.round((new Date(y2,m2-1,d2).getTime() - new Date(y1,m1-1,d1).getTime())/86400000) + 1; }
-// Who is on this period's payroll: employed at any point in the cycle (includes leavers who resigned inside it)
-function onPayroll(e, p){
-  const s=periodStart(p), en=periodEnd(p);
-  if (e.employment_date && e.employment_date > en) return false;
-  if (e.resignation_date) return e.resignation_date >= s;
-  return e.status !== 'Inactive';
-}
-// Days employed in the cycle and the pay factor on a 30-day basis (full cycle = 1)
-function employment(e, p){
-  const s=periodStart(p), en=periodEnd(p);
-  const from = (e.employment_date && e.employment_date > s) ? e.employment_date : s;
-  const to   = (e.resignation_date && e.resignation_date < en) ? e.resignation_date : en;
-  if (to < from) return { days:0, len:daysBetweenIncl(s,en), factor:0, partial:true, from, to };
-  if (from===s && to===en) return { days:daysBetweenIncl(s,en), len:daysBetweenIncl(s,en), factor:1, partial:false, from, to };
-  // 85: a cycle has 28–31 days; pay is reduced by the days NOT employed on a 30-day basis (1 − missing ÷ 30).
-  // MUST match payroll_calc (file 85).
-  const days = daysBetweenIncl(from, to), base = num(settings.daysPerMonth) || 30, len = daysBetweenIncl(s, en);
-  return { days, len, factor: Math.max(0, Math.min(1, 1 - (len - days)/base)), partial:true, from, to,
-           joiner: from!==s, leaver: to!==en };
-}
-function periodIdx(p){ const [y,m]=String(p).split('-').map(Number); return y*12+(m-1); }
-function empName(e){ return e ? (e.name_en || e.name_ar || e.id) : ''; }
+// The core helpers moved to React on 3 Nov 2026 (react/src/core/helpers.ts — proven equal to this part's old code by core.golden.json):
+// numbers and money, TODAY IN CAIRO, the payroll calendar (cycle start day, period dates and label, pay month of a day), who is on the
+// payroll and the 30-day pay factor (must match payroll_calc, file 85), the look-ups. These old names forward there, synchronously
+// (payEngine() of part4 says "reload the page (F5)" when react.js did not load).
+const num = v => payEngine().num(v);
+const fmt = v => payEngine().fmt(v);
+const pad = n => payEngine().pad(n);
+function todayStr(){ return payEngine().todayStr(); }
+function thisMonth(){ return payEngine().thisMonth(); }
+function cycleDay(){ return payEngine().cycleDay(); }
+function periodStart(p){ return payEngine().periodStart(p); }
+function periodEnd(p){ return payEngine().periodEnd(p); }
+function cycleOf(date){ return payEngine().cycleOf(date); }
+function periodLabel(p){ return payEngine().periodLabel(p); }
+function daysBetweenIncl(a,b){ return payEngine().daysBetweenIncl(a, b); }
+function onPayroll(e, p){ return payEngine().onPayroll(e, p); }
+function employment(e, p){ return payEngine().employment(e, p); }
+function periodIdx(p){ return payEngine().periodIdx(p); }
+function empName(e){ return payEngine().empName(e); }
 function lib(){ const l = window.supabase; return (l && typeof l.createClient === 'function') ? l : null; }
-function chip(s){
-  const m={Active:'c-green',Present:'c-green',Verified:'c-green',Insured:'c-green',Permanent:'c-blue',Temporary:'c-orange',Contract:'c-grey',
-           Pending:'c-orange',Approved:'c-green',Rejected:'c-red',Cancelled:'c-grey',Completed:'c-green','In progress':'c-blue','Waiting for manager':'c-orange','Waiting for HR':'c-blue','Half Day':'c-orange','Annual Leave':'c-orange','Sick Leave':'c-orange',Inactive:'c-grey',Absent:'c-red',Holiday:'c-blue','Non insured':'c-grey',Settled:'c-grey',Suspended:'c-orange'};
-  return s ? `<span class="chip ${m[s]||'c-grey'}">${esc(s)}</span>` : '';
-}
+// (chip() and esc() are gone: no old screen draws HTML any more)
 const NOPERM = "Your role doesn't allow this change";
 // The message at the bottom right and the "Loading …" cover are React since 2 Nov 2026 (react/src/shell: the wording of database
 // refusals, the colours, the 3.8 seconds). The old code keeps only the latest message / the cover's state, so nothing is lost
@@ -167,17 +121,13 @@ const SCREEN = { setup: '', login: 'none', app: 'none', self: 'none' };
 function setScreens(part){ Object.assign(SCREEN, part); if (typeof PKR !== 'undefined') PKR.screensChanged(); }
 /** @param {boolean} on @param {string} [msg] the words (kept when none is given) */
 function loader(on, msg){ LOADING.on = on; if (msg) LOADING.msg = msg; if (typeof PKR !== 'undefined') PKR.loadingChanged(); }
+// look-ups (React since 3 Nov 2026 — react/src/core/helpers.ts); elOrBlank / parseEmpInput / parseProjInput are gone (nothing used them)
 /** @returns {Employee | undefined} */
-function empById(id){ return S.employees.find(e => String(e.id) === String(id)); }
+function empById(id){ return payEngine().empById(id); }
 /** the employee, or an empty record when the code is unknown (never undefined) @returns {Employee} */
-function empOrBlank(id){ return empById(id) || /** @type {Employee} */ ({}); }
+function empOrBlank(id){ return payEngine().empOrBlank(id); }
 /** @returns {SalaryElement | undefined} */
-function elByCode(c){ return S.elements.find(e => Number(e.code) === Number(c)); }
-/** the salary element, or an empty one when the code is unknown @returns {SalaryElement} */
-function elOrBlank(c){ return elByCode(c) || /** @type {SalaryElement} */ ({}); }
-function parseEmpInput(v){ const id = String(v||'').split(' — ')[0].trim(); return empById(id) ? id : null; }
-function parseProjInput(v){ const id = String(v||'').split(' — ')[0].trim(); return S.projects.find(p=>String(p.id)===id) ? id : null; }
-
+function elByCode(c){ return payEngine().elByCode(c); }
 // The data loading is React since 2 Nov 2026 (react/src/data/load.ts: fetchAll in batches of 1,000, loadSettings, loadPeriodData with
 // the menu counts and the undone check-outs, loadAll, loadSelf with the missions). These old names forward there, so every caller
 // keeps working; the data is still kept here (S, settings, the …TableMissing flags, holidaySet, SD, SMIS).

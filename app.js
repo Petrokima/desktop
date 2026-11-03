@@ -199,21 +199,17 @@ async function loadAll(){ return (await pkr()).loadAll(); }
 // SharedLists): they follow S.employees / S.projects / the period by themselves; the old callers only ask for a redraw
 function buildLists(){ if (typeof PKR !== 'undefined') PKR.render(); }
 
-// Pages are prepared when they are opened (the payroll calculation, reports and labour cost are the heavy ones)
+// Pages are prepared when they are opened (the payroll calculation, reports and labour cost are the heavy ones): which pages, with their
+// redraws (React reads this list — react/src/legacy.ts navEnv). currentPage / renderPageIfNeeded / renderAll moved to React on 3 Nov 2026 (react/src/nav/nav.ts — proven to do the same by nav.golden.json); the old names forward to it
 const PAGE_RENDER = { dashboard:()=>renderDashboard(), projects:()=>renderProjects(),
   loans:()=>renderLoans(), permissions:()=>renderPermissions(),
   leaves:()=>renderLeaves(), exempt:()=>renderExempt(), penalties:()=>renderPenalties(), holidays:()=>renderHolidays(), hrreq:()=>renderHrRequests(),
   reporting:()=>renderReporting(), history:()=>renderHistory(), parrules:()=>renderParRules(), approvals:()=>renderApprovals(), assign:()=>renderAssign(), calc:()=>renderCalc(), news:()=>renderNewsPage() };
-let DIRTY = new Set();   // (LOAD_MS is gone: nothing read it — the load time is only in the "Loaded …" message)
-function currentPage(){ const p = document.querySelector('.page.active'); return p ? p.id.replace('page-','') : 'dashboard'; }
-function renderPageIfNeeded(name){ if (DIRTY.has(name) && PAGE_RENDER[name]) { DIRTY.delete(name); PAGE_RENDER[name](); } }
-function renderAll(){
-  SHOWN_PERIOD = settings.period;   // the top bar's period badge (react/src/frame)
-  DIRTY = new Set(Object.keys(PAGE_RENDER));
-  // always kept current: the dashboard, the menu badges, lock and period notices
-  renderPageIfNeeded('dashboard'); renderPageIfNeeded('reporting'); renderPeriodHint();
-  renderPageIfNeeded(currentPage());
-}
+let DIRTY = new Set();   // the pages to prepare again when they are opened (read and replaced by React)
+function currentPage(){ return payEngine().currentPage(); }
+/** @param {string} name */
+function renderPageIfNeeded(name){ return payEngine().renderPageIfNeeded(name); }
+function renderAll(){ return payEngine().renderAll(); }
 
 // ═════════════════════════════════════════════════════════
 //  PAYROLL ENGINE
@@ -392,31 +388,10 @@ const closeError = m => payEngine().closeError(m);
 // ═════════════════════════════════════════════════════════
 //  NAVIGATION & EVENTS
 // ═════════════════════════════════════════════════════════
-function showPage(name){
-  renderPageIfNeeded(name);
-  if (typeof PKR !== 'undefined') PKR.pageShown(name);   // React shows the page (react/src/app), the menu highlights it, screens that load fresh data do
-  window.scrollTo(0,0);
-}
-
-document.addEventListener('click', async ev => {
-  const t = /** @type {PageEl} */ (ev.target);
-  const nav = t.closest('[data-page]'); if (nav && nav.classList.contains('nav-item')) return showPage(nav.dataset.page);
-  const nv = t.closest('[data-nav]'); if (nv) return showPage(nv.dataset.nav);
-  const orp = t.closest('[data-open-report]'); if (orp) { showPage('reports'); return openReport(orp.dataset.openReport || ''); }
-  // (the old windows' data-close buttons and "click beside a window" are gone: every window is React — role="dialog", × or Esc)
-  const act = t.closest('[data-act]');
-  if (act){ const a = act.dataset.act;
-    if (a==='new-emp') return openEmp(null);
-    if (a==='myprofile') return showSelf(ME, { email: ME.email });
-    if (a==='goto-current') return gotoCurrentPeriod();
-    if (a==='theme') return openTheme();
-    if (a==='reload') return loadAll();
-    if (a==='signout') return signOut();
-    if (a==='chpass') return typeof PKR !== 'undefined' && PKR.openPassword();
-    if (a==='disconnect'){ ev.preventDefault(); return disconnect(); }
-  }
-  const er = t.closest('[data-emp]'); if (er) return openEmp(er.dataset.emp || null);
-});
+// showPage and the page-wide click handler (menu items, data-nav, data-open-report, the top-bar data-act buttons, data-emp rows) moved to React on 3 Nov 2026 (react/src/nav/nav.ts — proven to do the same by nav.golden.json); the old names forward to it
+// (the click handler is registered by react/src/main.tsx — installNav)
+/** @param {string} name */
+function showPage(name){ return payEngine().showPage(name); }
 
 // inputs
 // (Esc closes the top React window — react/src/main.tsx; every window is React since 31 Oct 2026)
@@ -691,33 +666,14 @@ function assignmentRemoved(empId, code){ return payEngine().assignmentRemoved(em
 // ═════════════════════════════════════════════════════════
 //  ⬇ EXCEL — on every page (what the page shows, with its filters) and on every report (all rows)
 // ═════════════════════════════════════════════════════════
-// long number codes (national ID, mobile, bank account, insurance no. …) stay TEXT so Excel shows every digit
-const isLongCode = v => /^\d{10,}$/.test(String(v).trim());
-const xlNum = v => { const s = String(v).replace(/,/g,'').trim(); if (isLongCode(String(v).trim())) return String(v).trim();
-  return /^-?\d+(\.\d+)?$/.test(s) && s.length < 16 && !/^0\d/.test(s) ? Number(s) : v; };
-function tableToRows(tbl){
-  const heads = [...tbl.querySelectorAll('thead th')], keep = heads.map(th => th.textContent.trim() !== '');
-  const out = [heads.filter((_,i) => keep[i]).map(th => th.textContent.trim())];
-  tbl.querySelectorAll('tbody tr').forEach(tr => {
-    if (tr.style.display === 'none') return;   // hidden by a status filter (part43)
-    const tds = [...tr.children]; if (tds.length === 1 && tds[0].classList.contains('empty')) return;
-    out.push(tds.filter((_,i) => keep[i] !== false).map(td => { const c = td.cloneNode(true); c.querySelectorAll('button,input,select').forEach(x => x.remove());
-      return xlNum(c.textContent.replace(/\s+/g,' ').trim()); }));
-  });
-  return out;
-}
-async function exportPageExcel(pageEl){
-  const tables = [...pageEl.querySelectorAll('table')].filter(t => t.offsetParent !== null || t.closest('.card'));
-  const visible = tables.filter(t => t.querySelectorAll('tbody tr').length && getComputedStyle(t.closest('.card') || t).display !== 'none');
-  if (!visible.length) return toast('Nothing to export on this page','warn');
-  const XL = await loadSheetJs(), wb = XL.utils.book_new();
-  visible.forEach((t, i) => { const card = t.closest('.card'), title = card && card.querySelector('.toolbar-title') ? card.querySelector('.toolbar-title').textContent.trim() : '';
-    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(tableToRows(t)), (title || `Sheet ${i+1}`).replace(/[\\/?*\[\]:]/g,' ').slice(0,31) || `Sheet ${i+1}`); });
-  const name = (pageEl.querySelector('.page-title') || {}).textContent || pageEl.id.replace('page-','');
-  XL.writeFile(wb, `petrokima-${name.trim().toLowerCase().replace(/[^a-z0-9]+/g,'-')}-${todayISO()}.xlsx`);
-  toast('Excel file downloaded');
-}
-const todayISO = () => new Date().toISOString().slice(0,10);
+// isLongCode / xlNum / tableToRows / exportPageExcel / todayISO moved to React on 3 Nov 2026 (react/src/nav/nav.ts — proven to do the same by nav.golden.json); the old names forward to it
+const isLongCode = v => payEngine().isLongCode(v);
+const xlNum = v => payEngine().xlNum(v);
+/** @param {Element} tbl */
+function tableToRows(tbl){ return payEngine().tableToRows(tbl); }
+/** @param {HTMLElement} pageEl */
+function exportPageExcel(pageEl){ return payEngine().exportPageExcel(pageEl); }
+const todayISO = () => payEngine().todayISO();
 // (every page draws its own ⬇ Excel in React — react/src/shared/ExcelButton calls exportPageExcel through the bridge)
 
 // ═════════════════════════════════════════════════════════
@@ -730,12 +686,8 @@ function publishProjectCosts(period, detail, quiet){ return payEngine().publishP
 
 // (the menus — ☰ Collapse menu, folding a section heading, its red dot — are React since 2 Nov 2026: react/src/frame)
 
-// ═════════════════════════════════════════════════════════
-//  PHONE / SMALL SCREENS — ☰ opens the menu over the page; picking a page closes it
-// ═════════════════════════════════════════════════════════
-// (☰ itself is React — react/src/frame AppTopBar)
-// (the dark area beside the menu, #nav-backdrop, closes it itself — React, react/src/app)
-document.addEventListener('click', e => { if (/** @type {PageEl} */ (e.target).closest('#app .sidebar .nav-item[data-page]')) document.body.classList.remove('nav-open'); });
+// PHONE / SMALL SCREENS: ☰ (React — react/src/frame AppTopBar) opens the menu over the page; the dark area beside it closes it (React,
+// react/src/app); "a menu item picked closes it" is React since 3 Nov 2026 (react/src/nav/nav.ts installNav).
 
 // ═════════════════════════════════════════════════════════
 //  BULK UPLOAD — one page for every kind of data (template → upload → preview → save)
@@ -917,42 +869,8 @@ function officerPatch(client){ return payEngine().officerPatch(client); }
 //  One button in the top bar (HR app and self-service): shrinks the open page so wide tables fit the screen
 //  without sideways scrolling. Click again for normal size. Remembered on this computer.
 // ═════════════════════════════════════════════════════════
-(function fitWidth(){
-  const KEY = 'pk_fit_width';
-  let on = false; try { on = localStorage.getItem(KEY) === '1'; } catch (e) {}
-  // the button itself is React since 2 Nov 2026 (react/src/frame FitButton, in both top bars); it asks these two:
-  window.fitWidthOn = () => on;
-  window.toggleFitWidth = () => { on = !on; try { localStorage.setItem(KEY, on ? '1' : '0'); } catch (e) {} fit(); if (typeof PKR !== 'undefined') PKR.render(); };
-
-  const targets = () => [...document.querySelectorAll('#app .page.active, #self .main')].filter(el => el.offsetParent !== null);
-  function fit(){
-    document.querySelectorAll('#app .page:not(.active)').forEach(p => { p.style.zoom = ''; });
-    targets().forEach(el => {
-      el.style.zoom = '';
-      if (!on) return;
-      let z = 1;
-      for (let i = 0; i < 4; i++) {                     // shrinking changes the layout a little, so measure again
-        const avail = el.clientWidth;
-        let need = el.scrollWidth;
-        el.querySelectorAll('.tbl-wrap, .calv').forEach(w => {
-          if (w.offsetParent !== null && w.scrollWidth > w.clientWidth + 2) need = Math.max(need, avail + (w.scrollWidth - w.clientWidth));
-        });
-        if (need <= avail + 2) break;
-        z = Math.max(0.5, z * avail / need * 0.995);
-        el.style.zoom = z.toFixed(3);
-        if (z === 0.5) break;
-      }
-    });
-  }
-  window.fitWidthNow = fit;
-  let t = null; const later = () => { clearTimeout(t); t = setTimeout(fit, 120); };
-  window.addEventListener('resize', later);
-  document.addEventListener('click', ev => { if (/** @type {PageEl} */ (ev.target).closest('[data-page],[data-nav],[data-spage],.tab,.seg button')) later(); }, true);
-  const mo = new MutationObserver(later);
-  // the page is React (react/src/app): it hands over its two main areas once drawn
-  window.fitWidthWatch = areas => areas.forEach(m => { if (m) mo.observe(m, { childList: true, subtree: true }); });
-  later();
-})();
+// The button (react/src/frame FitButton) and the shrinking itself are React since 3 Nov 2026 (react/src/nav/nav.ts installFit — proven to give
+// the same zoom by nav.golden.json): it still puts window.fitWidthOn / toggleFitWidth / fitWidthNow / fitWidthWatch on the page.
 
 // ═════════════════════════════════════════════════════════
 //  AUTO SIGN-OUT after 10 minutes without activity (21 Oct 2026, desktop only)

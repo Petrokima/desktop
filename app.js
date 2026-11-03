@@ -510,10 +510,9 @@ function openReport(id){ if (typeof PKR !== 'undefined') PKR.openReport(id); }
 // ═════════════════════════════════════════════════════════
 //  PERMISSIONS (late arrival / early leave)
 // ═════════════════════════════════════════════════════════
-function monthOf(d){ return cycleOf(d); }   // quota follows the payroll cycle
-function permUsed(empId, month, exceptId){
-  return S.permissions.filter(p => String(p.emp_id)===String(empId) && p.status==='Approved' && monthOf(p.date)===month && p.id!==exceptId).length;
-}
+// monthOf / permUsed moved to React on 3 Nov 2026 (react/src/calendar/helpers.ts); the old names forward to it
+function monthOf(d){ return payEngine().monthOf(d); }   // quota follows the payroll cycle
+function permUsed(empId, month, exceptId){ return payEngine().permUsed(empId, month, exceptId); }
 // The page and its windows are React now (react/src/permissions, 30 Oct 2026). Kept here: the menu badge, the quota helpers above
 // (also used elsewhere) and what a saved / decided / deleted permission changes in the rest of the app.
 function renderPermissions(){
@@ -534,34 +533,18 @@ function afterPermChange(){ renderPermissions(); renderAttendance(); renderPayro
 // ═════════════════════════════════════════════════════════
 //  LEAVE HELPERS
 // ═════════════════════════════════════════════════════════
-function dObj(s){ const [y,m,d]=String(s).split('-').map(Number); return new Date(y, m-1, d); }
-function dStr(o){ return `${o.getFullYear()}-${pad(o.getMonth()+1)}-${pad(o.getDate())}`; }
-function isHoliday(s){ return holidaySet.has(s); }
-function holidayOn(s){ return S.holidays.find(h => h.date===s) || null; }
-function isWorkday(s){ return !(settings.weekendDays||[]).includes(dObj(s).getDay()) && !isHoliday(s); }
-function workdays(from, to){
-  if (!from || !to || to < from) return 0;
-  let n=0, d=dObj(from), end=dObj(to), guard=0;
-  while (d <= end && guard++ < 800){ if (isWorkday(dStr(d))) n++; d.setDate(d.getDate()+1); }
-  return n;
-}
-// Leave days of one leave record that fall between a and b (inclusive), pro-rated when HR edited the day count
-function leaveDaysIn(l, a, b){
-  const s = l.date_from > a ? l.date_from : a, e = l.date_to < b ? l.date_to : b;
-  if (e < s) return 0;
-  const full = workdays(l.date_from, l.date_to); if (!full) return 0;
-  return Math.round(num(l.days) * workdays(s, e) / full * 100) / 100;
-}
-function leaveOn(empId, date){
-  if (!date) return null;
-  return S.leaves.find(l => l.status==='Approved' && String(l.emp_id)===String(empId) && l.date_from<=date && l.date_to>=date) || null;
-}
-function annualEntitlement(e){ return (e && e.annual_leave_days!==null && e.annual_leave_days!==undefined && e.annual_leave_days!=='') ? num(e.annual_leave_days) : num(settings.annualLeaveDefault); }
-function annualTaken(empId, exceptId){
-  const y = settings.period.slice(0,4), types = settings.casualCountsAnnual==='no' ? ['Annual'] : ['Annual','Casual'];
-  return S.leaves.filter(l => String(l.emp_id)===String(empId) && l.status==='Approved' && types.includes(l.leave_type) && l.id!==exceptId)
-                 .reduce((s,l)=>s+leaveDaysIn(l, `${y}-01-01`, `${y}-12-31`),0);
-}
+// The leave helpers moved to React on 3 Nov 2026 (react/src/calendar/helpers.ts — proven equal to the old code by calhelpers.golden.json).
+// The payroll engine, attendance, reports, self-service and the windows still call these names; they forward to it, synchronously.
+function dObj(s){ return payEngine().dObj(s); }
+function dStr(o){ return payEngine().dStr(o); }
+function isHoliday(s){ return payEngine().isHoliday(s); }
+function holidayOn(s){ return payEngine().holidayOn(s); }
+function isWorkday(s){ return payEngine().isWorkday(s); }
+function workdays(from, to){ return payEngine().workdays(from, to); }
+function leaveDaysIn(l, a, b){ return payEngine().leaveDaysIn(l, a, b); }
+function leaveOn(empId, date){ return payEngine().leaveOn(empId, date); }
+function annualEntitlement(e){ return payEngine().annualEntitlement(e); }
+function annualTaken(empId, exceptId){ return payEngine().annualTaken(empId, exceptId); }
 
 // ═════════════════════════════════════════════════════════
 //  VACATIONS PAGE
@@ -593,15 +576,9 @@ function employeesFlagged(ids, field, value){
 // ═════════════════════════════════════════════════════════
 //  PENALTIES
 // ═════════════════════════════════════════════════════════
-function penaltyValue(x, emp, dailyRate, hourRate){
-  emp = emp || empById(x.emp_id); if (!emp) return x.penalty_type==='Amount' ? num(x.quantity) : 0;
-  const R = (dailyRate===undefined || hourRate===undefined) ? empRates(emp) : null;
-  const d = dailyRate ?? /** @type {NonNullable<typeof R>} */ (R).daily, h = hourRate ?? /** @type {NonNullable<typeof R>} */ (R).hourly;
-  if (x.penalty_type==='Hours') return num(x.quantity) * h;
-  if (x.penalty_type==='Days')  return num(x.quantity) * d;
-  return num(x.quantity);
-}
-function penLabel(x){ return x.penalty_type==='Amount' ? `${fmt(x.quantity)} EGP` : `${fmt(x.quantity)} ${x.penalty_type==='Hours'?'hour':'day'}${num(x.quantity)===1?'':'s'}`; }
+// penaltyValue / penLabel moved to React on 3 Nov 2026 (react/src/calendar/helpers.ts); the old names forward to it
+function penaltyValue(x, emp, dailyRate, hourRate){ return payEngine().penaltyValue(x, emp, dailyRate, hourRate); }
+function penLabel(x){ return payEngine().penLabel(x); }
 // The page and its window moved to React 30 Oct 2026 (react/src/penalties). The old code keeps penaltyValue / penLabel (payroll,
 // reports) and the step after a change.
 function renderPenalties(){ if (typeof PKR !== 'undefined') PKR.render(); }

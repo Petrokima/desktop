@@ -865,14 +865,6 @@ function officerPatch(client){ return payEngine().officerPatch(client); }
 // ── the employee window's contract end preview is React now (react/src/employee — same rule as the database on Save)
 
 // ═════════════════════════════════════════════════════════
-//  FIT TO SCREEN WIDTH (16 Oct 2026)
-//  One button in the top bar (HR app and self-service): shrinks the open page so wide tables fit the screen
-//  without sideways scrolling. Click again for normal size. Remembered on this computer.
-// ═════════════════════════════════════════════════════════
-// The button (react/src/frame FitButton) and the shrinking itself are React since 3 Nov 2026 (react/src/nav/nav.ts installFit — proven to give
-// the same zoom by nav.golden.json): it still puts window.fitWidthOn / toggleFitWidth / fitWidthNow / fitWidthWatch on the page.
-
-// ═════════════════════════════════════════════════════════
 //  AUTO SIGN-OUT after 10 minutes without activity (21 Oct 2026, desktop only)
 //  · Activity = mouse, keyboard, scroll or touch in ANY open tab of the app (shared through localStorage).
 //  · At 9 minutes a window warns "You will be signed out in 60 seconds" with a button to stay signed in.

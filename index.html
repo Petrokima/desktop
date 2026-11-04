@@ -187,7 +187,8 @@ body:not(.can-hr):not(.can-pay) .ro-var{display:block}
 body:not(.can-set) :is(#set-save,#pay-approve,[data-act="goto-current"]){display:none!important}
 .ro-set-inline{display:none} body:not(.can-set) .ro-set-inline{display:inline}
 body:not(.can-admin) .admin-only{display:none!important}
-body:not(.can-hr):not(.can-pay) .nav-item[data-page="closed"]{display:none!important}   /* admin, HR, finance (file 100 report) */
+body:not(.can-hr):not(.can-pay) .nav-item[data-page="closed"]{display:none!important}
+body:not(.can-set) .nav-item[data-page="settings"]{display:none!important}   /* Settings: admin and finance only (4 Nov 2026 — HR / Rasha must not see it) */   /* admin, HR, finance (file 100 report) */
 .ro-note{display:none;font-size:12px;color:var(--warn);margin-top:4px}
 body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set{display:block}
 .user-chip{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:3px 4px 3px 12px;font-size:12px}
@@ -211,5 +212,5 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
      the windows, the lists, the message). The old code says which screen / page / part to show (setScreens, showPage, showSelfPart). -->
 <div id="react-root"></div>
 <script src="app.js?v=70897aa78a6c"></script>
-<script src="react.js?v=a7a668ca2445"></script>
+<script src="react.js?v=16c8f45a3f84"></script>
 </body></html>

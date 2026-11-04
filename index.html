@@ -174,6 +174,11 @@ body:not(.can-hr):not(.can-master) :is([data-act="new-att"],#mi-open,[data-act="
 #pay-table.pay-expanded th,#pay-table.pay-expanded td{white-space:nowrap}
 #pay-table.pay-expanded th.pay-el{max-width:130px;overflow:hidden;text-overflow:ellipsis}
 #pay-table.pay-expanded :is(th,td):nth-child(2){position:sticky;left:0;z-index:2;background:var(--card);box-shadow:1px 0 0 var(--border)}
+/* Employees register (4 Nov 2026): a click on a heading sorts (▲ / ▼ drawn by CSS, so Excel takes the plain heading), a filter box under every column */
+th.sortable{cursor:pointer;user-select:none;white-space:nowrap} th.sortable:hover{color:var(--text)}
+th.sorted-asc::after{content:' ▲';font-size:9px} th.sorted-desc::after{content:' ▼';font-size:9px}
+tr.emp-filter td{padding:4px 6px;background:var(--card);border-bottom:1px solid var(--border)}
+tr.emp-filter input{width:100%;min-width:56px;box-sizing:border-box;padding:4px 6px;font-size:11.5px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-family:inherit}
 a.maplink{color:var(--link);text-decoration:none;white-space:nowrap} a.maplink:hover{text-decoration:underline}
 body:not(.can-pay) :is(#pk-add,[data-del-fixed]){display:none!important}
 .lpp-chip{display:inline-flex;align-items:center;gap:4px;margin:3px 4px 0 0;font-size:11px}
@@ -212,5 +217,5 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
      the windows, the lists, the message). The old code says which screen / page / part to show (setScreens, showPage, showSelfPart). -->
 <div id="react-root"></div>
 <script src="app.js?v=70897aa78a6c"></script>
-<script src="react.js?v=16c8f45a3f84"></script>
+<script src="react.js?v=8402bd5ac050"></script>
 </body></html>

@@ -183,7 +183,8 @@ a.maplink{color:var(--link);text-decoration:none;white-space:nowrap} a.maplink:h
 body:not(.can-pay) :is(#pk-add,[data-del-fixed]){display:none!important}
 .lpp-chip{display:inline-flex;align-items:center;gap:4px;margin:3px 4px 0 0;font-size:11px}
 .lpp-chip button{border:0;background:none;cursor:pointer;color:inherit;padding:0 2px;font-size:12px}
-body:not(.can-hr) .nav-item:is([data-page="news"],[data-page="voice"]){display:none!important}
+body:not(.can-hr) .nav-item[data-page="news"]{display:none!important}
+body:not(.can-hr):not(.is-officer) .nav-item[data-page="voice"]{display:none!important}   /* HR officers see Employee voice (view only, no pay — file 108) */
 body:not(.can-hr):not(.can-pay):not(.can-master) .nav-item[data-page="bulk"]{display:none!important}
 body:not(.can-hr):not(.can-master) :is([data-act="new-emp"],#emp-save){display:none!important}   /* HR officers edit master data too (49) */
 #emp-form .field.req-miss input,#emp-form .field.req-miss select,#emp-form .field.req-miss textarea{border-color:#d33;box-shadow:0 0 0 2px rgba(221,51,51,.18)}#emp-form .field.req-miss label{color:#d33}   /* boxes still empty after Save (employee window) */
@@ -217,5 +218,5 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
      the windows, the lists, the message). The old code says which screen / page / part to show (setScreens, showPage, showSelfPart). -->
 <div id="react-root"></div>
 <script src="app.js?v=70897aa78a6c"></script>
-<script src="react.js?v=a5741822fbe6"></script>
+<script src="react.js?v=21595d4b795e"></script>
 </body></html>

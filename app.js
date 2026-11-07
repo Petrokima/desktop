@@ -227,6 +227,7 @@ function fixedActive(row, p){ return payEngine().fixedActive(row, p); }
 function loanDue(l, i){ return payEngine().loanDue(l, i); }
 function loanEnd(l){ return payEngine().loanEnd(l); }
 function loanInstalment(l, p){ return payEngine().loanInstalment(l, p); }
+function loanLeft(l, p){ return payEngine().loanLeft(l, p); }
 function missionsOn(empId, date){ return payEngine().missionsOn(empId, date); }
 function attNoOut(a){ return payEngine().attNoOut(a); }
 function dayRules(a, emp){ return payEngine().dayRules(a, emp); }

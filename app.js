@@ -557,8 +557,8 @@ function updateBadges(){ return payEngine().updateBadges(); }
 function nextPeriod(p){ return payEngine().nextPeriod(p); }
 function payrollLines(run){ return payEngine().payrollLines(run); }
 function payrollDiffs(mine, srv){ return payEngine().payrollDiffs(mine, srv); }
-/** @param {string} p @param {any} costDetail @param {boolean} moveNext */
-function payrollApproved(p, costDetail, moveNext){ return payEngine().payrollApproved(p, costDetail, moveNext); }
+/** @param {string} p @param {any} sent @param {boolean} moveNext */
+function payrollApproved(p, sent, moveNext){ return payEngine().payrollApproved(p, sent, moveNext); }
 
 // ═════════════════════════════════════════════════════════
 //  PAYROLL HISTORY

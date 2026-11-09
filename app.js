@@ -1019,8 +1019,10 @@ const EMBED_URL = 'https://hckkrzghxxhauotyqlqr.supabase.co';
 const EMBED_KEY = 'sb_publishable_yyfkPLo6M7XDe3lwurctmw_6wsmB-2M';
 (function boot(){
   const embedded = EMBED_KEY && !EMBED_KEY.startsWith('PASTE-');
-  if (embedded){ localStorage.setItem('sb_url', EMBED_URL); localStorage.setItem('sb_key', EMBED_KEY); setScreens({ setup: 'none' }); }
-  const url = embedded ? EMBED_URL : localStorage.getItem('sb_url'), key = embedded ? EMBED_KEY : localStorage.getItem('sb_key');
+  // the browser's storage may refuse (Firefox with damaged site data: NS_ERROR_FAILURE, 9 Nov 2026) — the app must still start
+  const keep = (k, v) => { try { localStorage.setItem(k, v); } catch(e){} }, saved = k => { try { return localStorage.getItem(k); } catch(e){ return null; } };
+  if (embedded){ keep('sb_url', EMBED_URL); keep('sb_key', EMBED_KEY); setScreens({ setup: 'none' }); }
+  const url = embedded ? EMBED_URL : saved('sb_url'), key = embedded ? EMBED_KEY : saved('sb_key');
   // (the connection card is React — react/src/signin: it starts with the saved address and key, and shows SETUP_ERR)
   if (!lib()){ SETUP_ERR = 'The app could not load. Check your internet connection and reload.'; setScreens({ setup: 'flex' }); return; }
   if (url && key) startApp(url, key).catch(e => { SETUP_ERR = 'Auto-connect failed: '+e.message; if (typeof PKR !== 'undefined') PKR.render(); setScreens({ setup: 'flex', app: 'none' }); });

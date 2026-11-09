@@ -951,9 +951,10 @@ function birthFromNid(nid){
 //  (React — react/src/employee, bridge employeeMissing / requiredFields) refuses Save for any employee until his gaps are filled,
 //  marks the empty boxes in red and lists them; always-required boxes get a red *. Report "Missing employee data" lists every
 //  active employee with gaps.
+//  9 Nov 2026 (Mohammed): the personal e-mail is OPTIONAL (file 126) — a typed one must still be a valid address.
 // ═════════════════════════════════════════════════════════
 const REQ_ALWAYS = [['name_ar','Arabic name'],['name_en','English name'],['department','Department'],['unit','Unit'],['entity','Entity'],
-  ['job_name','Job name'],['job_type','Job type'],['mobile','Personal mobile'],['personal_email','Personal e-mail'],['address','Address'],['contract_type','Contract type'],
+  ['job_name','Job name'],['job_type','Job type'],['mobile','Personal mobile'],['address','Address'],['contract_type','Contract type'],
   ['employment_date','Employment date'],['birth_date','Birth date'],['gender','Gender'],['marital_status','Marital status'],
   ['religion','Religion'],['nationality','Nationality'],['national_id','National ID'],['national_id_expiry','National ID expiry'],
   ['insurance','Insurance'],['payment_method','Payment method'],['university','University'],['college','College'],['graduation_date','Graduation date']];

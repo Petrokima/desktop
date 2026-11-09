@@ -193,6 +193,7 @@ body:not(.can-hr):not(.can-pay) .ro-var{display:block}
 body:not(.can-set) :is(#set-save,#pay-approve,[data-act="goto-current"]){display:none!important}
 .ro-set-inline{display:none} body:not(.can-set) .ro-set-inline{display:inline}
 body:not(.can-admin) .admin-only{display:none!important}
+body:not(.can-admin):not(.can-master) .nav-item[data-page="users"]{display:none!important}   /* HR + HR officers: unblock / reset passwords (125) */
 body:not(.can-hr):not(.can-pay) .nav-item[data-page="closed"]{display:none!important}
 body:not(.can-set) .nav-item[data-page="settings"]{display:none!important}   /* Settings: admin and finance only (4 Nov 2026 — HR / Rasha must not see it) */   /* admin, HR, finance (file 100 report) */
 .ro-note{display:none;font-size:12px;color:var(--warn);margin-top:4px}
@@ -218,5 +219,5 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
      the windows, the lists, the message). The old code says which screen / page / part to show (setScreens, showPage, showSelfPart). -->
 <div id="react-root"></div>
 <script src="app.js?v=6ca39c670094"></script>
-<script src="react.js?v=cde95651d145"></script>
+<script src="react.js?v=87e2ccdcee31"></script>
 </body></html>

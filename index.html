@@ -195,7 +195,7 @@ body:not(.can-set) :is(#set-save,#pay-approve,[data-act="goto-current"]){display
 body:not(.can-admin) .admin-only{display:none!important}
 body:not(.can-admin):not(.can-master) .nav-item[data-page="users"]{display:none!important}   /* HR + HR officers: unblock / reset passwords (125) */
 body:not(.can-hr):not(.can-pay) .nav-item[data-page="closed"]{display:none!important}
-body:not(.can-pay) .nav-item[data-page="labour"]{display:none!important}   /* ⏱ Project labour cost: admin + finance (pay rates in the result) */
+body:not(.can-labour) .nav-item[data-page="labour"]{display:none!important}   /* ⏱ Project labour cost: admin + finance, + HR / HR officers given it in 👁 Pages (file 131) */
 body:not(.can-set) .nav-item[data-page="settings"]{display:none!important}   /* Settings: admin and finance only (4 Nov 2026 — HR / Rasha must not see it) */   /* admin, HR, finance (file 100 report) */
 .ro-note{display:none;font-size:12px;color:var(--warn);margin-top:4px}
 body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set{display:block}
@@ -220,5 +220,5 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
      the windows, the lists, the message). The old code says which screen / page / part to show (setScreens, showPage, showSelfPart). -->
 <div id="react-root"></div>
 <script src="app.js?v=9cd68340b084"></script>
-<script src="react.js?v=d33855da73a2"></script>
+<script src="react.js?v=bf475545aa3a"></script>
 </body></html>

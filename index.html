@@ -44,6 +44,16 @@ input.dmy:disabled{opacity:.55;cursor:not-allowed}
 .nav-item.active{background:rgba(59,111,212,.18);color:var(--link)}
 .nav-item:focus-visible,.nav-group-btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .topnav .nav-item{margin:0;padding:7px 12px;white-space:nowrap}
+/* Reports page: the list of reports above the report (12 Nov 2026) — one row per group, the reports as buttons that wrap */
+#rep-list{padding:10px 16px 12px;margin-bottom:16px}
+.rep-pick-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.rep-pick-title{font-size:13px;color:var(--label)}
+.rep-groups{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.rep-group{display:grid;grid-template-columns:130px 1fr;gap:8px;align-items:start}
+#rep-list .nav-label{padding:8px 0 0}
+.rep-chips{display:flex;flex-wrap:wrap;gap:5px}
+#rep-list .nav-item{margin:0;padding:5px 11px;font-size:12.5px;border:1px solid var(--border);border-radius:999px;white-space:nowrap}
+#rep-list .nav-item.active{border-color:var(--link)}
 .nav-group{position:relative}
 .nav-group-btn{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:var(--rs);border:0;background:transparent;cursor:pointer;color:var(--label);font-size:13px;font-weight:500;font-family:inherit;white-space:nowrap}
 .nav-group-btn:hover,.nav-group.open .nav-group-btn{background:var(--card);color:var(--text)}
@@ -202,7 +212,7 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
 .user-chip{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:3px 4px 3px 12px;font-size:12px}
 #toast{position:fixed;bottom:24px;right:24px;padding:12px 18px;border-radius:var(--rs);font-size:13px;font-weight:600;transform:translateY(90px);opacity:0;transition:all .3s;z-index:999;max-width:360px}
 #loader{position:fixed;inset:0;background:var(--overlay);z-index:300;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;color:var(--label)}
-@media(max-width:900px){#page-reports .rep-grid{grid-template-columns:1fr!important}.main{padding:16px}.grid2,.grid3{grid-template-columns:1fr}}
+@media(max-width:900px){#page-reports .rep-group{grid-template-columns:1fr}.main{padding:16px}.grid2,.grid3{grid-template-columns:1fr}}
 
 /* phones and small tablets: the top bar and the menu bar wrap onto more lines (a drop-down list opens across the width — rule above) */
 @media(max-width:900px){
@@ -220,5 +230,5 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
      the windows, the lists, the message). The old code says which screen / page / part to show (setScreens, showPage, showSelfPart). -->
 <div id="react-root"></div>
 <script src="app.js?v=9cd68340b084"></script>
-<script src="react.js?v=bf475545aa3a"></script>
+<script src="react.js?v=f264e5794e09"></script>
 </body></html>

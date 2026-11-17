@@ -258,7 +258,7 @@ function renderEmployees(){ if (typeof PKR !== 'undefined') PKR.render(); }
 const EMP_FIELDS = [
   ['Identity', [['id','Code','text'],['name_ar','Arabic name','text','ar'],['name_en','English name','text']]],
   ['Organisation', [['department','Department','pick','dept'],['unit','Unit','pick','unit'],['entity','Entity','select',['Petrokima Egypt HQ','Petrokima Saudi Branch','Affiliate — Cairo']],
-                    ['job_name','Job name','text'],['job_type','Job type','text'],['status','Status','select',['Active','Inactive']],
+                    ['job_name','Job name','pick','job'],['job_type','Job type','text'],['status','Status','select',['Active','Inactive']],
                     ['manager_id','Direct manager','manager']]],
   ['Contact', [['mobile','Personal mobile','text'],['personal_email','Personal e-mail','email'],['business_phone','Business phone (optional)','text'],['email','Work e-mail (optional)','text'],['address','Address','text']]],
   ['Contract', [['contract_type','Contract type','select',['Permanent','Temporary','Contract']],['contract_start_date','Contract start','date'],
@@ -274,7 +274,7 @@ const EMP_FIELDS = [
                  ['insurance_title','Insurance title','text'],['insurance_amount','Insurable amount','number'],['insurance_date','Insurance date (Petrokima)','date'],
                  ['insurance_date_before','Insurance date before Petrokima (first insured — counts towards 10 years)','date']]],
   ['Personal', [['birth_date','Birth date','date'],['gender','Gender','select',['Male','Female']],['marital_status','Marital status','select',['Single','Married','Divorced','Widowed']],
-                ['religion','Religion','text'],['nationality','Nationality','text'],['military_status','Military status','select',['','Finished','Exempt','Postponed','Not Applicable']],
+                ['religion','Religion','select',['','Muslim','Christian']],['nationality','Nationality','pick','nat'],['military_status','Military status','select',['','Finished','Exempt','Postponed','Not Applicable']],
                 ['national_id','National ID','text'],['national_id_expiry','National ID expiry','date']]],
   ['Disability', [['has_disability','Has a disability card','bool'],['disability_card_no','Disability card number','text'],['disability_card_expiry','Disability card expiry','date']]],
   ['Education', [['university','University','pick','univ'],['college','College','pick','coll'],['certification','Certification','text'],['graduation_date','Graduation date','date']]],

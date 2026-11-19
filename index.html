@@ -212,6 +212,17 @@ body:not(.can-hr):not(.can-master) :is([data-act="new-att"],#mi-open,[data-act="
 th.sortable{cursor:pointer;user-select:none;white-space:nowrap} th.sortable:hover{color:var(--text)}
 th.sorted-asc::after{content:' ▲';font-size:9px} th.sorted-desc::after{content:' ▼';font-size:9px}
 tr.emp-filter td{padding:4px 6px;background:var(--card);border-bottom:1px solid var(--border)}
+/* 💵 Monthly amounts entry lines: every box in a line starts on the same top line (names / project names sit under their boxes) */
+table.mv-entry td{vertical-align:top}
+table.mv-entry td.mono{padding-top:19px}
+table.mv-entry tr.mv-has-days td{border-bottom:none}
+table.mv-entry tr.mv-days-row td{padding-top:0;white-space:normal}
+.mv-day input.dmy{width:140px}
+table tr.mv-has-check td{border-bottom:none}
+table tr.mv-check-row td{padding-top:0;white-space:normal}
+table.mv-check-tbl{width:auto}
+table.mv-check-tbl td.num{text-align:right}
+table.mv-check-tbl td{padding:3px 8px;font-size:12px;white-space:normal;vertical-align:top;border-bottom:1px dashed var(--border)}
 tr.emp-filter input{width:100%;min-width:56px;box-sizing:border-box;padding:4px 6px;font-size:11.5px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-family:inherit}
 a.maplink{color:var(--link);text-decoration:none;white-space:nowrap} a.maplink:hover{text-decoration:underline}
 body:not(.can-pay) :is(#pk-add,[data-del-fixed]){display:none!important}
@@ -254,5 +265,5 @@ body:not(.can-hr) .ro-hr, body:not(.can-pay) .ro-pay, body:not(.can-set) .ro-set
      the windows, the lists, the message). The old code says which screen / page / part to show (setScreens, showPage, showSelfPart). -->
 <div id="react-root"></div>
 <script src="app.js?v=624fc53f210a"></script>
-<script src="react.js?v=decdef2c1ddc"></script>
+<script src="react.js?v=fac16798da34"></script>
 </body></html>

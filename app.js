@@ -12,12 +12,14 @@ const PK_ERR = (function(){
     .replace(/\b[23]\d{13}\b/g, '[id]').replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '[email]')
     .replace(/eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}/g, '[token]').replace(/sb_(publishable|secret)_[\w-]+/g, '[key]');
   const bare = u => { try { const x = new URL(u, location.href); return x.origin + x.pathname; } catch(e){ return ''; } };
+  // which phone app sent the report (Android / iPhone) — read from Capacitor itself (the phone's own settings come later in the file)
+  const appKind = () => { try { const c = /** @type {any} */ (window).Capacitor; return (c && typeof c.getPlatform === 'function' && c.getPlatform() === 'ios') ? 'ios' : 'android'; } catch(e){ return 'android'; } };
   try {
     lib.init({
       dsn: 'https://public@o0.ingest.sentry.io/0',                       // placeholder — the real address is added by error-report
       tunnel: 'https://hckkrzghxxhauotyqlqr.supabase.co/functions/v1/error-report',
-      release: typeof APP_BUILD !== 'undefined' ? 'pk-phone@' + (APP_BUILD ? 'android-' + APP_BUILD : 'web') : 'pk-desktop@web',
-      environment: location.hostname === 'localhost' ? 'android-app' : location.hostname,
+      release: typeof APP_BUILD !== 'undefined' ? 'pk-phone@' + (APP_BUILD ? appKind() + '-' + APP_BUILD : 'web') : 'pk-desktop@web',
+      environment: location.hostname === 'localhost' ? appKind() + '-app' : location.hostname,      // android-app / ios-app
       sendDefaultPii: false, maxBreadcrumbs: 30, attachStacktrace: true,
       beforeBreadcrumb(b){
         if (b.category === 'console' || b.category === 'ui.input') return null;          // never what people type or logs

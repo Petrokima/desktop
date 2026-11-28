@@ -797,6 +797,7 @@ const LOC_FLAG = {
   perfect_accuracy: ['"Perfect" GPS accuracy', 'c-orange'],
   impossible_travel:['Impossible travel speed', 'c-red'],
   browser_android:  ['Browser instead of app', 'c-blue'],
+  browser_ios:      ['iPhone browser instead of app', 'c-blue'],   // 152
   old_app:          ['Old app version', 'c-blue'],
   no_site_point:    ['Project has no map point', 'c-orange'],
   gps_unchecked:    ['Fake-GPS check not done', 'c-blue'],
